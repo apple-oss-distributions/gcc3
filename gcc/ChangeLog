@@ -1,0 +1,632 @@
+2002-01-05  Richard Henderson  <rth@redhat.com>
+
+	* cfgcleanup.c (try_forward_edges): Detect infinite loops while
+	jump threading.
+
+2002-01-05  Richard Henderson  <rth@redhat.com>
+
+	* c-decl.c (c_expand_body): Don't call outlining_inline_function.
+	* integrate.c (output_inline_function): Likewise.
+	* toplev.c (rest_of_compilation): Do it here instead.  Move call
+	to remove_unnecessary_notes after emitting abstract instance.
+	Force an emitted nested function to have its parent emited as well.
+	* dwarf2out.c (loc_descriptor_from_tree): Read mode after checking
+	for null.
+	(rtl_for_decl_location): Do not look at reload data structures
+	before reload has run.
+
+2002-01-05  Kazu Hirata  <kazu@hxi.com>
+
+	* cse.c: Fix formatting.
+	* dwarf2asm.c: Likewise.
+	* dwarf2out.c: Likewise.
+	* explow.c: Likewise.
+	* expmed.c: Likewise.
+	* function.c: Likewise.
+	* gcov.c: Likewise.
+	* gencheck.c: Likewise.
+	* genrecog.c: Likewise.
+	* ggc-common.c: Likewise.
+	* ggc-page.c: Likewise.
+	* global.c: Likewise.
+
+2002-01-05  Kazu Hirata  <kazu@hxi.com>
+
+	* combine.c: Fix formatting.
+
+2002-01-05  Craig Rodrigues  <crodrigu@bbn.com>
+
+	PR middle-end/1557
+	* config/ia64/ia64.h (RENAME_EXTENDED_BLOCKS): Remove.
+
+2002-01-05  David Edelsohn  <edelsohn@gnu.org>
+
+	* config/rs6000/rs6000.h (TARGET_POWERPC): For IN_LIBGCC2, define
+	as 1 for __powerpc64__ as well.
+
+	* config/rs6000/t-aix43 (T_ADAFLAGS): Define.
+
+	* alias.c (find_base_value, PLUS/MINUS): If we found a base,
+	return it.
+
+2002-01-05  Daniel Berlin  <dan@dberlin.org>
+
+	* lcm.c: Revert change, due to performance regression it causes on
+	SPEC because it's slightly more conservative (sigh, I hate
+	edge-based LCM).
+	
+Sat Jan  5 11:52:05 CET 2002  Jan Hubicka  <jh@suse.cz>
+
+	* cfgcleanup.c (try_forward_edges): Allow multiple jump threading.
+
+2002-01-05  Neil Booth  <neil@daikokuya.demon.co.uk>
+
+	* doc/cppinternals.texi: Update.
+
+2002-01-05  Hans-Peter Nilsson  <hp@bitrange.com>
+
+	* doc/invoke.texi (Option Summary) <MMIX Options>: Document
+	-mbranch-predict, -mreg-stack-fill-bug-workaround and their
+	negatives.
+	(MMIX Options): Ditto.  Fix item/itemx typo for -mno-zero-extend.
+	* config/mmix/mmix.c (mmix_target_asm_function_prologue): Rework
+	kludge for pre-october-14th mmix versions to handle new-found bug
+	with PUSHJ/PUSHGO and the register stack.
+	* config/mmix/mmix.h (struct machine_function): Rename member
+	has_call_value_without_parameters to has_call_without_parameters.
+	All referers changed.
+	(TARGET_MASK_REG_STACK_FILL_BUG, TARGET_DEFAULT
+	TARGET_MASK_BRANCH_PREDICT): New macros.
+	(TARGET_SWITCHES): New options -mreg-stack-fill-bug-workaround,
+	-mno-reg-stack-fill-bug-workaround.
+	* config/mmix/mmix.md ("call"): Set struct machine member
+	has_call_without_parameters.
+
+Sat Jan  5 02:20:22 CET 2002  Jan Hubicka  <jh@suse.cz>
+
+	* cfgcleanup.c (thread_jump): Fix handling of reversed branches.
+
+Sat Jan  5 01:35:29 CET 2002  Jan Hubicka  <jh@suse.cz>
+
+	* cfgcleanup.c: Include tm_p.h
+	(mark_effect): Fix handling of hard register; fix handling of SET
+
+2002-01-04  Kazu Hirata  <kazu@hxi.com>
+
+	* config/h8300/h8300.md (anonymous patterns): Check that
+	operands are registers before using REGNO on them.
+
+2002-01-03  Roland McGrath  <roland@frob.com>
+
+	* doc/invoke.texi (RS/6000 and PowerPC Options): Add -mcall-gnu.
+
+2002-01-04  Jakub Jelinek  <jakub@redhat.com>
+
+	* tree.h (expand_expr_stmt_value): Add maybe_last argument.
+	* c-common.h (genrtl_expr_stmt_value): Likewise.
+	* stmt.c (expand_expr_stmt): Pass 1 as maybe_last.
+	(expand_expr_stmt_value): Add maybe_last argument.
+	Don't warn about statement with no effect if it is the last statement
+	in expression statement.
+	* c-semantics.c (genrtl_expr_stmt): Pass 1 as maybe_last.
+	(genrtl_expr_stmt_value): Add maybe_last argument, pass it down to
+	expand_expr_stmt_value.
+	(expand_stmt) [EXPR_STMT]: Pass 1 as maybe_last to
+	genrtl_expr_stmt_value if t is the last EXPR_STMT in its scope.
+	* expr.c (expand_expr) [LABELED_BLOCK_EXPR, LOOP_EXPR]: Pass 1
+	as maybe_last to expand_expr_stmt_value.
+
+Fri Jan  4 11:45:05 2002  Jeffrey A Law  (law@redhat.com)
+
+        * c-common.c (c_expand_start_cond): Expect the IF_STMT node to
+        be passed in, do not build it.
+        (c_begin_if_stmt): New function.
+        (c_begin_while_stmt, c_finish_while_stmt_cond): Likewise.
+        * c-common.h (c_expand_start_cond): Update prototype.
+        (c_begin_if_stmt): Prototype new function.
+        (c_begin_while_stmt, c_finish_while_stmt_cond): Likewise.
+        * c-parse.in (if_prefix): Use c_begin_if_stmt,
+        c_begin_while_stmt and c_finish_while_stmt_cond.
+
+2002-01-04  William Cohen  <wcohen@redhat.com>
+
+	* config/pa/elf.h (ASM_FILE_START): Reverted to profile_flag.
+	* config/pa/pa-linux.h (ASM_FILE_START): Likewise.
+	* config/pa/pa64-hpux.h (ASM_FILE_START): Likewise.
+	* config/pa/som.h (ASM_FILE_START): Likewise.
+
+2001-01-04  Daniel Berlin  <dan@cgsoftware.com>
+
+	* lcm.c: Include df.h.
+	Add available_transfer_function prototype.
+	(compute_available): Rework to use iterative dataflow framework.
+	(struct bb_info): s/bb_info/lcm_bb_info/g to avoid conflict
+	with bb_info in df.h
+	(available_transfer_function): New function.
+
+	* Makefile.in (lcm.o): add df.h to dependencies.
+
+2002-01-04  Richard Henderson  <rth@redhat.com>
+
+	* config/alpha/alpha.c (some_operand): Accept HIGH.
+	(input_operand): Likewise; accept simple references to globals.
+	(alpha_const_ok_for_letter_p): New, outlined from alpha.h.
+	(alpha_const_double_ok_for_letter_p): Likewise.
+	(alpha_extra_constraint): Likewise.
+	(alpha_preferred_reload_class): Likewise.  Do not force
+	symbolic constants to memory.
+	(alpha_legitimate_address_p): Accept simple references
+	to small_symbolic_operand.
+	(alpha_legitimize_address): New arg scratch.  Be prepared to be
+	called when no_new_pseudos.  Emit simple symbolic references.
+	Split integers into low, high, and rest.
+	(alpha_expand_mov): Use alpha_legitimize_address.
+	(some_small_symbolic_mem_operand): New.
+	(split_small_symbolic_mem_operand): New.
+	* config/alpha/alpha-protos.h: Update.
+	* config/alpha/alpha.h (CONST_OK_FOR_LETTER_P): Out-line.
+	(CONST_DOUBLE_OK_FOR_LETTER_P): Likewise.
+	(EXTRA_CONSTRAINT): Likewise.
+	(PREFERRED_RELOAD_CLASS): Likewise.
+	(LEGITIMIZE_ADDRESS): Update for alpha_legitimize_address change.
+	(PREDICATE_CODES): Update.
+	* config/alpha/alpha.md: New post-reload splitters to convert
+	simplfied symbolic operands to the form that references $29.
+	(divide expanders): Use emit_move_insn, not gen_movdi_er_high_g.
+	(movdi_er_nofix, movdi_er_fix): Accept any symbolic operand.
+
+2002-01-03  Richard Henderson  <rth@redhat.com>
+
+	* local-alloc.c (function_invariant_p): Update commentary.
+
+2002-01-04  H.J. Lu <hjl@gnu.org>
+
+	* toplev.c (rest_of_compilation): Fix a typo when calling
+	cleanup_cfg.
+
+2002-01-03  Kazu Hirata  <kazu@hxi.com>
+
+	* c-common.c: Fix formatting.
+	* diagnostic.c: Likewise.
+	* doloop.c: Likewise.
+	* dwarf2out.c: Likewise.
+
+2002-01-03  Kazu Hirata  <kazu@hxi.com>
+
+	* config/h8300/h8300.c (output_logical_op): Use 'not.w' instead
+	of 'neg.w' when xoring with 0x0000ffff or 0xffff0000.
+
+2002-01-03  Neil Booth  <neil@daikokuya.demon.co.uk>
+
+	* cpperror.c: Update comments and copyright.
+	* cppexp.c, cppfiles.c, cpphash.c, cpphash.h, cppinit.c,
+	cpplex.c, cpplib.c, cpplib.h, cppmacro.c, cppmain.c: Similarly.
+
+2002-01-03  John David Anglin  <dave@hiauly1.hia.nrc.ca>
+
+	* collect2.c (main): Use strcmp when testing for "-shared".
+
+2002-01-03  Neil Booth  <neil@daikokuya.demon.co.uk>
+
+	* cppmacro.c: Don't include intl.h.  Update comments.
+	(new_number_token): Allocate enough buffer for 64-bit unsigned
+	integers; update prototype.
+	* cppmain.c: Update comments.
+
+2002-01-03  William Cohen  <wcohen@redhat.com>
+
+	* function.h (struct function): Add profile.
+	(current_function_profile): New.
+	doc/extend.texi: Update documentation.
+	* final.c (final_start_function): Use current_function_profile
+	instead of profile_flag.
+	(profile_after_prologue): Likewise.
+	* function.c (expand_function_start): Likewise.
+	(expand_function_start): Likewise.
+	* config/alpha/alpha.c (direct_call_operand):
+	(alpha_does_function_need_gp): Likewise.
+	(alpha_expand_prologue): Likewise.
+	* config/arm/arm.c (arm_expand_prologue): Likewise.
+	thumb_expand_prologue: Likewise.
+	* config/d30v/d30v.c (d30v_stack_info): Likewise.
+	* config/fr30/fr30.c (MUST_SAVE_RETURN_POINTER): Likewise.
+	(fr30_expand_prologue): Likewise.
+	* config/i386/cygwin.h (SUBTARGET_PROLOGUE): Likewise.
+	* config/i386/i386.c (ix86_osf_output_function_prologue): Likewise.
+	* config/i386/i386.h (FINALIZE_PIC): Likewise.
+	* config/i386/win32.h (SUBTARGET_PROLOGUE): Likewise.
+	* config/i960/i960.c (i960_output_function_prologue): Likewise.
+	* config/ia64/ia64.c (ia64_compute_frame_size): Likewise.
+	* config/m32r/m32r.c (MUST_SAVE_RETURN_ADDR): Likewise.
+	(m32r_expand_prologue): Likewise.
+	* config/m88k/m88k.c (m88k_layout_frame): Likewise.
+	(m88k_expand_prologue): Likewise.
+	* config/m88k/m88k.h (ADJUST_INSN_LENGTH): Likewise.
+	* config/mips/mips.c (compute_frame_size): Likewise.
+	(mips_expand_prologue): Likewise.
+	(mips_can_use_return_insn): Likewise.
+	* config/pa/elf.h (ASM_FILE_START): Likewise.
+	* config/pa/pa-linux.h (ASM_FILE_START): Likewise.
+	* config/pa/pa64-hpux.h (ASM_FILE_START): Likewise.
+	* config/pa/som.h (ASM_FILE_START): Likewise.
+	* config/romp/romp.c (romp_using_r14): Likewise.
+	* config/rs6000/rs6000.c (first_reg_to_save): Likewise.
+	(rs6000_stack_info): Likewise.
+	* config/rs6000/sysv4.h (ASM_DECLARE_FUNCTION_NAME): Likewise.
+	* config/rs6000/xcoff.h (ASM_FILE_START): Likewise.
+	* config/v850/v850.c (compute_register_save_size): Likewise.
+
+2002-01-03  Jakub Jelinek  <jakub@redhat.com>
+
+	* simplify-rtx.c (simplify_binary_operation) [DIV]: If
+	gen_lowpart_common fails, use gen_lowpart_SUBREG.
+
+2002-01-03  Turly O'Connor  <turly@apple.com>
+
+	* darwin.c (machopic_output_possible_stub_label): Don't generate
+	stub routines for pseudo-stubs which we've just defined.
+
+2002-01-03  Kazu Hirata  <kazu@hxi.com>
+
+	* builtins.c: Fix formatting.
+	* c-typeck.c: Likewise.
+	* combine.c: Likewise.
+	* expr.c: Likewise.
+	* loop.c: Likewise.
+
+2002-01-03  Andreas Schwab  <schwab@suse.de>
+
+	* cppfiles.c (_cpp_pop_file_buffer): Change return type to bool
+	and return true if _cpp_push_next_buffer pushed a new include
+	file.
+	* cpplib.c (_cpp_pop_buffer): Only call obstack_free if
+	_cpp_pop_file_buffer did not push a new file.
+	* cpphash.h (_cpp_pop_file_buffer): Update declaration.
+
+2002-01-02  Eric Christopher  <echristo@redhat.com>
+
+	* final.c (final_scan_insn): Change 0 -> NULL_RTX in
+	FIND_REG_INC_NOTE call. Update copyright.
+	* loop.c (canonicalize_condition): Ditto.
+	* reorg.c (delete_scheduled_jump): Ditto.
+
+2002-01-03  Kazu Hirata  <kazu@hxi.com>
+
+	* gcse.c: Fix formatting.
+
+2002-01-03  Graham Stott  <grahams@redhat.com>
+
+	* mkconfig.sh: Output to config.h, hconfig.h and tconfig.h
+	forward defs for struct tags rtx_def, union_tree, rtvec_def
+	also output corresponding typedefs for rtxm, tree, and rtvcec.
+
+	* system.h: Move forward defs for struct tags rtx_def, union_tree,
+	rtvec_def along with corresponding typedefs for rtx, tree, and
+	rtvcec to config.h, hconfig.h, tconfig.h
+
+2002-01-03  Graham Stott  <grahams@redhat.com>
+
+	* tree.h: Update copyright date.
+	(IS_EXPR_CODE_CLASS): Add parenthesis.
+	(TREE_SET_CODE): Add whitespace.
+	(TREE_CHECK): Add parenthesis.
+	(TREE_CLASS_CODE): Add parenthesis and wrap long line.
+	(CST_OR_CONSTRUCTOR_CHECK):
+	(EXPR_CHECK): Add parenthis, whitespace and wrap line.
+	(TREE_SYMBOL_REFERENCED): Whitespace.
+	(INT_CST_LT): Likewise.
+	(INT_CST_LT_UNSIGNED): Likewise.
+	(tree_real_cst): Unwrap comment.
+	(tree_string): Likewise.
+	(tree_complex): Likewise.
+	(IDENTIFIER_POINTER): correct cast.
+	(SAVE_EXPR_CONTEXT): Whitespace.
+	(EXPR_WFL_FILENAME_NODE): Likewise.
+	(EXPR_WFL_FILENAME): Remove parenthesis.
+	(DECL_ORIGIN): Add parenthesis.
+	(DECL_FROM_INLINE): Use NULL_TREE.
+	(build_int_2): Whitespace.
+	(build_type_variant): Add parenthesis.
+
+	* gcc/jcf-parse.c: Update copyright date.
+	(yyparse): Constify resource_filename.
+
+2002-01-03  Graham Stott  <grahams@redhat.com>
+
+	* rtl.h: Update copyright date.
+	(RTL_CHECK1): Wrap long line.
+	(RTL_CHECK2): Likewise.
+	(RTL_CHECKC1): Wrap long line and whitespace.
+	(RTL_CHECKC2): Likewise.
+	(XWINT): Whitespace.
+	(XINT): Likewise.
+	(XSTR): Likewise.
+	(XEXP): Likewise.
+	(XVEC): Likewise.
+	(XMODE): Likewise.
+	(XBITMAP): Likewise.
+	(XTREE): Likewise.
+	(XBBDEF): Likewise.
+	(XTMPL): Likewise.
+	(X0WINT): Likewise.
+	(X0INT):Likewise.
+	(X0UINT): Likewise.
+	(X0STR): Likewise.
+	(X0EXP): Likewise.
+	(X0VEC): Likewise.
+	(X0MODE): Likewise.
+	(X0BITMAP): Likewise.
+	(X0TREE): Likewise.
+	(X0BBDEF): Likewise.
+	(X0ADVFLAGS): Likewise.
+	(X0CSELIB): Likewise.
+	(X0MEMATTR): Likewise.
+	(XCWINT): Likewise.
+	(XCINT): Likewise.
+	(XCUINT): Likewise.
+	(XCSTR): Likewise.
+	(XCEXP): Likewise.
+	(XCVEC): Likewise.
+	(XCMODE): Likewise.
+	(XCBITMAP): Likewise.
+	(XCTREE): Likewise.
+	(XCBBDEF): Likewise.
+	(XCADVFLAGS): Likewise.
+	(XCCSELIB): Likewise.
+	(XC2EXP): Likewise.
+	(INSN_UID): Likewise.
+	(PREV_INSN): Likewise.
+	(PATTERN): Likewise.
+	(INSN_CODE): Likewise.
+	(PUT_REG_NOTE_KIND): Likewise.
+	(CODE_LABEL_NUMBER): Likewise.
+	(NOTE_SOURCE_FILE): Likewise.
+	(NOTE_BLOCK): Likewise.
+	(NOTE_EH_HANDLER): Likewise.
+	(NOTE_RANGE_INFO): Likewise.
+	(NOTE_LIVE_INFO): Likewise.
+	(NOTE_BASIC_BLOCK): Likewise.
+	(NOTE_EXPECTED_VALUE): Likewise.
+	(NOTE_LINE_NUMBER): Likewise.
+	(LABEL_NAME): Likewise.
+	(LABEL_NUSES): Likewise.
+	(LABEL_ALTERNATE_NAME): Likewise.
+	(ADDRESSOF_DECL): Likewise.
+	(JUMP_LABEL): Likewise.
+	(LABEL_NEXTREF): Likewise.
+	(REGNO): Likewise.
+	(ORIGINAL_REGNO: Likewise.
+	(HARD_REGISTER_NUM_P): Add parenthesis.
+	(SUBREG_REG): Whitespace.
+	(SUBREG_BYTE): Likewise.
+	(ASM_OPERANDS_TEMPLATE): Remove parenthesis.
+	(ASM_OPERANDS_OUTPUT_CONSTRAINT): Likewise.
+	(ASM_OPERANDS_OUTPUT_IDX): Likewise.
+	(ASM_OPERANDS_INPUT_VEC): Likewise.
+	(ASM_OPERANDS_INPUT_CONSTRAINT_VEC): Likewise.
+	(ASM_OPERANDS_INPUT): Likewise.
+	(ASM_OPERANDS_INPUT_LENGTH): Likewise.
+	(ASM_OPERANDS_INPUT_CONSTRAINT_EXP): Likewise.
+	(ASM_OPERANDS_INPUT_CONSTRAINT): Likewise.
+	(ASM_OPERANDS_INPUT_MODE): Likewise.
+	(ASM_OPERANDS_SOURCE_FILE): Likewise.
+	(ASM_OPERANDS_SOURCE_LINE): Likewise.
+	(MEM_SET_IN_STRUCT_P): Minor reformat.
+	(TRAP_CONDITION): Whitespace.
+	(TRAP_CODE): Likewise.
+	(COND_EXEC_TEST): Likewise.
+	(COND_EXEC_CODE): Likewise.
+	(FIND_REG_INC_NOTE): Uppercase macro args and add parenthesis.
+	(PHI_NODE_P): Add parenthesis.
+	(plus_constant): Whitespace and add parenthesis.
+
+2002-01-03  Kazu Hirata  <kazu@hxi.com>
+
+	* config/avr/avr.c: Fix comment typos.
+	* config/c4x/c4x.md: Likewise.
+	* config/dsp16xx/dsp16xx.h: Likewise.
+	* config/dsp16xx/dsp16xx.md: Likewise.
+	* config/i386/i386.md: Likewise.
+	* config/ia64/ia64.c: Likewise.
+	* config/m32r/m32r.h: Likewise.
+	* config/m68hc11/m68hc11.md: Likewise.
+	* config/mmix/mmix.c: Likewise.
+	* config/mn10200/mn10200.c: Likewise.
+	* config/romp/romp.c: Likewise.
+	* config/sh/sh.c: Likewise.
+	* config/stormy16/stormy16.c: Likewise.
+	* config/stormy16/stormy16.h: Likewise.
+	* config/stormy16/stormy16.md: Likewise.
+
+2002-01-03  Graham Stott  <grahams@redhat.com>
+
+	* loop.h: Update copyright date.
+        (LOOP_MOVABLES): Fix typo.
+        (LOOP_REGS): Likewise.
+        (LOOP_IVS): Likewise.
+
+2002-01-03  Graham Stott  <grahams@redhat.com>
+
+	* cppinit.c: Update copyright date.
+	Don't include output.h
+	* Makefile.in: Update copyright date.
+	Update dependency.
+
+2002-01-02  Craig Rodrigues  <rodrigc@gcc.gnu.org>
+
+	PR c/5226
+	* invoke.texi (-mthreads): Remove from documented RS/6000 options.
+	(-pthread) Add to RS/6000 options.
+
+2002-01-02  Kazu Hirata  <kazu@hxi.com>
+
+	* except.c: Fix comment typos.
+	* loop.c: Likewise.
+	* varasm.c: Likewise.
+	* doc/tm.texi: Fix a typo.
+
+2002-01-02  Jakub Jelinek  <jakub@redhat.com>
+
+	* c-typeck.c (output_init_element): Allow initializing static storage
+	duration objects with compound literals.
+
+2002-01-02  Richard Henderson  <rth@redhat.com>
+
+	* objc/objc-act.c (hack_method_prototype): Clear current_function_decl
+	after abusing it.
+
+2002-01-02  Kaveh R. Ghazi  <ghazi@caip.rutgers.edu>
+
+	* gcc.c (default_compilers): Const-ify.
+	* mips-tdump.c (stab_names): Likewise.
+	* mips-tfile.c (map_coff_types, map_coff_storage,
+	map_coff_sym_type, map_coff_derived_type, stabs_symbol,
+	pseudo_ops_t, pseudo_ops): Likewise.
+	* protoize.c (default_include): Likewise
+
+	* real.c (GET_REAL, PUT_REAL): Don't cast away const-ness.
+	(ezero, ehalf, eone, etwo, e32, elog2, esqrt2, epi): Const-ify.
+	Add array size in declaration.
+	(endian, emov, eisneg, eisinf, eisnan, eiisnan, eiisneg, emovi,
+	emovo, emovz, eiisinf, ecmpm, eaddm, esubm, m16m, edivm, emulm,
+	esub, eadd, eadd1, ediv, emul, e53toe, e64toe, e113toe, e24toe,
+	etoe113, etoe64, etoe53, etoe24, ecmp, eround, ltoe, ultoe,
+	eifrac, euifrac, e24toasc, e53toasc, e64toasc, e113toasc, etoasc,
+	efloor, efrexp, eldexp, eremain, dectoe, etodec, ibmtoe, etoibm,
+	c4xtoe, etoc4x, uditoe, ditoe, etoudi, etodi, esqrt, etens,
+	emtens, make_nan): Const-ify.
+	(TFbignan, TFlittlenan, XFbignan, XFlittlenan, DFbignan,
+	DFlittlenan, SFbignan, SFlittlenan): Make static and const-ify.
+
+2002-01-02  Joseph S. Myers  <jsm28@cam.ac.uk>
+
+	* config.gcc (ia64-*-*): Set extra_headers.
+	(alpha*-dec-osf*): Likewise.  Don't use alpha/t-osf.
+	* config/alpha/t-osf: Remove.
+	* config/ia64/t-ia64 (EXTRA_HEADERS): Remove.
+
+2002-01-02  David Edelsohn  <edelsohn@gnu.org>
+
+	* config/rs6000/t-aix43: Revert previous change.
+
+2002-01-02  Jason Merrill  <jason@redhat.com>
+
+	* c-decl.c (c_expand_body): Call outlining_inline_function when
+	emitting an inline function out of line.
+
+2002-01-02  Richard Henderson  <rth@redhat.com>
+
+	* dwarf2out.c (limbo_die_node): Add created_for member.
+	(new_die): New argument created_for.  Update all callers.
+	(mark_limbo_die_list): New.
+	(dwarf2out_init): Register limbo_die_list as a root.
+	(dwarf2out_finish): Force insert limbo dies into their function
+	context.
+
+2002-01-02  Nathan Sidwell  <nathan@codesourcery.com>
+
+	PR c++/5089
+	* doc/invoke.texi (-Wold-style-cast): Only warn about non-void casts.
+
+2002-01-02  Kazu Hirata  <kazu@hxi.com>
+
+	* config/h8300/fixunssfsi.c: Update copyright.
+	Fix comment typos.
+	Fix formatting.
+	* config/h8300/h8300.c: Update copyright.
+	Eliminate warnings.
+
+2002-01-02  Kazu Hirata  <kazu@hxi.com>
+
+	* config/romp/romp.c: Fix comment formatting.
+	* config/romp/romp.h: Likewise.
+	* config/romp/romp.md: Likewise.
+	* config/s390/s390.c: Likewise.
+	* config/stormy16/stormy16.c: Likewise.
+	* config/stormy16/stormy16.h: Likewise.
+
+2002-01-02  Alexandre Oliva  <aoliva@redhat.com>
+
+	* c-common.h (genrtl_expr_stmt_value): Declare.
+	* c-semantics.c (genrtl_goto_stmt): Redirect to...
+	(genrtl_goto_stmt_value): ... this new function.  Pass new
+	argument down to expand_expr_stmt_value, taking
+	TREE_ADDRESSABLE into account.
+	* c-common.c (c_expand_expr): Mark the last EXPR_STMT of a
+	STMT_EXPR as addressable, i.e., one whose result we want.
+	* expr.c (expand_expr): Don't save expression statement value
+	of labeled_blocks or loop_exprs.
+	* stmt.c (expand_expr_stmt): Redirect to...
+	(expand_expr_stmt_value): ... this new function.  Use new
+	argument to tell whether to save expression value.
+	(expand_end_stmt_expr): Reset last_expr_type and
+	last_expr_value if we don't have either.
+	* tree-inline.c (declare_return_variable): Mark its use
+	statement as addressable.
+	* tree.h: Document new use of TREE_ADDRESSABLE.
+	(expand_expr_stmt_value): Declare.
+
+2002-01-01  Tom Rix  <trix@redhat.com>
+
+	* config/rs6000/rs6000.c (rs6000_emit_set_long_const): Fix for use by
+	rs6000_emit_allocate_stack.
+
+2002-01-01  Joseph S. Myers  <jsm28@cam.ac.uk>
+
+	* configure.in: Prepend ${srcdir}/config/${cpu_type}/ instead of
+	${srcdir}/ginclude/ to every entry in extra_headers.
+	* configure: Regenerate.
+	* ginclude/math-3300.h: Rename to config/m68k/math-3300.h.
+	* ginclude/math-68881.h: Rename to config/m68k/math-68881.h.
+	* ginclude/ppc-asm.h: Rename to config/rs6000/ppc-asm.h.
+	* ginclude/proto.h: Rename to config/convex/proto.h.
+
+Tue Jan  1 17:12:56 2002  Richard Kenner  <kenner@vlsi1.ultra.nyu.edu>
+
+	* attribs.c (handle_vector_size_attribute): Use host_integerp
+	and tree_int_cst; remove warnings.
+	* caller-save.c (insert_restore): Add cast to get rid of warning.
+	(insert_save): Likewise.
+	* emit-rtl.c (adjust_address_1, offset_address): Likewise.
+	* regmove.c (find_matches): Add temporary var to kill a warning.
+
+2002-01-01  Douglas B Rupp  <rupp@gnat.com>
+
+	* config/alpha/vms.h (DWARF2_UNWIND_INFO, EH_RETURN_HANDLER_RTX,
+	LINK_EH_SPEC, MD_FALLBACK_FRAME_STATE_FOR): Define.
+	* config/alpha/t-vms (EXTRA_PARTS): Add vms-dwarf2eh.o
+	(vms-dwarf2eh.o): Add Makefile rule.
+	* config/alpha/vms-ld.c (main): Handle vms-dwarf2eh.o.
+	* config/alpha/vms-dwarf2eh.asm: New file.
+
+	* gcc.c (delete_if_ordinary): Delete all versions.
+
+2002-01-01  Hans-Peter Nilsson  <hp@bitrange.com>
+
+	* config/mmix/mmix.md: Update FIXME to not mention
+	define_constants.
+	(MMIX_rJ_REGNUM): New define_constants constant.
+	("movqi", "movsi", "movdi", "*movdicc_real_foldable",
+	"*movdicc_real"): Adjust contraints formatting.
+	("*bCC_foldable"): Add %+ for P in output format and delete FIXME
+	for branch prediction.
+	("*bCC", "*bCC_inverted_foldable", "*bCC_inverted"): Add %+ in
+	output template.
+	("*call_real", "*call_value_real", "nonlocal_goto_receiver",
+	"*nonlocal_goto_receiver_expanded"): Use MMIX_rJ_REGNUM instead of
+	number.  Delete related FIXMEs.
+	* config/mmix/mmix.h (MMIX_INCOMING_RETURN_ADDRESS_REGNUM): Change
+	from number to MMIX_rJ_REGNUM.
+	(TARGET_MASK_BRANCH_PREDICT): New.
+	(TARGET_DEFAULT): Change to TARGET_MASK_BRANCH_PREDICT.
+	(TARGET_SWITCHES): Update comment.  Correct -mno-toplevel-symbols
+	value.  Add -mbranch-predict and -mno-branch-predict.
+	(TARGET_VERSION): Drop date.
+	(ADDITIONAL_REGISTER_NAMES): Use MMIX_rJ_REGNUM, not number.
+	* config/mmix/mmix.c (mmix_encode_section_info): Correct condition
+	for finding out global symbols.
+	(mmix_asm_output_labelref): Revert condition for global symbol.
+	(mmix_print_operand): <case '+'>: Emit P for a likely branch.
+	(mmix_print_operand_punct_valid_p): A '+' is valid.
+
+See ChangeLog.6 for earlier changes.

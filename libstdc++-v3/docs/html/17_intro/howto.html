@@ -1,0 +1,180 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN">
+<html>
+<head>
+   <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+   <meta name="AUTHOR" content="pme@gcc.gnu.org (Phil Edwards)">
+   <meta name="KEYWORDS" content="HOWTO, libstdc++, gcc, g++, libg++, STL">
+   <meta name="DESCRIPTION" content="HOWTO for libstdc++ chapter 17.">
+   <meta name="GENERATOR" content="vi and eight fingers">
+   <title>libstdc++-v3 HOWTO:  Chapter 17</title>
+<link rel="StyleSheet" href="../lib3styles.css">
+</head>
+<body>
+
+<h1 class="centered"><a name="top">Chapter 17:  Library Introduction</a></h1>
+
+<p>Chapter 17 is actually a list of definitions and descriptions used
+   in the following chapters of the Standard when describing the actual
+   library.  Here, we use &quot;Introduction&quot; as an introduction
+   to the <em>GNU implementation of</em> the ISO Standard C++ Library.
+</p>
+
+
+<!-- ####################################################### -->
+<hr>
+<h1>Contents</h1>
+<ul>
+   <li><a href="#2">The Standard C++ header files</a>
+   <li><a href="#3">The Standard C++ library and multithreading</a>
+   <li><a href="#4"><code>&lt;foo&gt;</code> vs <code>&lt;foo.h&gt;</code></a>
+   <li><a href="porting-howto.html">Porting HOWTO</a>
+</ul>
+
+<hr>
+
+<!-- ####################################################### -->
+
+<h2><a name="2">The Standard C++ header files</a></h2>
+   <p>The Standard C++ Library specifies 50 header files that must be
+      available to all hosted implementations.  Actually, the word
+      &quot;files&quot; is a misnomer, since the contents of the headers
+      don't necessarily have to be in any kind of external file.  The
+      only rule is that when you <code>#include</code> a certain header, the
+      contents of that header, as defined by the Standard, become
+      available to you, no matter how.
+   </p>
+   <p>The names of the headers can be easily seen in
+      <a href="headers_cc.txt"><code>testsuite/17_intro/headers.cc</code></a>,
+      which is a small testbed we use to make certain that the headers
+      all compile and run.
+   </p>
+
+<hr>
+<h2><a name="3">The Standard C++ library and multithreading</a></h2>
+   <p>This section discusses issues surrounding the proper compilation
+      of multithreaded applications which use the Standard C++
+      library.  This information is gcc-specific since the C++
+      standard does not address matters of multithreaded applications.
+      Unless explicitly prefaced, all information in this section is
+      current as of the gcc 3.0 release and all later point releases.
+   </p>
+   <p>Earlier gcc releases had a somewhat different approach to
+      threading configuration and proper compilation.  Before gcc 3.0,
+      configuration of the threading model was dictated by compiler
+      command-line options and macros (both of which were somewhat
+      thread-implementation and port-specific).  There were no
+      guarantees related to being able to link code compiled with one
+      set of options and macro setting with another set.  For gcc 3.0,
+      configuration of the threading model used with libraries and
+      user-code is performed when gcc is configured and built using
+      the --enable-threads and --disable-threads options.  The ABI is
+      stable for symbol name-mangling and limited functional
+      compatibility exists between code compiled under different
+      threading models.
+   </p>
+   <p>All normal disclaimers aside, multithreaded C++ application are
+      only supported when libstdc++ and all user code was built with
+      compilers which report (via <code> gcc/g++ -v </code>) the same thread
+      model and that model is not <em>single</em>.  As long as your
+      final application is actually single-threaded, then it should be
+      safe to mix user code built with a thread model of
+      <em>single</em> with a libstdc++ and other C++ libraries built
+      with another thread model useful on the platform.  Other mixes
+      may or may not work but are not considered supported.  (Thus, if
+      you distribute a shared C++ library in binary form only, it may
+      be best to compile it with a gcc configured with
+      --enable-threads for maximal interchangeability and usefulness
+      with a user population that may have built gcc with either
+      --enable-threads or --disable-threads.)
+   </p>
+   <p>When you link a multithreaded application, you will probably
+      need to add a library or flag to g++.  This is a very
+      non-standardized area of GCC across ports.  Some ports support a
+      special flag (the spelling isn't even standardized yet) to add
+      all required macros to a compilation (if any such flags are
+      required then you must provide the flag for all compilations not
+      just linking) and link-library additions and/or replacements at
+      link time.  The documentation is weak.  Here is a quick summary
+      to display how ad hoc this is: On Solaris, both -pthreads and
+      -threads (with subtly different meanings) are honored.  On OSF,
+      -pthread and -threads (with subtly different meanings) are
+      honored.  On Linux/i386, -pthread is honored.  On FreeBSD,
+      -pthread is honored.  Some other ports use other switches.
+      AFAIK, none of this is properly documented anywhere other than
+      in ``gcc -dumpspecs'' (look at lib and cpp entries).
+   </p>
+   <p>See <a href="../faq/index.html#3">FAQ</a> (general overview), <a
+      href="../23_containers/howto.html#3">23</a> (containers), and <a
+      href="../27_io/howto.html#9">27</a> (I/O) for more information.
+   </p>
+   <p>The libstdc++-v3 library (unlike libstdc++-v2, all of it, not
+      just the STL) has been designed so that multithreaded
+      applications using it may be written.  The first problem is
+      finding a <em>fast</em> method of implementation portable to all
+      platforms.  Due to historical reasons, some of the library is
+      written against per-CPU-architecture spinlocks and other parts
+      against the gthr.h abstraction layer which is provided by gcc.
+      A minor problem that pops up every so often is different
+      interpretations of what &quot;thread-safe&quot; means for a
+      library (not a general program).  We currently use the <a
+      href="http://www.sgi.com/tech/stl/thread_safety.html">same
+      definition that SGI</a> uses for their STL subset.  However, the
+      exception for read-only containers only applies to the STL
+      components.
+   </p>
+   <p>Here is a small link farm to threads (no pun) in the mail archives
+      that discuss the threading problem.  Each link is to the first
+      relevant message in the thread; from there you can use
+      &quot;Thread Next&quot; to move down the thread.  This farm is in
+      latest-to-oldest order.
+      <ul>
+        <li>Our threading expert Loren gives a breakdown of
+        <a href="http://gcc.gnu.org/ml/libstdc++/2001-10/msg00024.html">the
+        six situations involving threads</a> for the 3.0 release series.
+        <li><a href="http://gcc.gnu.org/ml/libstdc++/2001-05/msg00384.html">
+        This message</a> inspired a recent updating of issues with threading
+        and the SGI STL library.  It also contains some example
+        POSIX-multithreaded STL code.
+      </ul>
+      (A large selection of links to older messages has been removed; many
+      of the messages from 1999 were lost in a disk crash, and the few
+      people with access to the backup tapes have been too swamped with work
+      to restore them.  Many of the points have been superseded anyhow.)
+   </p>
+   <p>This section will be updated as new and interesting issues come
+      to light.
+   </p>
+   <p>Return <a href="#top">to top of page</a> or
+      <a href="../faq/index.html">to the FAQ</a>.
+   </p>
+
+<hr>
+<h2><a name="4"><code>&lt;foo&gt;</code> vs <code>&lt;foo.h&gt;</code></a></h2>
+   <p>The new-style headers are fully supported in libstdc++-v3.  The compiler
+      itself fully supports namespaces, including <code>std::</code>.
+   </p>
+   <p>For those of you new to ISO C++98, no, that isn't a typo, the headers
+      really have new names.  Marshall Cline's C++ FAQ Lite has a good
+      explanation in
+<a href="http://www.cerfnet.com/~mpcline/On-Line-C++-FAQ/coding-standards.html#[25.4]">item [25.4]</a>.
+   </p>
+   <p>Return <a href="#top">to top of page</a> or
+      <a href="../faq/index.html">to the FAQ</a>.
+   </p>
+
+
+
+<!-- ####################################################### -->
+
+<hr>
+<p class="fineprint"><em>
+See <a href="license.html">license.html</a> for copying conditions.
+Comments and suggestions are welcome, and may be sent to
+<a href="mailto:libstdc++@gcc.gnu.org">the libstdc++ mailing list</a>.
+</em></p>
+
+
+</body>
+</html>
+
+

@@ -1,0 +1,1380 @@
+// !$*UTF8*$!
+{
+	8928587D02108C4F0CCA2CB6 = {
+		activeExec = 0;
+	};
+	8972D0FC025024210CCA2950 = {
+		fRef = 8972D166025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "MMPlugInOne.mii: 66732";
+		rLen = 0;
+		rLoc = 1951720;
+		rType = 0;
+		vrLen = 1535;
+		vrLoc = 1951043;
+	};
+	8972D0FD025024210CCA2950 = {
+		fRef = 8972D167025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "Make-lang.in: 4";
+		rLen = 0;
+		rLoc = 141;
+		rType = 0;
+		vrLen = 1765;
+		vrLoc = 0;
+	};
+	8972D0FE025024210CCA2950 = {
+		fRef = 8972D168025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "Make-lang.in: 322";
+		rLen = 0;
+		rLoc = 12691;
+		rType = 0;
+		vrLen = 2497;
+		vrLoc = 12097;
+	};
+	8972D0FF025024210CCA2950 = {
+		fRef = 8972D169025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "cp-tree.h: 3865";
+		rLen = 13;
+		rLoc = 155889;
+		rType = 0;
+		vrLen = 2704;
+		vrLoc = 154531;
+	};
+	8972D100025024210CCA2950 = {
+		fRef = 8972D14E025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "lex.h: 88";
+		rLen = 13;
+		rLoc = 3383;
+		rType = 0;
+		vrLen = 1523;
+		vrLoc = 2297;
+	};
+	8972D101025024210CCA2950 = {
+		fRef = 8972D14F025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "cp-parse.in: 98";
+		rLen = 0;
+		rLoc = 3268;
+		rType = 0;
+		vrLen = 1564;
+		vrLoc = 3118;
+	};
+	8972D102025024210CCA2950 = {
+		fRef = 8972D150025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "cp-lang.h: 1";
+		rLen = 0;
+		rLoc = 0;
+		rType = 0;
+		vrLen = 2132;
+		vrLoc = 2759;
+	};
+	8972D103025024210CCA2950 = {
+		fRef = 8972D151025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "cp-lang.c: 29";
+		rLen = 0;
+		rLoc = 1008;
+		rType = 0;
+		vrLen = 1342;
+		vrLoc = 304;
+	};
+	8972D104025024210CCA2950 = {
+		fRef = 8972D152025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-lang.c: 1";
+		rLen = 0;
+		rLoc = 0;
+		rType = 0;
+		vrLen = 1490;
+		vrLoc = 1346;
+	};
+	8972D105025024210CCA2950 = {
+		fRef = 8972D153025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "c-lang.c: 31";
+		rLen = 0;
+		rLoc = 994;
+		rType = 0;
+		vrLen = 1266;
+		vrLoc = 96;
+	};
+	8972D106025024210CCA2950 = {
+		fRef = 8972D154025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "c-common.h: 900";
+		rLen = 0;
+		rLoc = 34748;
+		rType = 0;
+		vrLen = 1617;
+		vrLoc = 33163;
+	};
+	8972D107025024210CCA2950 = {
+		fRef = 8972D155025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "stub-objc.c: 50";
+		rLen = 0;
+		rLoc = 1197;
+		rType = 0;
+		vrLen = 925;
+		vrLoc = 478;
+	};
+	8972D108025024210CCA2950 = {
+		fRef = 8972D156025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "spew.c: 469";
+		rLen = 0;
+		rLoc = 15809;
+		rType = 0;
+		vrLen = 1453;
+		vrLoc = 0;
+	};
+	8972D109025024210CCA2950 = {
+		fRef = 8972D157025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "pt.c: 4466";
+		rLen = 0;
+		rLoc = 134850;
+		rType = 0;
+		vrLen = 1200;
+		vrLoc = 134027;
+	};
+	8972D10A025024210CCA2950 = {
+		fRef = 8972D15B025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-idebug.c: 42";
+		rLen = 0;
+		rLoc = 1576;
+		rType = 0;
+		vrLen = 1495;
+		vrLoc = 1205;
+	};
+	8972D10B025024210CCA2950 = {
+		fRef = 8972D15C025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "cp-idebug.c: 8";
+		rLen = 0;
+		rLoc = 233;
+		rType = 0;
+		vrLen = 1709;
+		vrLoc = 0;
+	};
+	8972D10C025024210CCA2950 = {
+		fRef = 8972D15D025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.h: 296";
+		rLen = 0;
+		rLoc = 9334;
+		rType = 0;
+		vrLen = 2118;
+		vrLoc = 8740;
+	};
+	8972D10D025024210CCA2950 = {
+		fRef = 8972D15E025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.c: 2639";
+		rLen = 0;
+		rLoc = 76603;
+		rType = 0;
+		vrLen = 860;
+		vrLoc = 76147;
+	};
+	8972D10E025024210CCA2950 = {
+		fRef = 8972D15F025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "MMPlugInOne.mii: 66732";
+		rLen = 0;
+		rLoc = 1951720;
+		rType = 0;
+		vrLen = 1535;
+		vrLoc = 1951043;
+	};
+	8972D10F025024210CCA2950 = {
+		fRef = 8972D160025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "pt.c: 4464";
+		rLen = 0;
+		rLoc = 134855;
+		rType = 0;
+		vrLen = 1419;
+		vrLoc = 133559;
+	};
+	8972D110025024210CCA2950 = {
+		fRef = 8972D163025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.h: 301";
+		rLen = 0;
+		rLoc = 9524;
+		rType = 0;
+		vrLen = 2234;
+		vrLoc = 8889;
+	};
+	8972D111025024210CCA2950 = {
+		fRef = 8972D164025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "pt.c: 40";
+		rLen = 0;
+		rLoc = 1393;
+		rType = 0;
+		vrLen = 1591;
+		vrLoc = 0;
+	};
+	8972D112025024210CCA2950 = {
+		fRef = 8972D165025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "Make-lang.in: 4";
+		rLen = 0;
+		rLoc = 141;
+		rType = 0;
+		vrLen = 1765;
+		vrLoc = 0;
+	};
+	8972D113025024210CCA2950 = {
+		fRef = 8972D173025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "Make-lang.in: 72";
+		rLen = 0;
+		rLoc = 2873;
+		rType = 0;
+		vrLen = 1711;
+		vrLoc = 2082;
+	};
+	8972D114025024210CCA2950 = {
+		fRef = 8972D16A025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.h: 304";
+		rLen = 0;
+		rLoc = 9655;
+		rType = 0;
+		vrLen = 2129;
+		vrLoc = 8062;
+	};
+	8972D115025024210CCA2950 = {
+		fRef = 8972D16B025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "pt.c: 40";
+		rLen = 0;
+		rLoc = 1393;
+		rType = 0;
+		vrLen = 1381;
+		vrLoc = 550;
+	};
+	8972D116025024210CCA2950 = {
+		fRef = 8972D16C025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "spew.c: 469";
+		rLen = 0;
+		rLoc = 15809;
+		rType = 0;
+		vrLen = 1453;
+		vrLoc = 0;
+	};
+	8972D117025024210CCA2950 = {
+		fRef = 8972D16D025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "cp-parse.in: 34";
+		rLen = 0;
+		rLoc = 1443;
+		rType = 0;
+		vrLen = 1253;
+		vrLoc = 964;
+	};
+	8972D118025024210CCA2950 = {
+		fRef = 8972D16E025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "pt.c: 41";
+		rLen = 0;
+		rLoc = 1410;
+		rType = 0;
+		vrLen = 1322;
+		vrLoc = 550;
+	};
+	8972D119025024210CCA2950 = {
+		fRef = 8972D158025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "Make-lang.in: 322";
+		rLen = 0;
+		rLoc = 12691;
+		rType = 0;
+		vrLen = 2497;
+		vrLoc = 12097;
+	};
+	8972D11A025024210CCA2950 = {
+		fRef = 8972D174025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "pt.c: 38";
+		rLen = 0;
+		rLoc = 1393;
+		rType = 0;
+		vrLen = 1346;
+		vrLoc = 531;
+	};
+	8972D11B025024210CCA2950 = {
+		fRef = 8972D175025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.h: 108";
+		rLen = 0;
+		rLoc = 4234;
+		rType = 0;
+		vrLen = 1900;
+		vrLoc = 983;
+	};
+	8972D11C025024210CCA2950 = {
+		fRef = 8972D177025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.c: 2633";
+		rLen = 0;
+		rLoc = 76618;
+		rType = 0;
+		vrLen = 910;
+		vrLoc = 76095;
+	};
+	8972D11D025024210CCA2950 = {
+		fRef = 8972D178025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.h: 34";
+		rLen = 0;
+		rLoc = 1146;
+		rType = 0;
+		vrLen = 1899;
+		vrLoc = 983;
+	};
+	8972D11E025024210CCA2950 = {
+		fRef = 8972D17A025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "cp-tree.h: 3865";
+		rLen = 13;
+		rLoc = 155889;
+		rType = 0;
+		vrLen = 2704;
+		vrLoc = 154531;
+	};
+	8972D11F025024210CCA2950 = {
+		fRef = 8972D161025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "lex.h: 88";
+		rLen = 13;
+		rLoc = 3383;
+		rType = 0;
+		vrLen = 1523;
+		vrLoc = 2297;
+	};
+	8972D120025024210CCA2950 = {
+		fRef = 8972D171025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "cp-parse.in: 98";
+		rLen = 0;
+		rLoc = 3268;
+		rType = 0;
+		vrLen = 1564;
+		vrLoc = 3118;
+	};
+	8972D121025024210CCA2950 = {
+		fRef = 8972D172025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "cp-lang.h: 1";
+		rLen = 0;
+		rLoc = 0;
+		rType = 0;
+		vrLen = 2132;
+		vrLoc = 2759;
+	};
+	8972D122025024210CCA2950 = {
+		fRef = 8972D13D025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "cp-lang.c: 29";
+		rLen = 0;
+		rLoc = 1008;
+		rType = 0;
+		vrLen = 1342;
+		vrLoc = 304;
+	};
+	8972D123025024210CCA2950 = {
+		fRef = 8972D13E025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-lang.c: 1";
+		rLen = 0;
+		rLoc = 0;
+		rType = 0;
+		vrLen = 1490;
+		vrLoc = 1346;
+	};
+	8972D124025024210CCA2950 = {
+		fRef = 8972D176025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "c-lang.c: 31";
+		rLen = 0;
+		rLoc = 994;
+		rType = 0;
+		vrLen = 1266;
+		vrLoc = 96;
+	};
+	8972D125025024210CCA2950 = {
+		fRef = 8972D179025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "stub-objc.c: 37";
+		rLen = 0;
+		rLoc = 1079;
+		rType = 0;
+		vrLen = 1194;
+		vrLoc = 0;
+	};
+	8972D126025024210CCA2950 = {
+		fRef = 8972D17B025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "pt.c: 4464";
+		rLen = 0;
+		rLoc = 134797;
+		rType = 0;
+		vrLen = 1213;
+		vrLoc = 134027;
+	};
+	8972D127025024210CCA2950 = {
+		fRef = 8972D17C025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "stub-objc.c: 45";
+		rLen = 0;
+		rLoc = 1175;
+		rType = 0;
+		vrLen = 938;
+		vrLoc = 478;
+	};
+	8972D128025024210CCA2950 = {
+		fRef = 8972D16F025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.h: 24";
+		rLen = 0;
+		rLoc = 880;
+		rType = 0;
+		vrLen = 1735;
+		vrLoc = 0;
+	};
+	8972D129025024210CCA2950 = {
+		fRef = 8972D159025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.c: 2632";
+		rLen = 0;
+		rLoc = 76474;
+		rType = 0;
+		vrLen = 818;
+		vrLoc = 76210;
+	};
+	8972D12A025024210CCA2950 = {
+		fRef = 8972D144025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "c-common.h: 894";
+		rLen = 0;
+		rLoc = 34441;
+		rType = 0;
+		vrLen = 1617;
+		vrLoc = 33163;
+	};
+	8972D12B025024210CCA2950 = {
+		fRef = 8972D146025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.c: 2643";
+		rLen = 0;
+		rLoc = 76658;
+		rType = 0;
+		vrLen = 775;
+		vrLoc = 76210;
+	};
+	8972D12C025024210CCA2950 = {
+		fRef = 8972D148025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.h: 24";
+		rLen = 0;
+		rLoc = 880;
+		rType = 0;
+		vrLen = 2098;
+		vrLoc = 8344;
+	};
+	8972D12D025024210CCA2950 = {
+		fRef = 8972D149025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.c: 2639";
+		rLen = 0;
+		rLoc = 76603;
+		rType = 0;
+		vrLen = 860;
+		vrLoc = 76147;
+	};
+	8972D12E025024210CCA2950 = {
+		fRef = 8972D14A025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "pt.c: 12";
+		rLen = 0;
+		rLoc = 549;
+		rType = 0;
+		vrLen = 1560;
+		vrLoc = 0;
+	};
+	8972D12F025024210CCA2950 = {
+		fRef = 8972D162025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "c-common.h: 900";
+		rLen = 0;
+		rLoc = 34748;
+		rType = 0;
+		vrLen = 1617;
+		vrLoc = 33163;
+	};
+	8972D130025024210CCA2950 = {
+		fRef = 8972D17D025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "pt.c: 4460";
+		rLen = 13;
+		rLoc = 134571;
+		rType = 0;
+		vrLen = 1213;
+		vrLoc = 134027;
+	};
+	8972D131025024210CCA2950 = {
+		fRef = 8972D143025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "stub-objc.c: 50";
+		rLen = 0;
+		rLoc = 1197;
+		rType = 0;
+		vrLen = 925;
+		vrLoc = 478;
+	};
+	8972D132025024210CCA2950 = {
+		fRef = 8972D147025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "spew.c: 469";
+		rLen = 0;
+		rLoc = 15809;
+		rType = 0;
+		vrLen = 1453;
+		vrLoc = 0;
+	};
+	8972D133025024210CCA2950 = {
+		fRef = 8972D13F025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "pt.c: 4466";
+		rLen = 0;
+		rLoc = 134850;
+		rType = 0;
+		vrLen = 1200;
+		vrLoc = 134027;
+	};
+	8972D134025024210CCA2950 = {
+		fRef = 8972D140025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.h: 296";
+		rLen = 0;
+		rLoc = 9334;
+		rType = 0;
+		vrLen = 2182;
+		vrLoc = 8740;
+	};
+	8972D135025024210CCA2950 = {
+		fRef = 8972D141025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-idebug.c: 72";
+		rLen = 0;
+		rLoc = 2672;
+		rType = 0;
+		vrLen = 1572;
+		vrLoc = 1063;
+	};
+	8972D136025024210CCA2950 = {
+		fRef = 8972D142025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.h: 296";
+		rLen = 0;
+		rLoc = 9334;
+		rType = 0;
+		vrLen = 2118;
+		vrLoc = 8740;
+	};
+	8972D137025024210CCA2950 = {
+		fRef = 8972D145025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-idebug.c: 74";
+		rLen = 0;
+		rLoc = 2672;
+		rType = 0;
+		vrLen = 1561;
+		vrLoc = 1136;
+	};
+	8972D138025024210CCA2950 = {
+		fRef = 8972D170025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.h: 296";
+		rLen = 0;
+		rLoc = 9334;
+		rType = 0;
+		vrLen = 2118;
+		vrLoc = 8740;
+	};
+	8972D139025024210CCA2950 = {
+		fRef = 8972D15A025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-idebug.c: 42";
+		rLen = 0;
+		rLoc = 1576;
+		rType = 0;
+		vrLen = 1495;
+		vrLoc = 1205;
+	};
+	8972D13A025024210CCA2950 = {
+		fRef = 8972D14B025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "cp-idebug.c: 8";
+		rLen = 0;
+		rLoc = 233;
+		rType = 0;
+		vrLen = 1709;
+		vrLoc = 0;
+	};
+	8972D13B025024210CCA2950 = {
+		fRef = 8972D14C025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.h: 296";
+		rLen = 0;
+		rLoc = 9334;
+		rType = 0;
+		vrLen = 2118;
+		vrLoc = 8740;
+	};
+	8972D13C025024210CCA2950 = {
+		fRef = 8972D14D025024220CCA2950;
+		isa = PBXTextBookmark;
+		name = "objc-act.c: 1054";
+		rLen = 0;
+		rLoc = 32627;
+		rType = 0;
+		vrLen = 1308;
+		vrLoc = 31812;
+	};
+	8972D13D025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "cp-lang.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/cp-lang.c";
+		refType = 0;
+	};
+	8972D13E025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-lang.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-lang.c";
+		refType = 0;
+	};
+	8972D13F025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = pt.c;
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/pt.c";
+		refType = 0;
+	};
+	8972D140025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.h";
+		refType = 0;
+	};
+	8972D141025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-idebug.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-idebug.c";
+		refType = 0;
+	};
+	8972D142025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.h";
+		refType = 0;
+	};
+	8972D143025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "stub-objc.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/stub-objc.c";
+		refType = 0;
+	};
+	8972D144025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "c-common.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/c-common.h";
+		refType = 0;
+	};
+	8972D145025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-idebug.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-idebug.c";
+		refType = 0;
+	};
+	8972D146025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.c";
+		refType = 0;
+	};
+	8972D147025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = spew.c;
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/spew.c";
+		refType = 0;
+	};
+	8972D148025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.h";
+		refType = 0;
+	};
+	8972D149025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.c";
+		refType = 0;
+	};
+	8972D14A025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = pt.c;
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/pt.c";
+		refType = 0;
+	};
+	8972D14B025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "cp-idebug.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/cp-idebug.c";
+		refType = 0;
+	};
+	8972D14C025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.h";
+		refType = 0;
+	};
+	8972D14D025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.c";
+		refType = 0;
+	};
+	8972D14E025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = lex.h;
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/lex.h";
+		refType = 0;
+	};
+	8972D14F025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "cp-parse.in";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/cp-parse.in";
+		refType = 0;
+	};
+	8972D150025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "cp-lang.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/cp-lang.h";
+		refType = 0;
+	};
+	8972D151025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "cp-lang.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/cp-lang.c";
+		refType = 0;
+	};
+	8972D152025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-lang.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-lang.c";
+		refType = 0;
+	};
+	8972D153025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "c-lang.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/c-lang.c";
+		refType = 0;
+	};
+	8972D154025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "c-common.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/c-common.h";
+		refType = 0;
+	};
+	8972D155025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "stub-objc.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/stub-objc.c";
+		refType = 0;
+	};
+	8972D156025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = spew.c;
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/spew.c";
+		refType = 0;
+	};
+	8972D157025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = pt.c;
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/pt.c";
+		refType = 0;
+	};
+	8972D158025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "Make-lang.in";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/Make-lang.in";
+		refType = 0;
+	};
+	8972D159025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.c";
+		refType = 0;
+	};
+	8972D15A025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-idebug.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-idebug.c";
+		refType = 0;
+	};
+	8972D15B025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-idebug.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-idebug.c";
+		refType = 0;
+	};
+	8972D15C025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "cp-idebug.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/cp-idebug.c";
+		refType = 0;
+	};
+	8972D15D025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.h";
+		refType = 0;
+	};
+	8972D15E025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.c";
+		refType = 0;
+	};
+	8972D15F025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = MMPlugInOne.mii;
+		path = /Volumes/DATA2/Dev/JUNK/objcp/MMPlugInOne.mii;
+		refType = 0;
+	};
+	8972D160025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = pt.c;
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/pt.c";
+		refType = 0;
+	};
+	8972D161025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = lex.h;
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/lex.h";
+		refType = 0;
+	};
+	8972D162025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "c-common.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/c-common.h";
+		refType = 0;
+	};
+	8972D163025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.h";
+		refType = 0;
+	};
+	8972D164025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = pt.c;
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/pt.c";
+		refType = 0;
+	};
+	8972D165025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "Make-lang.in";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/Make-lang.in";
+		refType = 0;
+	};
+	8972D166025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = MMPlugInOne.mii;
+		path = /Volumes/DATA2/Dev/JUNK/objcp/MMPlugInOne.mii;
+		refType = 0;
+	};
+	8972D167025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "Make-lang.in";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/Make-lang.in";
+		refType = 0;
+	};
+	8972D168025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "Make-lang.in";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/Make-lang.in";
+		refType = 0;
+	};
+	8972D169025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "cp-tree.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/cp-tree.h";
+		refType = 0;
+	};
+	8972D16A025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.h";
+		refType = 0;
+	};
+	8972D16B025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = pt.c;
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/pt.c";
+		refType = 0;
+	};
+	8972D16C025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = spew.c;
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/spew.c";
+		refType = 0;
+	};
+	8972D16D025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "cp-parse.in";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/cp-parse.in";
+		refType = 0;
+	};
+	8972D16E025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = pt.c;
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/pt.c";
+		refType = 0;
+	};
+	8972D16F025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.h";
+		refType = 0;
+	};
+	8972D170025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.h";
+		refType = 0;
+	};
+	8972D171025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "cp-parse.in";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/cp-parse.in";
+		refType = 0;
+	};
+	8972D172025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "cp-lang.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/cp-lang.h";
+		refType = 0;
+	};
+	8972D173025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "Make-lang.in";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/Make-lang.in";
+		refType = 0;
+	};
+	8972D174025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = pt.c;
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/pt.c";
+		refType = 0;
+	};
+	8972D175025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.h";
+		refType = 0;
+	};
+	8972D176025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "c-lang.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/c-lang.c";
+		refType = 0;
+	};
+	8972D177025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.c";
+		refType = 0;
+	};
+	8972D178025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "objc-act.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/objc/objc-act.h";
+		refType = 0;
+	};
+	8972D179025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "stub-objc.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/stub-objc.c";
+		refType = 0;
+	};
+	8972D17A025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "cp-tree.h";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/cp-tree.h";
+		refType = 0;
+	};
+	8972D17B025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = pt.c;
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/pt.c";
+		refType = 0;
+	};
+	8972D17C025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = "stub-objc.c";
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/stub-objc.c";
+		refType = 0;
+	};
+	8972D17D025024220CCA2950 = {
+		isa = PBXFileReference;
+		name = pt.c;
+		path = "/Volumes/DATA2/Dev/WC/darwin/nervous-weasel-branch/gcc3/gcc/cp/pt.c";
+		refType = 0;
+	};
+	8C18C7DB00C5722F06CA2AC8 = {
+		activeBuildStyle = 8C864B2C00C575A806CA2AC8;
+		activeTarget = 8928587D02108C4F0CCA2CB6;
+		perUserDictionary = {
+			PBXWorkspaceContents = (
+				{
+					LeftSlideOut = {
+						Split0 = {
+							Split0 = {
+								NavContent0 = {
+									bookmark = 8972D13C025024210CCA2950;
+									history = (
+										8972D0FC025024210CCA2950,
+										8972D0FD025024210CCA2950,
+										8972D0FE025024210CCA2950,
+										8972D0FF025024210CCA2950,
+										8972D100025024210CCA2950,
+										8972D101025024210CCA2950,
+										8972D102025024210CCA2950,
+										8972D103025024210CCA2950,
+										8972D104025024210CCA2950,
+										8972D105025024210CCA2950,
+										8972D106025024210CCA2950,
+										8972D107025024210CCA2950,
+										8972D108025024210CCA2950,
+										8972D109025024210CCA2950,
+										8972D10A025024210CCA2950,
+										8972D10B025024210CCA2950,
+										8972D10C025024210CCA2950,
+										8972D10D025024210CCA2950,
+									);
+									prevStack = (
+										8972D10E025024210CCA2950,
+										8972D10F025024210CCA2950,
+										8972D110025024210CCA2950,
+										8972D111025024210CCA2950,
+										8972D112025024210CCA2950,
+										8972D113025024210CCA2950,
+										8972D114025024210CCA2950,
+										8972D115025024210CCA2950,
+										8972D116025024210CCA2950,
+										8972D117025024210CCA2950,
+										8972D118025024210CCA2950,
+										8972D119025024210CCA2950,
+										8972D11A025024210CCA2950,
+										8972D11B025024210CCA2950,
+										8972D11C025024210CCA2950,
+										8972D11D025024210CCA2950,
+										8972D11E025024210CCA2950,
+										8972D11F025024210CCA2950,
+										8972D120025024210CCA2950,
+										8972D121025024210CCA2950,
+										8972D122025024210CCA2950,
+										8972D123025024210CCA2950,
+										8972D124025024210CCA2950,
+										8972D125025024210CCA2950,
+										8972D126025024210CCA2950,
+										8972D127025024210CCA2950,
+										8972D128025024210CCA2950,
+										8972D129025024210CCA2950,
+										8972D12A025024210CCA2950,
+										8972D12B025024210CCA2950,
+										8972D12C025024210CCA2950,
+										8972D12D025024210CCA2950,
+										8972D12E025024210CCA2950,
+										8972D12F025024210CCA2950,
+										8972D130025024210CCA2950,
+										8972D131025024210CCA2950,
+										8972D132025024210CCA2950,
+										8972D133025024210CCA2950,
+										8972D134025024210CCA2950,
+										8972D135025024210CCA2950,
+										8972D136025024210CCA2950,
+										8972D137025024210CCA2950,
+										8972D138025024210CCA2950,
+										8972D139025024210CCA2950,
+										8972D13A025024210CCA2950,
+										8972D13B025024210CCA2950,
+									);
+								};
+								NavCount = 1;
+								NavGeometry0 = {
+									Frame = "{{0, 0}, {794, 706}}";
+									NavBarVisible = YES;
+								};
+							};
+							SplitCount = 1;
+							Tab0 = {
+								Debugger = {
+									Split0 = {
+										SplitCount = 2;
+									};
+									SplitCount = 1;
+									TabCount = 2;
+								};
+								LauncherConfigVersion = 4;
+							};
+							Tab1 = {
+								LauncherConfigVersion = 3;
+								Runner = {
+								};
+							};
+							TabCount = 4;
+						};
+						SplitCount = 1;
+						Tab1 = {
+							OptionsSetName = "Default Options";
+						};
+						Tab3 = {
+							SplitCount = 2;
+						};
+						TabCount = 6;
+					};
+				},
+			);
+			PBXWorkspaceGeometries = (
+				{
+					ContentSize = "{1078, 729}";
+					LeftSlideOut = {
+						ActiveTab = 0;
+						Collapsed = NO;
+						Frame = "{{0, 23}, {1078, 706}}";
+						Split0 = {
+							Collapsed = NO;
+							Frame = "{{284, 0}, {794, 706}}";
+							Split0 = {
+								Frame = "{{0, 0}, {794, 706}}";
+							};
+							SplitCount = 1;
+							Tab0 = {
+								Debugger = {
+									ActiveTab = 1;
+									Collapsed = NO;
+									Frame = "{{0, 0}, {681, 289}}";
+									Split0 = {
+										Frame = "{{0, 92}, {681, 197}}";
+										Split0 = {
+											Frame = "{{0, 0}, {331, 197}}";
+										};
+										Split1 = {
+											DebugVariablesTableConfiguration = (
+												Name,
+												114,
+												Value,
+												206,
+											);
+											Frame = "{{340, 0}, {341, 197}}";
+										};
+										SplitCount = 2;
+									};
+									SplitCount = 1;
+									Tab0 = {
+										Frame = "{{0, 0}, {100, 50}}";
+									};
+									Tab1 = {
+										Frame = "{{0, 0}, {681, 68}}";
+									};
+									TabCount = 2;
+									TabsVisible = YES;
+								};
+								Frame = "{{0, 0}, {681, 289}}";
+								LauncherConfigVersion = 4;
+							};
+							Tab1 = {
+								Frame = "{{0, 0}, {681, 120}}";
+								LauncherConfigVersion = 3;
+								Runner = {
+									Frame = "{{0, 0}, {681, 120}}";
+								};
+							};
+							Tab2 = {
+								BuildMessageFrame = "{{0, 0}, {683, 127}}";
+								BuildTranscriptFrame = "{{0, 136}, {683, 100}}";
+								Frame = "{{0, 0}, {681, 234}}";
+							};
+							Tab3 = {
+								Frame = "{{0, 0}, {681, 238}}";
+							};
+							TabCount = 4;
+							TabsVisible = NO;
+						};
+						SplitCount = 1;
+						Tab0 = {
+							Frame = "{{0, 0}, {260, 706}}";
+							GroupTreeTableConfiguration = (
+								TargetStatusColumn,
+								18,
+								MainColumn,
+								227,
+							);
+						};
+						Tab1 = {
+							ClassesFrame = "{{0, 0}, {250, 333}}";
+							ClassesTreeTableConfiguration = (
+								PBXBookColumnIdentifier,
+								20,
+								PBXClassColumnIdentifier,
+								207,
+							);
+							Frame = "{{0, 0}, {248, 554}}";
+							MembersFrame = "{{0, 342}, {250, 212}}";
+							MembersTreeTableConfiguration = (
+								PBXBookColumnIdentifier,
+								20,
+								PBXMethodColumnIdentifier,
+								206,
+							);
+						};
+						Tab2 = {
+							Frame = "{{0, 0}, {217, 554}}";
+						};
+						Tab3 = {
+							Frame = "{{0, 0}, {239, 554}}";
+							Split0 = {
+								Frame = "{{0, 0}, {239, 268}}";
+								TargetTreeTableConfiguration = (
+									ActiveTarget,
+									16,
+									TargetName,
+									207,
+								);
+							};
+							Split1 = {
+								BuildStyleTreeTableConfiguration = (
+									IsActive,
+									16,
+									Name,
+									208,
+								);
+								Frame = "{{0, 277}, {239, 277}}";
+							};
+							SplitCount = 2;
+						};
+						Tab4 = {
+							ExecutableTreeTableConfiguration = (
+								ActiveExecutable,
+								16,
+								ExecutableName,
+								217,
+							);
+							Frame = "{{0, 0}, {250, 554}}";
+						};
+						Tab5 = {
+							BreakpointsTreeTableConfiguration = (
+								breakpointColumn,
+								197,
+								enabledColumn,
+								31,
+							);
+							Frame = "{{0, 0}, {250, 554}}";
+						};
+						TabCount = 6;
+						TabsVisible = YES;
+					};
+					StatusViewVisible = YES;
+					Template = 64ABBB4501FA494900185B06;
+					ToolbarVisible = YES;
+					WindowLocation = "{668, 37}";
+				},
+			);
+			PBXWorkspaceStateSaveDate = 38867616;
+		};
+		perUserProjectItems = {
+			8972D0FC025024210CCA2950 = 8972D0FC025024210CCA2950;
+			8972D0FD025024210CCA2950 = 8972D0FD025024210CCA2950;
+			8972D0FE025024210CCA2950 = 8972D0FE025024210CCA2950;
+			8972D0FF025024210CCA2950 = 8972D0FF025024210CCA2950;
+			8972D100025024210CCA2950 = 8972D100025024210CCA2950;
+			8972D101025024210CCA2950 = 8972D101025024210CCA2950;
+			8972D102025024210CCA2950 = 8972D102025024210CCA2950;
+			8972D103025024210CCA2950 = 8972D103025024210CCA2950;
+			8972D104025024210CCA2950 = 8972D104025024210CCA2950;
+			8972D105025024210CCA2950 = 8972D105025024210CCA2950;
+			8972D106025024210CCA2950 = 8972D106025024210CCA2950;
+			8972D107025024210CCA2950 = 8972D107025024210CCA2950;
+			8972D108025024210CCA2950 = 8972D108025024210CCA2950;
+			8972D109025024210CCA2950 = 8972D109025024210CCA2950;
+			8972D10A025024210CCA2950 = 8972D10A025024210CCA2950;
+			8972D10B025024210CCA2950 = 8972D10B025024210CCA2950;
+			8972D10C025024210CCA2950 = 8972D10C025024210CCA2950;
+			8972D10D025024210CCA2950 = 8972D10D025024210CCA2950;
+			8972D10E025024210CCA2950 = 8972D10E025024210CCA2950;
+			8972D10F025024210CCA2950 = 8972D10F025024210CCA2950;
+			8972D110025024210CCA2950 = 8972D110025024210CCA2950;
+			8972D111025024210CCA2950 = 8972D111025024210CCA2950;
+			8972D112025024210CCA2950 = 8972D112025024210CCA2950;
+			8972D113025024210CCA2950 = 8972D113025024210CCA2950;
+			8972D114025024210CCA2950 = 8972D114025024210CCA2950;
+			8972D115025024210CCA2950 = 8972D115025024210CCA2950;
+			8972D116025024210CCA2950 = 8972D116025024210CCA2950;
+			8972D117025024210CCA2950 = 8972D117025024210CCA2950;
+			8972D118025024210CCA2950 = 8972D118025024210CCA2950;
+			8972D119025024210CCA2950 = 8972D119025024210CCA2950;
+			8972D11A025024210CCA2950 = 8972D11A025024210CCA2950;
+			8972D11B025024210CCA2950 = 8972D11B025024210CCA2950;
+			8972D11C025024210CCA2950 = 8972D11C025024210CCA2950;
+			8972D11D025024210CCA2950 = 8972D11D025024210CCA2950;
+			8972D11E025024210CCA2950 = 8972D11E025024210CCA2950;
+			8972D11F025024210CCA2950 = 8972D11F025024210CCA2950;
+			8972D120025024210CCA2950 = 8972D120025024210CCA2950;
+			8972D121025024210CCA2950 = 8972D121025024210CCA2950;
+			8972D122025024210CCA2950 = 8972D122025024210CCA2950;
+			8972D123025024210CCA2950 = 8972D123025024210CCA2950;
+			8972D124025024210CCA2950 = 8972D124025024210CCA2950;
+			8972D125025024210CCA2950 = 8972D125025024210CCA2950;
+			8972D126025024210CCA2950 = 8972D126025024210CCA2950;
+			8972D127025024210CCA2950 = 8972D127025024210CCA2950;
+			8972D128025024210CCA2950 = 8972D128025024210CCA2950;
+			8972D129025024210CCA2950 = 8972D129025024210CCA2950;
+			8972D12A025024210CCA2950 = 8972D12A025024210CCA2950;
+			8972D12B025024210CCA2950 = 8972D12B025024210CCA2950;
+			8972D12C025024210CCA2950 = 8972D12C025024210CCA2950;
+			8972D12D025024210CCA2950 = 8972D12D025024210CCA2950;
+			8972D12E025024210CCA2950 = 8972D12E025024210CCA2950;
+			8972D12F025024210CCA2950 = 8972D12F025024210CCA2950;
+			8972D130025024210CCA2950 = 8972D130025024210CCA2950;
+			8972D131025024210CCA2950 = 8972D131025024210CCA2950;
+			8972D132025024210CCA2950 = 8972D132025024210CCA2950;
+			8972D133025024210CCA2950 = 8972D133025024210CCA2950;
+			8972D134025024210CCA2950 = 8972D134025024210CCA2950;
+			8972D135025024210CCA2950 = 8972D135025024210CCA2950;
+			8972D136025024210CCA2950 = 8972D136025024210CCA2950;
+			8972D137025024210CCA2950 = 8972D137025024210CCA2950;
+			8972D138025024210CCA2950 = 8972D138025024210CCA2950;
+			8972D139025024210CCA2950 = 8972D139025024210CCA2950;
+			8972D13A025024210CCA2950 = 8972D13A025024210CCA2950;
+			8972D13B025024210CCA2950 = 8972D13B025024210CCA2950;
+			8972D13C025024210CCA2950 = 8972D13C025024210CCA2950;
+		};
+		projectwideBuildSettings = {
+		};
+		wantsIndex = 1;
+		wantsSCM = -1;
+	};
+}
