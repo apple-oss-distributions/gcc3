@@ -1,4 +1,4 @@
-/* APPLE LOCAL debugging */
+/* APPLE LOCAL file debugging */
 /* C++ tree & rtl accessors defined as functions for use in a debugger.
    Copyright (C) 2001  Free Software Foundation, Inc.
    Contributed by Ira L. Ruben (ira@apple.com)

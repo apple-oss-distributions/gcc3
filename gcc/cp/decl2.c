@@ -412,6 +412,13 @@ int flag_preprocessed = 0;
 int flag_apple_kext = 0;
 /* APPLE LOCAL end apple-kext ilr */
 
+/* APPLE LOCAL begin structor thunks */
+/* Nonzero if we prefer to clone con/de/structors.
+   Alternative is to gen multiple tiny thunk-esque things that call/jump to a unified con/de/structor.
+   This is a classic size/speed tradeoff.  */
+int flag_clone_structors = 0;
+/* APPLE LOCAL begin structor thunks */
+
 /* Nonzero if we want to check the return value of new and avoid calling
    constructors if it is a null pointer.  */
 
@@ -441,7 +448,7 @@ int flag_use_cxa_atexit;
    arbitrary, but it exists to limit the time it takes to notice
    infinite template instantiations.  */
 
-int max_tinst_depth = 50;
+int max_tinst_depth = 500;
 
 /* Nonzero means output .vtable_{entry,inherit} for use in doing vtable gc.  */
 
@@ -486,6 +493,9 @@ lang_f_options[] =
   {"altivec", &flag_altivec, 1},
   {"vec", &flag_altivec, 1},
   /* APPLE LOCAL end AltiVec */
+  /* APPLE LOCAL begin constant cfstrings */
+  {"constant-cfstrings", &flag_constant_cfstrings, 1},
+  /* APPLE LOCAL end constant cfstrings */
 
   /* C++-only options.  */
   {"access-control", &flag_access_control, 1},
@@ -519,6 +529,8 @@ lang_f_options[] =
   {"use-cxa-atexit", &flag_use_cxa_atexit, 1},
   /* APPLE LOCAL apple-kext   Radar #2849864 ilr */
   {"apple-kext", &flag_apple_kext, 1},
+/* APPLE LOCAL structor thunks */
+  {"clone-structors", &flag_clone_structors, 1},
   {"weak", &flag_weak, 1}
 };
 
@@ -566,7 +578,7 @@ cxx_decode_option (argc, argv)
   int strings_processed;
   const char *p = argv[0];
 
-  strings_processed = cpp_handle_option (parse_in, argc, argv);
+  strings_processed = cpp_handle_option (parse_in, argc, argv, 0);
 
   if (!strcmp (p, "-ftraditional") || !strcmp (p, "-traditional"))
     /* ignore */;
@@ -693,6 +705,10 @@ cxx_decode_option (argc, argv)
 	warn_implicit = setting;
       else if (!strcmp (p, "long-long"))
 	warn_long_long = setting;
+      /* APPLE LOCAL begin long double */
+      else if (!strcmp (p, "long-double"))
+        warn_long_double = setting;
+      /* APPLE LOCAL end long double */
       else if (!strcmp (p, "return-type"))
 	warn_return_type = setting;
       else if (!strcmp (p, "ctor-dtor-privacy"))
@@ -1096,10 +1112,6 @@ grokclassfn (ctype, function, flags, quals)
       qual_type = cp_build_qualified_type (type, this_quals);
       parm = build_artificial_parm (this_identifier, qual_type);
       c_apply_type_quals_to_decl (this_quals, parm);
-
-      /* We can make this a register, so long as we don't
-	 accidentally complain if someone tries to take its address.  */
-      DECL_REGISTER (parm) = 1;
       TREE_CHAIN (parm) = last_function_parms;
       last_function_parms = parm;
     }
@@ -1270,21 +1282,8 @@ delete_sanity (exp, size, doing_vec, use_global_delete)
     return build_vec_delete (t, maxindex, sfk_deleting_destructor,
 			     use_global_delete);
   else
-    {
-      if (IS_AGGR_TYPE (TREE_TYPE (type))
-	  && TYPE_GETS_REG_DELETE (TREE_TYPE (type)))
-	{
-	  /* Only do access checking here; we'll be calling op delete
-	     from the destructor.  */
-	  tree tmp = build_op_delete_call (DELETE_EXPR, t, size_zero_node,
-					   LOOKUP_NORMAL, NULL_TREE);
-	  if (tmp == error_mark_node)
-	    return error_mark_node;
-	}
-
-      return build_delete (type, t, sfk_deleting_destructor,
-			   LOOKUP_NORMAL, use_global_delete);
-    }
+    return build_delete (type, t, sfk_deleting_destructor,
+			 LOOKUP_NORMAL, use_global_delete);
 }
 
 /* Report an error if the indicated template declaration is not the
@@ -1538,6 +1537,10 @@ finish_static_data_member_decl (decl, init, asmspec_tree, flags)
       VARRAY_PUSH_TREE (pending_statics, decl);
     }
 
+  if (LOCAL_CLASS_P (current_class_type))
+    pedwarn ("local class `%#T' shall not have static data member `%#D'",
+	     current_class_type, decl);
+
   /* Static consts need not be initialized in the class definition.  */
   if (init != NULL_TREE && TYPE_NEEDS_CONSTRUCTING (TREE_TYPE (decl)))
     {
@@ -1785,7 +1788,7 @@ grokfield (declarator, declspecs, init, asmspec_tree, attrlist)
       DECL_IN_AGGR_P (value) = 1;
       return value;
     }
-  my_friendly_abort (21);
+  abort ();
   /* NOTREACHED */
   return NULL_TREE;
 }
@@ -1829,8 +1832,6 @@ grokbitfield (declarator, declspecs, width)
 		  DECL_CONTEXT (value));
       return void_type_node;
     }
-
-  GNU_xref_member (current_class_name, value);
 
   if (TREE_STATIC (value))
     {
@@ -2198,7 +2199,7 @@ coerce_new_type (type)
       e = 2;
       if (args && args != void_list_node)
         args = TREE_CHAIN (args);
-      error ("`operator new' takes type `size_t' (`%T') as first parameter", c_size_type_node);
+      pedwarn ("`operator new' takes type `size_t' (`%T') as first parameter", c_size_type_node);
     }
   switch (e)
   {
@@ -2310,19 +2311,6 @@ comdat_linkage (decl)
     TREE_PUBLIC (decl) = 0;
   else
     {
-      /* APPLE LOCAL begin no-common turly 20020116 */
-#ifdef COMMON_NOT_SUPPORTED_P
-      /* Some targets do not support COMMON symbols at all.  */
-      if (COMMON_NOT_SUPPORTED_P ())
-	{
-	  /* We can't do anything useful; leave vars for explicit
-	     instantiation.  */
-	  DECL_EXTERNAL (decl) = 1;
-	  DECL_NOT_REALLY_EXTERN (decl) = 0;
-	}
-      else
-#endif
-      /* APPLE LOCAL end no-common turly 20020116 */
       /* Static data member template instantiations, however, cannot
 	 have multiple copies.  */
       if (DECL_INITIAL (decl) == 0
@@ -2370,8 +2358,12 @@ maybe_make_one_only (decl)
 
   make_decl_one_only (decl);
 
-  if (TREE_CODE (decl) == VAR_DECL && DECL_LANG_SPECIFIC (decl))
-    DECL_COMDAT (decl) = 1;
+  if (TREE_CODE (decl) == VAR_DECL)
+    {
+      DECL_COMDAT (decl) = 1;
+      /* Mark it needed so we don't forget to emit it.  */
+      TREE_SYMBOL_REFERENCED (DECL_ASSEMBLER_NAME (decl)) = 1;
+    }
 }
 
 /* Returns the virtual function with which the vtable for TYPE is
@@ -2534,7 +2526,7 @@ output_vtable_inherit (vars)
       parent_rtx = XEXP (DECL_RTL (parent), 0);  /* strip the mem ref  */
     }
   else
-    my_friendly_abort (980826);
+    abort ();
 
   assemble_vtable_inherit (child_rtx, parent_rtx);
 }
@@ -2680,6 +2672,14 @@ import_export_decl (decl)
 	}
       else
 	comdat_linkage (decl);
+      /* APPLE LOCAL begin coalesce inline member functions */
+#ifdef MAKE_DECL_COALESCED
+      if (DECL_DECLARED_INLINE_P (decl))
+	{
+	  MAKE_DECL_COALESCED (decl);
+	}
+#endif /* MAKE_DECL_COALESCED */
+      /* APPLE LOCAL end coalesce inline member functions */
     }
   else if (tinfo_decl_p (decl, 0))
     {
@@ -2717,8 +2717,15 @@ import_export_decl (decl)
       else
 	comdat_linkage (decl);
     } 
+  /* APPLE LOCAL begin coalesce inline functions */
   else
-    comdat_linkage (decl);
+    {
+      comdat_linkage (decl);
+#ifdef MAKE_DECL_COALESCED
+      MAKE_DECL_COALESCED(decl);
+#endif /* MAKE_DECL_COALESCED */
+    }
+  /* APPLE LOCAL end coalesce inline functions */
 
   DECL_INTERFACE_KNOWN (decl) = 1;
 }
@@ -2729,24 +2736,6 @@ build_cleanup (decl)
 {
   tree temp;
   tree type = TREE_TYPE (decl);
-  /* APPLE LOCAL  begin double destructor  turly 20020214  */
-  special_function_kind dtor = sfk_complete_destructor;
-  if (flag_apple_kext && has_apple_kext_compatibility_attr_p (type))
-    {
-      /* If we have a trivial operator delete (), we can go ahead
-	 and just use the deleting destructor, sfk_deleting_destructor.  */
-
-      if (! has_empty_operator_delete_p (type) || pedantic)
-	{
-	  cp_warning_at ("'%D' is an instance of a class which does "
-			 "not allow global or stack-based objects; it "
-			 "does not have an empty `operator delete', and "
-			 "so it will ** NOT ** be destructed.", decl);
-	  return 0;
-	}
-      dtor = sfk_deleting_destructor;
-    }
-  /* APPLE LOCAL  end double destructor  turly 20020214  */
  
   if (TREE_CODE (type) == ARRAY_TYPE)
     temp = decl;
@@ -2756,8 +2745,7 @@ build_cleanup (decl)
       temp = build1 (ADDR_EXPR, build_pointer_type (type), decl);
     }
   temp = build_delete (TREE_TYPE (temp), temp,
-		       /* APPLE LOCAL double destructor  */
-		       dtor,
+		       sfk_complete_destructor,
 		       LOOKUP_NORMAL|LOOKUP_NONVIRTUAL|LOOKUP_DESTRUCTOR, 0);
   return temp;
 }
@@ -2907,6 +2895,13 @@ start_objects (method_type, initp)
     DECL_GLOBAL_DTOR_P (current_function_decl) = 1;
   GLOBAL_INIT_PRIORITY (current_function_decl) = initp;
 
+  /* APPLE LOCAL */
+#ifdef STATIC_INIT_SECTION
+  if ( ! flag_apple_kext)
+    DECL_SECTION_NAME (current_function_decl) = 
+      build_string (strlen (STATIC_INIT_SECTION), STATIC_INIT_SECTION);
+#endif
+
   body = begin_compound_stmt (/*has_no_scope=*/0);
 
   /* We cannot allow these functions to be elided, even if they do not
@@ -3008,7 +3003,7 @@ start_static_storage_duration_function ()
       /* Overflow occurred.  That means there are at least 4 billion
 	 initialization functions.  */
       sorry ("too many initialization functions required");
-      my_friendly_abort (19990430);
+      abort ();
     }
 
   /* Create the parameters.  */
@@ -3023,6 +3018,13 @@ start_static_storage_duration_function ()
 			       type);
   TREE_PUBLIC (ssdf_decl) = 0;
   DECL_ARTIFICIAL (ssdf_decl) = 1;
+
+  /* APPLE LOCAL */
+#ifdef STATIC_INIT_SECTION
+  if ( ! flag_apple_kext)
+    DECL_SECTION_NAME (ssdf_decl) = build_string (strlen (STATIC_INIT_SECTION),
+						  STATIC_INIT_SECTION);
+#endif
 
   /* Put this function in the list of functions to be called from the
      static constructors and destructors.  */
@@ -3630,7 +3632,11 @@ cxx_finish_file ()
 	 not defined when they really are.  This keeps these functions
 	 from being put out unnecessarily.  But, we must stop lying
 	 when the functions are referenced, or if they are not comdat
-	 since they need to be put out now.  */
+	 since they need to be put out now.
+	 This is done in a separate for cycle, because if some deferred
+	 function is contained in another deferred function later in
+	 deferred_fns varray, rest_of_compilation would skip this
+	 function and we really cannot expand the same function twice. */
       for (i = 0; i < deferred_fns_used; ++i)
 	{
 	  tree decl = VARRAY_TREE (deferred_fns, i);
@@ -3639,6 +3645,11 @@ cxx_finish_file ()
 	      && DECL_INITIAL (decl)
 	      && DECL_NEEDED_P (decl))
 	    DECL_EXTERNAL (decl) = 0;
+	}
+
+      for (i = 0; i < deferred_fns_used; ++i)
+	{
+	  tree decl = VARRAY_TREE (deferred_fns, i);
 
 	  /* If we're going to need to write this function out, and
 	     there's already a body for it, create RTL for it now.
@@ -3863,7 +3874,7 @@ reparse_absdcl_as_casts (decl, expr)
       decl = TREE_OPERAND (decl, 0);
 
       if (processing_template_decl)
-	expr = build_min (CONSTRUCTOR, type, decl, CONSTRUCTOR_ELTS (expr));
+	TREE_TYPE (expr) = type;
       else
 	{
 	  expr = digest_init (type, expr, (tree *) 0);
@@ -4061,7 +4072,7 @@ build_expr_from_tree (t)
 	return build_x_compound_expr
 	  (build_expr_from_tree (TREE_OPERAND (t, 0)));
       else
-	my_friendly_abort (42);
+	abort ();
 
     case METHOD_CALL_EXPR:
       if (TREE_CODE (TREE_OPERAND (t, 0)) == SCOPE_REF)
@@ -4195,17 +4206,35 @@ build_expr_from_tree (t)
     case CONSTRUCTOR:
       {
 	tree r;
+	tree elts;
+	tree type = TREE_TYPE (t);
+	bool purpose_p;
 
 	/* digest_init will do the wrong thing if we let it.  */
-	if (TREE_TYPE (t) && TYPE_PTRMEMFUNC_P (TREE_TYPE (t)))
+	if (type && TYPE_PTRMEMFUNC_P (type))
 	  return t;
 
-	r = build_nt (CONSTRUCTOR, NULL_TREE,
-		      build_expr_from_tree (CONSTRUCTOR_ELTS (t)));
+	r = NULL_TREE;
+	/* We do not want to process the purpose of aggregate
+	   initializers as they are identifier nodes which will be
+	   looked up by digest_init.  */
+	purpose_p = !(type && IS_AGGR_TYPE (type));
+	for (elts = CONSTRUCTOR_ELTS (t); elts; elts = TREE_CHAIN (elts))
+	  {
+	    tree purpose = TREE_PURPOSE (elts);
+	    tree value = TREE_VALUE (elts);
+	    
+	    if (purpose && purpose_p)
+	      purpose = build_expr_from_tree (purpose);
+	    value = build_expr_from_tree (value);
+	    r = tree_cons (purpose, value, r);
+	  }
+	
+	r = build_nt (CONSTRUCTOR, NULL_TREE, nreverse (r));
 	TREE_HAS_CONSTRUCTOR (r) = TREE_HAS_CONSTRUCTOR (t);
 
-	if (TREE_TYPE (t))
-	  return digest_init (TREE_TYPE (t), r, 0);
+	if (type)
+	  return digest_init (type, r, 0);
 	return r;
       }
 
@@ -4279,7 +4308,7 @@ finish_decl_parsing (decl)
     case TEMPLATE_ID_EXPR:
       return decl;
     default:
-      my_friendly_abort (5);
+      abort ();
       return NULL_TREE;
     }
 }
@@ -4431,6 +4460,11 @@ ambiguous_decl (name, old, new, flags)
         break;
       case NAMESPACE_DECL:
         if (LOOKUP_TYPES_ONLY (flags))
+          val = NULL_TREE;
+        break;
+      case FUNCTION_DECL:
+        /* Ignore built-in functions that are still anticipated.  */
+        if (LOOKUP_QUALIFIERS_ONLY (flags) || DECL_ANTICIPATED (val))
           val = NULL_TREE;
         break;
       default:
@@ -4927,7 +4961,7 @@ arg_assoc_type (k, type)
 	return 0;
       /* else fall through */
     default:
-      my_friendly_abort (390);
+      abort ();
     }
   return 0;
 }
@@ -5122,7 +5156,7 @@ validate_nonmember_using_decl (decl, scope, name)
       return NULL_TREE;
     }
   else
-    my_friendly_abort (382);
+    abort ();
   if (DECL_P (*name))
     *name = DECL_NAME (*name);
   /* Make a USING_DECL. */
@@ -5185,6 +5219,15 @@ do_nonmember_using_decl (scope, name, oldval, oldtype, newval, newtype)
 	      else if (compparms (TYPE_ARG_TYPES (TREE_TYPE (new_fn)),
 		  		  TYPE_ARG_TYPES (TREE_TYPE (old_fn))))
 		{
+                  /* If this using declaration introduces a function
+                     recognized as a built-in, no longer mark it as
+                     anticipated in this scope.  */
+                  if (DECL_ANTICIPATED (old_fn))
+                    {
+                      DECL_ANTICIPATED (old_fn) = 0;
+                      break;
+                    }
+
 	          /* There was already a non-using declaration in
 		     this scope with the same parameter types. If both
 	             are the same extern "C" functions, that's ok.  */
@@ -5456,7 +5499,7 @@ handle_class_head (aggr, scope, id, defn_p, new_type_p)
 	    {
 	      /* According to the suggested resolution of core issue
 	     	 180, 'typename' is assumed after a class-key.  */
-	      decl = make_typename_type (scope, id, 1);
+	      decl = make_typename_type (scope, id, tf_error);
 	      if (decl != error_mark_node)
 		decl = TYPE_MAIN_DECL (decl);
 	      else
@@ -5495,10 +5538,18 @@ handle_class_head (aggr, scope, id, defn_p, new_type_p)
 	 is different to the current scope.  */
       tree context = CP_DECL_CONTEXT (decl);
 
-      *new_type_p = current != context;
+      *new_type_p = (current != context
+		     && TREE_CODE (context) != TEMPLATE_TYPE_PARM
+		     && TREE_CODE (context) != BOUND_TEMPLATE_TEMPLATE_PARM);
       if (*new_type_p)
 	push_scope (context);
-  
+
+      if (TREE_CODE (TREE_TYPE (decl)) == RECORD_TYPE)
+	/* It is legal to define a class with a different class key,
+	   and this changes the default member access.  */
+	CLASSTYPE_DECLARED_CLASS (TREE_TYPE (decl))
+	  = aggr == class_type_node;
+	
       if (!xrefd_p && PROCESSING_REAL_TEMPLATE_DECL_P ())
 	decl = push_template_decl (decl);
     }

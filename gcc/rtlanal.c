@@ -1,6 +1,6 @@
 /* Analyze RTL for C-Compiler
    Copyright (C) 1987, 1988, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001 Free Software Foundation, Inc.
+   1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -64,6 +64,7 @@ rtx_unstable_p (x)
     case CONST:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case SYMBOL_REF:
     case LABEL_REF:
       return 0;
@@ -139,6 +140,7 @@ rtx_varies_p (x, for_alias)
     case CONST:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case SYMBOL_REF:
     case LABEL_REF:
       return 0;
@@ -301,7 +303,7 @@ rtx_addr_varies_p (x, for_alias)
 /* Return the value of the integer term in X, if one is apparent;
    otherwise return 0.
    Only obvious integer terms are detected.
-   This is used in cse.c with the `related_value' field.*/
+   This is used in cse.c with the `related_value' field.  */
 
 HOST_WIDE_INT
 get_integer_term (x)
@@ -502,6 +504,7 @@ count_occurrences (x, find, count_dest)
     case REG:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case SYMBOL_REF:
     case CODE_LABEL:
     case PC:
@@ -580,7 +583,8 @@ reg_mentioned_p (reg, in)
 
     case CONST_INT:
       return GET_CODE (reg) == CONST_INT && INTVAL (in) == INTVAL (reg);
-      
+
+    case CONST_VECTOR:
     case CONST_DOUBLE:
       /* These are kept unique for a given value.  */
       return 0;
@@ -829,6 +833,7 @@ regs_set_between_p (x, start, end)
     {
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case CONST:
     case SYMBOL_REF:
     case LABEL_REF:
@@ -875,6 +880,7 @@ modified_between_p (x, start, end)
     {
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case CONST:
     case SYMBOL_REF:
     case LABEL_REF:
@@ -930,6 +936,7 @@ modified_in_p (x, insn)
     {
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case CONST:
     case SYMBOL_REF:
     case LABEL_REF:
@@ -1410,7 +1417,7 @@ reg_overlap_mentioned_p (x, in)
     do_reg:
       endregno = regno + (regno < FIRST_PSEUDO_REGISTER
 			  ? HARD_REGNO_NREGS (regno, GET_MODE (x)) : 1);
-      return refers_to_regno_p (regno, endregno, in, (rtx*)0);
+      return refers_to_regno_p (regno, endregno, in, (rtx*) 0);
 
     case MEM:
       {
@@ -1535,17 +1542,12 @@ note_stores (x, fun, data)
 	dest = XEXP (dest, 0);
 
       /* If we have a PARALLEL, SET_DEST is a list of EXPR_LIST expressions,
-	 each of whose first operand is a register.  We can't know what
-	 precisely is being set in these cases, so make up a CLOBBER to pass
-	 to the function.  */
+	 each of whose first operand is a register.  */
       if (GET_CODE (dest) == PARALLEL)
 	{
 	  for (i = XVECLEN (dest, 0) - 1; i >= 0; i--)
 	    if (XEXP (XVECEXP (dest, 0, i), 0) != 0)
-	      (*fun) (XEXP (XVECEXP (dest, 0, i), 0),
-		      gen_rtx_CLOBBER (VOIDmode,
-				       XEXP (XVECEXP (dest, 0, i), 0)),
-		      data);
+	      (*fun) (XEXP (XVECEXP (dest, 0, i), 0), x, data);
 	}
       else
 	(*fun) (dest, x, data);
@@ -1857,7 +1859,7 @@ find_reg_fusage (insn, code, datum)
     return 0;
 
   if (! datum)
-    abort();
+    abort ();
 
   if (GET_CODE (datum) != REG)
     {
@@ -1867,7 +1869,7 @@ find_reg_fusage (insn, code, datum)
            link;
 	   link = XEXP (link, 1))
         if (GET_CODE (XEXP (link, 0)) == code
-	    && rtx_equal_p (datum, SET_DEST (XEXP (link, 0))))
+	    && rtx_equal_p (datum, XEXP (XEXP (link, 0), 0)))
           return 1;
     }
   else
@@ -1919,6 +1921,31 @@ find_regno_fusage (insn, code, regno)
 	  && GET_CODE (reg = XEXP (op, 0)) == REG
 	  && (regnote = REGNO (reg)) <= regno
 	  && regnote + HARD_REGNO_NREGS (regnote, GET_MODE (reg)) > regno)
+	return 1;
+    }
+
+  return 0;
+}
+
+/* Return true if INSN is a call to a pure function.  */
+
+int
+pure_call_p (insn)
+     rtx insn;
+{
+  rtx link;
+
+  if (GET_CODE (insn) != CALL_INSN || ! CONST_OR_PURE_CALL_P (insn))
+    return 0;
+
+  /* Look for the note that differentiates const and pure functions.  */
+  for (link = CALL_INSN_FUNCTION_USAGE (insn); link; link = XEXP (link, 1))
+    {
+      rtx u, m;
+
+      if (GET_CODE (u = XEXP (link, 0)) == USE
+	  && GET_CODE (m = XEXP (u, 0)) == MEM && GET_MODE (m) == BLKmode
+	  && GET_CODE (XEXP (m, 0)) == SCRATCH)
 	return 1;
     }
 
@@ -2021,6 +2048,7 @@ volatile_insn_p (x)
     case CONST_INT:
     case CONST:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case CC0:
     case PC:
     case REG:
@@ -2087,6 +2115,7 @@ volatile_refs_p (x)
     case CONST_INT:
     case CONST:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case CC0:
     case PC:
     case REG:
@@ -2153,6 +2182,7 @@ side_effects_p (x)
     case CONST_INT:
     case CONST:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case CC0:
     case PC:
     case REG:
@@ -2231,6 +2261,7 @@ may_trap_p (x)
       /* Handle these cases quickly.  */
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case SYMBOL_REF:
     case LABEL_REF:
     case CONST:
@@ -2339,6 +2370,7 @@ inequality_comparisons_p (x)
     case CC0:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case CONST:
     case LABEL_REF:
     case SYMBOL_REF:
@@ -2405,6 +2437,40 @@ replace_rtx (x, from, to)
   if (x == 0)
     return 0;
 
+  if (GET_CODE (x) == SUBREG)
+    {
+      rtx new = replace_rtx (SUBREG_REG (x), from, to);
+
+      if (GET_CODE (new) == CONST_INT)
+	{
+	  x = simplify_subreg (GET_MODE (x), new,
+			       GET_MODE (SUBREG_REG (x)),
+			       SUBREG_BYTE (x));
+	  if (! x)
+	    abort ();
+	}
+      else
+	SUBREG_REG (x) = new;
+
+      return x;
+    }
+  else if (GET_CODE (x) == ZERO_EXTEND)
+    {
+      rtx new = replace_rtx (XEXP (x, 0), from, to);
+
+      if (GET_CODE (new) == CONST_INT)
+	{
+	  x = simplify_unary_operation (ZERO_EXTEND, GET_MODE (x),
+					new, GET_MODE (XEXP (x, 0)));
+	  if (! x)
+	    abort ();
+	}
+      else
+	XEXP (x, 0) = new;
+
+      return x;
+    }
+
   fmt = GET_RTX_FORMAT (GET_CODE (x));
   for (i = GET_RTX_LENGTH (GET_CODE (x)) - 1; i >= 0; i--)
     {
@@ -2452,6 +2518,7 @@ replace_regs (x, reg_map, nregs, replace_dest)
     case CC0:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case CONST:
     case SYMBOL_REF:
     case LABEL_REF:
@@ -2542,6 +2609,7 @@ computed_jump_p_1 (x)
     case CONST:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case SYMBOL_REF:
     case REG:
       return 1;
@@ -2947,9 +3015,7 @@ subreg_lsb (x)
    xmode  - The mode of xregno.
    offset - The byte offset.
    ymode  - The mode of a top level SUBREG (or what may become one).
-   RETURN - The regno offset which would be used.  
-   This function can be overridden by defining SUBREG_REGNO_OFFSET,
-   taking the same parameters.  */
+   RETURN - The regno offset which would be used.  */
 unsigned int
 subreg_regno_offset (xregno, xmode, offset, ymode)
      unsigned int xregno;
@@ -2957,15 +3023,10 @@ subreg_regno_offset (xregno, xmode, offset, ymode)
      unsigned int offset;
      enum machine_mode ymode;
 {
-  unsigned ret;
   int nregs_xmode, nregs_ymode;
   int mode_multiple, nregs_multiple;
   int y_offset;
 
-/* Check for an override, and use it instead.  */
-#ifdef SUBREG_REGNO_OFFSET
-  ret = SUBREG_REGNO_OFFSET (xregno, xmode, offset, ymode);
-#else
   if (xregno >= FIRST_PSEUDO_REGISTER)
     abort ();
 
@@ -2981,10 +3042,7 @@ subreg_regno_offset (xregno, xmode, offset, ymode)
 
   y_offset = offset / GET_MODE_SIZE (ymode);
   nregs_multiple =  nregs_xmode / nregs_ymode;
-  ret = (y_offset / (mode_multiple / nregs_multiple)) * nregs_ymode;
-#endif
-
-  return ret;
+  return (y_offset / (mode_multiple / nregs_multiple)) * nregs_ymode;
 }
 
 /* Return the final regno that a subreg expression refers to.  */

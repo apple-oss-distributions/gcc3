@@ -1,5 +1,5 @@
 /* Definitions for MIPS running Linux-based GNU systems with ELF format.
-   Copyright (C) 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
 This file is part of GNU CC.
 
@@ -18,12 +18,8 @@ along with GNU CC; see the file COPYING.  If not, write to
 the Free Software Foundation, 59 Temple Place - Suite 330,
 Boston, MA 02111-1307, USA.  */
 
-#include "gofast.h"
-
-/* US Software GOFAST library support.  */
-#define INIT_SUBTARGET_OPTABS INIT_GOFAST_OPTABS
-
 #include "mips/mips.h"
+#include "mips/abi64.h"
 
 #undef WCHAR_TYPE
 #define WCHAR_TYPE "int"
@@ -138,11 +134,11 @@ void FN ()							\
 #undef CPP_PREDEFINES
 #if TARGET_ENDIAN_DEFAULT == 0
 #define CPP_PREDEFINES "-DMIPSEL -D_MIPSEL -Dunix -Dmips -D_mips \
--DR3000 -D_R3000 -Dlinux -Asystem=posix -Acpu=mips \
+-DR3000 -D_R3000 -D__gnu_linux__ -Dlinux -Asystem=posix -Acpu=mips \
 -Amachine=mips -D__ELF__ -D__PIC__ -D__pic__"
 #else
 #define CPP_PREDEFINES "-DMIPSEB -D_MIPSEB -Dunix -Dmips -D_mips \
--DR3000 -D_R3000 -Dlinux -Asystem=posix -Acpu=mips \
+-DR3000 -D_R3000 -D__gnu_linux__ -Dlinux -Asystem=posix -Acpu=mips \
 -Amachine=mips -D__ELF__ -D__PIC__ -D__pic__"
 #endif
 
@@ -225,6 +221,9 @@ void FN ()							\
 %{!fno-PIC:%{!fno-pic:-KPIC}} \
 %{fno-PIC:-non_shared} %{fno-pic:-non_shared}"
 
+#undef SUBTARGET_ASM_DEBUGGING_SPEC
+#define SUBTARGET_ASM_DEBUGGING_SPEC "-g0"
+
 /* The MIPS assembler has different syntax for .set. We set it to
    .dummy to trap any errors.  */
 #undef SET_ASM_OP
@@ -283,3 +282,14 @@ void FN ()							\
 /* Tell function_prologue in mips.c that we have already output the .ent/.end
    pseudo-ops.  */
 #define FUNCTION_NAME_ALREADY_DECLARED
+
+#define ASM_PREFERRED_EH_DATA_FORMAT(CODE, GLOBAL)       		\
+  (flag_pic								\
+    ? ((GLOBAL) ? DW_EH_PE_indirect : 0) | DW_EH_PE_pcrel | DW_EH_PE_sdata4\
+   : DW_EH_PE_absptr)
+
+/* The glibc _mcount stub will save $v0 for us.  Don't mess with saving
+   it, since ASM_OUTPUT_REG_PUSH/ASM_OUTPUT_REG_POP do not work in the
+   presence of $gp-relative calls.  */
+#undef ASM_OUTPUT_REG_PUSH
+#undef ASM_OUTPUT_REG_POP

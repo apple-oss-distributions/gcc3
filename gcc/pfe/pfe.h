@@ -106,6 +106,13 @@ extern void pfe_init 			PARAMS ((enum pfe_action));
 /* Shut down the PFE.  */
 extern void pfe_term 			PARAMS ((void));
 
+/* Create and open a pfe file for dumping or open a pfe file for
+   loading.  */
+extern void pfe_open_pfe_file 		PARAMS ((char *, char *, int));
+
+/* Close a currently opened pfe file and optionally delete it.  */
+extern void pfe_close_pfe_file 		PARAMS ((int));
+
 /* Print out a message for an error and quit.  */
 extern void error                       PARAMS ((const char *, ...));
 /* Print out a message for an internal error and quit.  */
@@ -452,6 +459,31 @@ extern void pfe_freeze_thaw_function	         PARAMS ((struct function **));
 extern void pfe_varray_free 	        PARAMS ((struct varray_head_tag *));
 extern void pfe_freeze_thaw_varray_tree PARAMS ((struct varray_head_tag **));
 #endif
+
+/* command line macro validation */
+enum {
+  PFE_MACRO_NOT_FOUND,  /* Not found in pfe header identifier hashtable */
+  PFE_MACRO_FOUND, 
+  PFE_MACRO_CMDLN, 	/* Found macro. It is command line macro.  */ 
+  PFE_MACRO_DIFFERENT,  /* Found macro, but it's value is different */
+  PFE_MACRO_IDENTICAL
+};
+
+/* Macro validatin flags */
+#define PFE_MACRO_FOUND	  (1 << 0)	/* Found macro in PFE identifier hash table.  */
+#define PFE_MACRO_CMD_LN  (1 << 1)	/* It is a command line macro.  */
+
+
+/* Turn On/Off pfe macro validation.  */
+extern int pfe_macro_validation;
+extern int pfe_cmd_ln_macro_count;
+extern int pfe_macro_status;
+/* Set/Reset the flag to indicate that command line macro processing 
+   is in progress.  */
+extern void pfe_set_cmd_ln_processing   PARAMS ((void));
+extern void pfe_reset_cmd_ln_processing PARAMS ((void));
+/* Return 1 if command line macro processing is in progress.  */
+extern int pfe_is_cmd_ln_processing     PARAMS ((void));
 
 #endif /* PFE */
 #endif /* GCC_PFE_H */

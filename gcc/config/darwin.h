@@ -1,5 +1,5 @@
 /* Target definitions for Darwin (Mac OS X) systems.
-   Copyright (C) 1989, 1990, 1991, 1992, 1993, 2000, 2001
+   Copyright (C) 1989, 1990, 1991, 1992, 1993, 2000, 2001, 2002
    Free Software Foundation, Inc.
    Contributed by Apple Computer Inc.
 
@@ -42,6 +42,20 @@ Boston, MA 02111-1307, USA.  */
 #ifndef CONFIG_DARWIN_H
 #define CONFIG_DARWIN_H
 
+/* APPLE LOCAL PFE */
+#ifdef PFE
+/* For PFE machopic_function_base_name() always places its string in
+   a PFE-allocated buffer.  In addition it is always the same buffer
+   so that all rtl references that point to this buffer point to that
+   single buffer.  PFE_SAVESTRING ensures it will never map strings
+   in this buffer to some other PFE-allocated buffer.  This is
+   necessary since when this buffer changes on the load side all
+   rtl references to it reflect that change.  */
+#define MACHOPIC_FUNCTION_BASE_NAME() (machopic_function_base_name())
+#else
+#define MACHOPIC_FUNCTION_BASE_NAME() (machopic_function_base_name())
+#endif /* PFE */
+
 #define MATH_LIBRARY ""
 
 /* We have atexit.  */
@@ -70,6 +84,12 @@ Boston, MA 02111-1307, USA.  */
 #undef	WCHAR_TYPE_SIZE
 #define WCHAR_TYPE_SIZE 32
 
+/* APPLE LOCAL begin size of bool  */
+/* `bool' has size and alignment `4', on Darwin.  */
+#undef	BOOL_TYPE_SIZE
+#define BOOL_TYPE_SIZE 32
+/* APPLE LOCAL end size of bool  */
+
 /* Default to using the NeXT-style runtime, since that's what is
    pre-installed on Darwin systems.  */
 
@@ -85,9 +105,20 @@ Boston, MA 02111-1307, USA.  */
 /* This table intercepts weirdo options whose names would interfere
    with normal driver conventions, and either translates them into
    standardly-named options, or adds a 'Z' so that they can get to
-   specs processing without interference.  */
+   specs processing without interference.
+
+   Do not expand a linker option to "-Xlinker -<option>", since that
+   forfeits the ability to control via spec strings later.  However,
+   as a special exception, do this translation with -filelist, because
+   otherwise the driver will think there are no input files and quit.
+   (The alternative would be to hack the driver to recognize -filelist
+   specially, but it's simpler to use the translation table.)
+
+   Note that an option name with a prefix that matches another option
+   name, that also takes an argument, needs to be modified so the
+   prefix is different, otherwise a '*' after the shorter option will
+   match with the longer one.  */
 /* Ignore -dynamic for now */
-/* Ignore -traditional-cpp for now */
 #define TARGET_OPTION_TRANSLATE_TABLE \
   { "-all_load", "-Zall_load" },  \
   { "-allowable_client", "-Zallowable_client" },  \
@@ -104,10 +135,10 @@ Boston, MA 02111-1307, USA.  */
   { "-flat_namespace", "-Zflat_namespace" },  \
   { "-force_cpusubtype_ALL", "-Zforce_cpusubtype_ALL" },  \
   { "-force_flat_namespace", "-Zforce_flat_namespace" },  \
-  { "-framework", "-Xlinker -framework -Xlinker" },  \
-  { "-image_base", "-Xlinker -image_base -Xlinker" },  \
-  { "-init", "-Xlinker -init -Xlinker" },  \
-  { "-install_name", "-Xlinker -install_name -Xlinker" },  \
+  { "-framework", "-Zframework" },  \
+  { "-image_base", "-Zimage_base" },  \
+  { "-init", "-Zinit" },  \
+  { "-install_name", "-Zinstall_name" },  \
   { "-multiply_defined_unused", "-Zmultiplydefinedunused" },  \
   { "-multiply_defined", "-Zmultiply_defined" },  \
   { "-static", "-static -Wa,-static" },  \
@@ -136,15 +167,17 @@ Boston, MA 02111-1307, USA.  */
    !strcmp (STR, "compatibility_version") ? 1 : \
    !strcmp (STR, "current_version") ? 1 :	\
    !strcmp (STR, "Zdylib_file") ? 1 :		\
-   !strcmp (STR, "Zfilelist") ? 1 :		\
    !strcmp (STR, "Zframework") ? 1 :		\
-   !strcmp (STR, "Zseg_addr_table_filename") ?1 :\
+   !strcmp (STR, "Zimage_base") ? 1 :		\
+   !strcmp (STR, "Zinit") ? 1 :			\
+   !strcmp (STR, "Zinstall_name") ? 1 :		\
    !strcmp (STR, "Zmultiplydefinedunused") ? 1 : \
    !strcmp (STR, "Zmultiply_defined") ? 1 :	\
    !strcmp (STR, "precomp-trustfile") ? 1 :	\
    !strcmp (STR, "read_only_relocs") ? 1 :	\
    !strcmp (STR, "sectcreate") ? 3 :		\
    !strcmp (STR, "sectorder") ? 3 :		\
+   !strcmp (STR, "Zseg_addr_table_filename") ?1 :\
    !strcmp (STR, "seg1addr") ? 1 :		\
    !strcmp (STR, "segprot") ? 3 :		\
    !strcmp (STR, "seg_addr_table") ? 1 :	\
@@ -172,21 +205,9 @@ Boston, MA 02111-1307, USA.  */
 
 /* Machine dependent cpp options.  */
 
-/* The sequence here allows us to get a more specific version number
-   glued into __APPLE_CC__.  Normally this number would be updated as
-   part of submitting to a release engineering organization.  */
-
-#ifndef APPLE_CC
-#define APPLE_CC 1041
-#endif
-
-#define STRINGIFY_THIS(x) # x
-#define REALLY_STRINGIFY(x) STRINGIFY_THIS(x)
-
 #undef	CPP_SPEC
 /* APPLE LOCAL -precomp-trustfile, -arch */
-#define CPP_SPEC "-D__APPLE_CC__=" REALLY_STRINGIFY(APPLE_CC) "	\
-		  %{static:-D__STATIC__}%{!static:-D__DYNAMIC__} \
+#define CPP_SPEC "%{static:-D__STATIC__}%{!static:-D__DYNAMIC__} \
 		  %{precomp-trustfile} %{arch}"
 
 
@@ -195,24 +216,81 @@ Boston, MA 02111-1307, USA.  */
 #define CC1PLUS_SPEC "-D__private_extern__=extern"
 
 /* APPLE LOCAL asm flags */
-#define ASM_SPEC  \
-  "%{Zforce_cpusubtype_ALL:-force_cpusubtype_ALL}" \
-  "%{!Zforce_cpusubtype_ALL:%{faltivec:-force_cpusubtype_ALL}}"
+#define ASM_SPEC "-arch %T \
+  %{Zforce_cpusubtype_ALL:-force_cpusubtype_ALL} \
+  %{!Zforce_cpusubtype_ALL:%{faltivec:-force_cpusubtype_ALL}}"
 
-/* APPLE LOCAL begin common flags for ld and libtool */
-/* Please keep the random ld/libtool options in alphabetical order (modulo
-   'Z' and 'no' prefixes). */
+/* APPLE LOCAL begin linker flags */
+/* This is mostly a clone of the standard LINK_COMMAND_SPEC, plus
+   framework, precomp, libtool, and fat build additions.  Also we
+   don't specify a second %G after %L because libSystem is
+   self-contained and doesn't need to link against libgcc.a.  */
+/* In general, random Darwin linker flags should go into LINK_SPEC
+   instead of LINK_COMMAND_SPEC.  The command spec is better for
+   specifying the handling of options understood by generic Unix
+   linkers, and for positional arguments like libraries.  */
+#define LINK_COMMAND_SPEC "\
+%{!fdump=*:%{!fsyntax-only:%{!precomp:%{!c:%{!M:%{!MM:%{!E:%{!S:\
+    %{!Zdynamiclib:%(linker)}%{Zdynamiclib:/usr/bin/libtool} \
+    %{!Zdynamiclib:-arch %T %{@:-arch_multiple}} \
+    %{Zdynamiclib:-arch_only %T} \
+    %l %X %{d} %{s} %{t} %{Z} \
+    %{!Zdynamiclib:%{A} %{e*} %{m} %{N} %{n} %{r} %{u*} %{x} %{z}} \
+    %{@:-o %f%u.out}%{!@:%{o*}%{!o:-o a.out}} \
+    %{!Zdynamiclib:%{!A:%{!nostdlib:%{!nostartfiles:%S}}}} \
+    %{L*} %(link_libgcc) %o %{!nostdlib:%{!nodefaultlibs:%G %L}} \
+    %{!A:%{!nostdlib:%{!nostartfiles:%E}}} %{T*} %{F*} \
+    %{!--help:%{!no-c++filt|c++filt:| c++filt3 }} }}}}}}}}"
+
+/* Note that the linker
+   output is always piped through c++filt (unless -no-c++filt is
+   specified) to ensure error messages have demangled C++ names.
+   We do this even for C.  */
+/* nice idea, needs some work
+   "%{!no-c++filt|c++filt:| " STANDARD_BINDIR_PREFIX cppfilt " }}}}}}}}" */
+
+/* Please keep the random linker options in alphabetical order (modulo
+   'Z' and 'no' prefixes).  Options that can only go to one of libtool
+   or ld must be listed twice, under both !Zdynamiclib and
+   Zdynamiclib, with one of the cases reporting an error.  */
 /* Note that options taking arguments may appear multiple times on a
    command line with different arguments each time, so put a * after
    their names so all of them get passed.  */
-#define LD_AND_LIBTOOL_FLAGS \
-  "%{Zallowable_client*:-allowable_client %*} \
+#define LINK_SPEC  \
+  "%{static}%{!static:-dynamic} \
+   %{!Zdynamiclib: \
+     %{Zbundle:-bundle} \
+     %{Zbundle_loader*:-bundle_loader %*} \
+     %{client_name*} \
+     %{compatibility_version*:%e-compatibility_version only allowed with -dynamiclib} \
+     %{current_version*:%e-current_version only allowed with -dynamiclib} \
+     %{Zforce_cpusubtype_ALL:-force_cpusubtype_ALL} \
+     %{Zforce_flat_namespace:-force_flat_namespace} \
+     %{Zinstall_name*:%e-install_name only allowed with -dynamiclib} \
+     %{keep_private_externs} \
+     %{private_bundle} \
+    } \
+   %{Zdynamiclib: \
+     %{Zbundle:%e-bundle not allowed with -dynamiclib} \
+     %{Zbundle_loader*:%e-bundle_loader not allowed with -dynamiclib} \
+     %{client_name*:%e-client_name not allowed with -dynamiclib} \
+     %{compatibility_version*} \
+     %{current_version*} \
+     %{Zforce_cpusubtype_ALL:%e-force_cpusubtype_ALL not allowed with -dynamiclib} \
+     %{Zforce_flat_namespace:%e-force_flat_namespace not allowed with -dynamiclib} \
+     %{Zinstall_name*:-install_name %*} \
+     %{keep_private_externs:%e-keep_private_externs not allowed with -dynamiclib} \
+     %{private_bundle:%e-private_bundle not allowed with -dynamiclib} \
+    } \
+   %{Zall_load:-all_load}%{Zdynamiclib:%{!Zall_load:-noall_load}} \
+   %{Zallowable_client*:-allowable_client %*} \
    %{Zarch_errors_fatal:-arch_errors_fatal} \
    %{Zdylib_file*:-dylib_file %*} \
    %{Zflat_namespace:-flat_namespace} \
    %{Zframework*:-framework %*} \
    %{headerpad_max_install_names*} \
-   %{image_base*} %{init*} \
+   %{Zimage_base*:-image_base %*} \
+   %{Zinit*:-init %*} \
    %{nomultidefs} \
    %{Zmultiply_defined*:-multiply_defined %*} \
    %{Zmultiplydefinedunused*:-multiply_defined_unused %*} \
@@ -225,67 +303,13 @@ Boston, MA 02111-1307, USA.  */
    %{umbrella*} \
    %{undefined*} \
    %{Zweak_reference_mismatches*:-weak_reference_mismatches %*} \
+   %{X} \
    %{y*} \
-   %{segs_read_*} %{sectalign*} %{segcreate*} %{whyload} \
-   %{whatsloaded} "
-
-/* APPLE LOCAL begin linker flags */
-/* This is mostly a clone of the standard LINK_COMMAND_SPEC, plus
-   framework, precomp, and fat build additions.  Also we don't specify
-   a second %G after %L because libSystem is self-contained and
-   doesn't need to link against libgcc.a.  */
-#define LINK_COMMAND_SPEC "\
-%{!fsyntax-only:%{!precomp:%{!c:%{!M:%{!MM:%{!E:%{!S:\
-    %(linker) -arch %T %{@:-arch_multiple}\
-    %l %X %{A} %{d} %{e*} %{m} %{N} %{n} %{r} %{s} %{t}\
-    %{@:-o %f%u.out}%{!@:%{o*}}\
-    %{u*} %{x} %{z} %{Z} %{!A:%{!nostdlib:%{!nostartfiles:%S}}}\
-    %{static:} %{L*} %(link_libgcc) %o %{!nostdlib:%{!nodefaultlibs:%G %L}}\
-    %{!A:%{!nostdlib:%{!nostartfiles:%E}}} %{T*} %{F*} }}}}}}}"
-
-/* Please keep the random linker options in alphabetical order (modulo
-   'Z' and 'no' prefixes). */
-#define LINK_SPEC  \
-  "%{static}%{!static:-dynamic} \
-   %{Zall_load:-all_load} \
-   %{Zbundle:-bundle %{!Zdynamiclib:%{image_base*}}} \
-   %{Zbundle_loader*:-bundle_loader %*} \
-   %{client_name*} \
-   %{Zfilelist*:-filelist %*} \
-   %{Zforce_cpusubtype_ALL:-force_cpusubtype_ALL} \
-   %{Zforce_flat_namespace:-force_flat_namespace} \
-   %{keep_private_externs} \
-   %{private_bundle} \
    %{w} \
-   %{pagezero_size*} %{seglinkedit} %{noseglinkedit}  \
-   %{sectobjectsymbols*} \
-   %{dylinker_install_name*} \
-   %{dylinker} %{Mach} \
-   %(ld_and_libtool_flags) "
-/* APPLE LOCAL end linker flags */
-
-/* APPLE LOCAL begin -dynamiclib 2001-10-29 sts */
-/* Note that we can use %(linker) here because we've substituted
-   libtool for the linker's name in the driver's C code.  */
-#ifndef LIBTOOL_COMMAND_SPEC
-#define LIBTOOL_COMMAND_SPEC "\
-%{!fsyntax-only:%{!c:%{!M:%{!MM:%{!E:%{!S:\
-    %(linker) -arch_only %T\
-    %K %X %{!Zall_load:-noall_load}\
-    %{@:-o %f%u.out}%{!@:%{o}%{!o:-o a.out}}\
-    %{d} %{s} %{t} %{X} %{Z}\
-    %{static} %{!static:-dynamic}\
-    %{L*} %(link_libgcc)\
-    %o %{!nostdlib:%{!nodefaultlibs:%G %L}} \
-    %{!nostdlib:%{!nostartfiles:%E}} %{T*} %{F*} }}}}}}"
-#endif
-
-#define LIBTOOL_SPEC  \
-  "%{compatibility_version*} %{current_version*} \
-   %{Zfilelist*:-filelist %*} \
-   %{install_name*} \
-   %(ld_and_libtool_flags)"
-/* APPLE LOCAL end -dynamiclib 2001-10-29 sts */
+   %{pagezero_size*} %{segs_read_*} %{seglinkedit} %{noseglinkedit}  \
+   %{sectalign*} %{sectobjectsymbols*} %{segcreate*} %{whyload} \
+   %{whatsloaded} %{dylinker_install_name*} \
+   %{dylinker} %{Mach} "
 
 /* Machine dependent libraries.  */
 
@@ -302,7 +326,7 @@ Boston, MA 02111-1307, USA.  */
 /* APPLE LOCAL begin C++ EH */
 #undef	STARTFILE_SPEC
 #define STARTFILE_SPEC  \
-  "%{!dynamiclib:%{Zbundle:%{!static:-lbundle1.o}} \
+  "%{!Zdynamiclib:%{Zbundle:%{!static:-lbundle1.o}} \
      %{!Zbundle:%{pg:%{static:-lgcrt0.o} \
                      %{!static:%{object:-lgcrt0.o} \
                                %{!object:%{preload:-lgcrt0.o} \
@@ -311,9 +335,6 @@ Boston, MA 02111-1307, USA.  */
                       %{!static:%{object:-lcrt0.o} \
                                 %{!object:%{preload:-lcrt0.o} \
                                   %{!preload:-lcrt1.o -lcrtbegin.o}}}}}}"
-
-#undef  ENDFILE_SPEC
-#define ENDFILE_SPEC ""
 /* APPLE LOCAL end C++ EH */
 
 #undef	DOLLARS_IN_IDENTIFIERS
@@ -360,14 +381,11 @@ do { text_section ();							\
 
 #define NO_PROFILE_COUNTERS
 
-/* Don't use .gcc_compiled symbols to communicate with GDB;
-   They interfere with numerically sorted symbol lists. */
-
-#undef	ASM_IDENTIFY_GCC
-#define ASM_IDENTIFY_GCC(asm_out_file)
-
 #undef	INIT_SECTION_ASM_OP
 #define INIT_SECTION_ASM_OP
+
+/* APPLE LOCAL static structors in __StaticInit section */
+#define STATIC_INIT_SECTION "__TEXT,__StaticInit,regular,pure_instructions"
 
 #undef	INVOKE__main
 
@@ -381,17 +399,19 @@ do { text_section ();							\
 #undef	ASM_FILE_START
 #define ASM_FILE_START(FILE)
 
+/* APPLE LOCAL PFE */
 #undef	ASM_FILE_END
-#define ASM_FILE_END(FILE)					\
-  do {								\
-    machopic_finish (asm_out_file);                             \
-    if (strcmp (lang_hooks.name, "GNU C++") == 0)		\
-      {								\
-	constructor_section ();					\
-	destructor_section ();					\
-	ASM_OUTPUT_ALIGN (FILE, 1);				\
-      }								\
-  } while (0)
+#define ASM_FILE_END(FILE)						\
+  if (pfe_operation != PFE_DUMP)					\
+    do {								\
+      machopic_finish (asm_out_file);                            	\
+      if (strcmp (lang_hooks.name, "GNU C++") == 0)			\
+	{								\
+	  constructor_section ();					\
+	  destructor_section ();					\
+	  ASM_OUTPUT_ALIGN (FILE, 1);					\
+	}								\
+    } while (0)
 
 /* APPLE LOCAL begin darwin native */
 #undef ASM_OUTPUT_LABEL
@@ -542,7 +562,10 @@ do { text_section ();							\
 
 /* APPLE LOCAL C++ EH */
 #define ASM_OUTPUT_DWARF_DELTA(FILE,SIZE,LABEL1,LABEL2)  \
-  darwin_asm_output_dwarf_delta (FILE, SIZE, LABEL1, LABEL2)
+  darwin_asm_output_dwarf_delta (FILE, SIZE, LABEL1, LABEL2, 0)
+
+#define ASM_OUTPUT_RELOC_DWARF_DELTA(FILE,SIZE,LABEL1,LABEL2)  \
+  darwin_asm_output_dwarf_delta (FILE, SIZE, LABEL1, LABEL2, 1)
 
 /* Create new Mach-O sections. */
 
@@ -583,6 +606,8 @@ do { if (!strcmp (alias_name, name))					\
   in_objc_symbols, in_objc_module_info,			\
   in_objc_protocol, in_objc_string_object,		\
   in_objc_constant_string_object,			\
+  /* APPLE LOCAL constant cfstrings */			\
+  in_cfstring_constant_object,				\
   in_objc_class_names, in_objc_meth_var_names,		\
   in_objc_meth_var_types, in_objc_cls_refs, 		\
   in_machopic_nl_symbol_ptr,				\
@@ -670,6 +695,14 @@ SECTION_FUNCTION (objc_string_object_section,	\
 SECTION_FUNCTION (objc_constant_string_object_section,	\
 		  in_objc_constant_string_object,	\
 		  ".section __OBJC, __cstring_object", 1)	\
+/* APPLE LOCAL begin constant cfstrings */	\
+/* Unlike constant NSStrings, constant CFStrings do not live */\
+/* in the __OBJC segment since they may also occur in pure C */\
+/* or C++ programs.  */\
+SECTION_FUNCTION (cfstring_constant_object_section,	\
+		  in_cfstring_constant_object,	\
+		  ".section __DATA, __cfstring", 0)	\
+/* APPLE LOCAL end constant cfstrings */	\
 SECTION_FUNCTION (objc_class_names_section,	\
 		in_objc_class_names,		\
 		".objc_class_names", 1)	\
@@ -701,8 +734,8 @@ SECTION_FUNCTION (darwin_exception_section,		\
 		".section __DATA,__gcc_except_tab", 0)	\
 SECTION_FUNCTION (darwin_eh_frame_section,		\
 		in_darwin_eh_frame,			\
-                /* APPLE LOCAL eh in data segment */  \
-		".section __DATA,__eh_frame", 0)	\
+                /* APPLE LOCAL eh in data segment */    \
+		 ".section " EH_FRAME_SECTION_NAME ",__eh_frame" EH_FRAME_SECTION_ATTR, 0)  \
 							\
 static void					\
 objc_section_init ()				\
@@ -744,6 +777,13 @@ static void try_section_alias () 		\
       fprintf (asm_out_file, "%s\n",		\
 	       IDENTIFIER_POINTER (section_alias[in_section]));	\
 }      						\
+int darwin_named_section_is (const char* name)		\
+{  /* This is in this macro because it refers to \
+      variables that are local to varasm.c */	\
+  return (in_section == in_named		\
+	  && strcmp (in_named_name, name) == 0);   \
+}
+	
 
 #if 0
 static void alias_section PARAMS ((const char *, const char *)); \
@@ -798,13 +838,23 @@ static void alias_section (name, alias)			\
 	       && TREE_CODE (TREE_TYPE (exp)) == RECORD_TYPE		\
 	       && TYPE_NAME (TREE_TYPE (exp)))				\
 	{								\
+	  /* APPLE LOCAL begin constant strings */			\
+	  extern int flag_next_runtime;					\
+	  extern char *constant_string_class_name;			\
+	  /* APPLE LOCAL end constant strings */			\
 	  tree name = TYPE_NAME (TREE_TYPE (exp));			\
 	  if (TREE_CODE (name) == TYPE_DECL)				\
 	    name = DECL_NAME (name);					\
-	  if (!strcmp (IDENTIFIER_POINTER (name), "NSConstantString"))	\
-	    objc_constant_string_object_section ();			\
-	  else if (!strcmp (IDENTIFIER_POINTER (name), "NXConstantString")) \
-	    objc_string_object_section ();				\
+	  /* APPLE LOCAL begin constant strings */			\
+	  if (constant_string_class_name				\
+	      && !strcmp (IDENTIFIER_POINTER (name), 			\
+			  constant_string_class_name)) {		\
+	    if (flag_next_runtime)					\
+	      objc_constant_string_object_section ();			\
+	    else							\
+	      objc_string_object_section ();				\
+	  }								\
+	  /* APPLE LOCAL end constant strings */			\
 	  else if (TREE_READONLY (exp) || TREE_CONSTANT (exp))		\
 	    {								\
 	      /* APPLE LOCAL dynamic-no-pic  */				\
@@ -816,6 +866,37 @@ static void alias_section (name, alias)			\
 	  else								\
 	    data_section ();						\
       }									\
+	/* APPLE LOCAL begin constant cfstrings */			\
+      else if (TREE_CODE (exp) == CONSTRUCTOR				\
+	       && TREE_TYPE (exp)					\
+	       && TREE_CODE (TREE_TYPE (exp)) == ARRAY_TYPE		\
+	       && TREE_OPERAND (exp, 1))				\
+	{								\
+	  tree name = TREE_OPERAND (exp, 1);				\
+	  if (TREE_CODE (name) == TREE_LIST && TREE_VALUE (name)	\
+	      && TREE_CODE (TREE_VALUE (name)) == NOP_EXPR		\
+	      && TREE_OPERAND (TREE_VALUE (name), 0)			\
+	      && TREE_OPERAND (TREE_OPERAND (TREE_VALUE (name), 0), 0))	\
+	    {								\
+	      name = TREE_OPERAND 					\
+		     (TREE_OPERAND (TREE_VALUE (name), 0), 0);		\
+	    }								\
+	  if (TREE_CODE (name) == VAR_DECL				\
+	      && !strcmp (IDENTIFIER_POINTER (DECL_NAME (name)), 	\
+			  "__CFConstantStringClassReference"))		\
+	    cfstring_constant_object_section ();			\
+	  else if (TREE_READONLY (exp) || TREE_CONSTANT (exp))		\
+	    {								\
+	      /* APPLE LOCAL dynamic-no-pic  */				\
+	      if (TREE_SIDE_EFFECTS (exp) || MACHOPIC_INDIRECT && reloc)\
+		const_data_section ();					\
+	      else							\
+		readonly_data_section (); 				\
+            }								\
+	  else								\
+	    data_section ();						\
+	}								\
+	/* APPLE LOCAL end constant cfstrings */			\
       else if (TREE_CODE (exp) == VAR_DECL &&				\
 	       DECL_NAME (exp) &&					\
 	       TREE_CODE (DECL_NAME (exp)) == IDENTIFIER_NODE &&	\
@@ -947,6 +1028,22 @@ static void alias_section (name, alias)			\
  do { const char* _x = (NAME); if (!!strncmp (_x, "_OBJC_", 6)) {	\
   fputs (".private_extern ", FILE); assemble_name (FILE, _x);		\
   fputs ("\n", FILE); }} while (0)
+/* APPLE LOCAL end private extern */
+
+#if !defined(APPLE_WEAK_SECTION_ATTRIBUTE) && !defined(APPLE_WEAK_ASSEMBLER_DIRECTIVE)
+  #warning Neither weak attributes nor weak directives defined.
+  #warning Assuming weak directives.
+#define APPLE_WEAK_ASSEMBLER_DIRECTIVE 1
+#endif 
+
+/* APPLE LOCAL weak definition */
+#ifdef APPLE_WEAK_ASSEMBLER_DIRECTIVE
+#define ASM_WEAK_DEFINITIONIZE_LABEL(FILE,  NAME)                       \
+ do { const char* _x = (NAME); if (!!strncmp (_x, "_OBJC_", 6)) {	\
+  fputs (".weak_definition ", FILE); assemble_name (FILE, _x);		\
+  fputs ("\n", FILE); }} while (0)
+#endif
+/* APPLE LOCAL end weak definition */
 
 #undef ASM_GENERATE_INTERNAL_LABEL
 #define ASM_GENERATE_INTERNAL_LABEL(LABEL,PREFIX,NUM)	\
@@ -978,16 +1075,19 @@ enum machopic_addr_class {
 
 /* Macros defining the various PIC cases.  */
 
-/* APPLE LOCAL begin dynamic-no-pic  turly */
+/* APPLE LOCAL begin dynamic-no-pic */
 #define MACHO_DYNAMIC_NO_PIC_P()	(TARGET_DYNAMIC_NO_PIC)
 #define MACHOPIC_INDIRECT	(flag_pic || MACHO_DYNAMIC_NO_PIC_P ())
 #define MACHOPIC_JUST_INDIRECT	(flag_pic == 1 || MACHO_DYNAMIC_NO_PIC_P ())
 #define MACHOPIC_PURE		(flag_pic == 2 && ! MACHO_DYNAMIC_NO_PIC_P ())
 
-/* COMMON symbols are not supported for *PURE* PIC. -mdynamic-no-pic code,
-   which will never be in a shared library, is fine.  */
-#define COMMON_NOT_SUPPORTED_P() (flag_no_common || MACHOPIC_PURE)
-/* APPLE LOCAL end dynamic-no-pic  turly */
+/* APPLE LOCAL PFE */
+/* Used to check for consistent target settings between load and dump
+   files.  */
+#ifdef PFE
+#define PFE_CHECK_TARGET_SETTINGS() (darwin_pfe_check_target_settings ())
+#endif
+/* APPLE LOCAL end dynamic-no-pic */
 
 /* APPLE LOCAL darwin native */
 #undef ENCODE_SECTION_INFO
@@ -1062,12 +1162,121 @@ enum machopic_addr_class {
 
 #define TARGET_ASM_EH_FRAME_SECTION darwin_eh_frame_section
 
-/* APPLE LOCAL darwin native */
+/* APPLE LOCAL begin C++ EH turly 20020208  */
+/* The __eh_frame section attributes: a "normal" section by default.  */
+#define EH_FRAME_SECTION_ATTR	/*nothing*/
+
+/* The only EH item we can't do PC-relative is the reference to
+   __gxx_personality_v0.  So we cheat, since moving the __eh_frame section
+   to the DATA segment is expensive.
+   We output a 4-byte encoding - including the last 2 chars of the 
+   personality function name: {0, 'g', 'v', '0', 0xff}
+   (The first zero byte coincides with the "absolute" encoding.)
+   This means we can now use DW_EH_PE_pcrel for everything.  And there
+   was much rejoicing.  */
+
+#define EH_FRAME_SECTION_NAME	"__TEXT"
+
+#define COALESCED_UNWIND_INFO
+
+#ifdef COALESCED_UNWIND_INFO
+#undef EH_FRAME_SECTION_ATTR
+
+#ifdef APPLE_WEAK_SECTION_ATTRIBUTE
+#define APPLE_EH_FRAME_WEAK_DEFINITIONS ",weak_definitions"
+#else /* APPLE_WEAK_SECTION_ATTRIBUTE */
+#define APPLE_EH_FRAME_WEAK_DEFINITIONS ""
+#endif /* APPLE_WEAK_SECTION_ATTRIBUTE */
+
+#ifdef APPLE_STRIP_STATIC_SYMS_SECTION_ATTRIBUTE
+#define APPLE_EH_FRAME_STRIP_STATIC "+strip_static_syms"
+#else /* APPLE_STRIP_STATIC_SYMS_SECTION_ATTRIBUTE */
+#define APPLE_EH_FRAME_STRIP_STATIC ""
+#endif /* APPLE_STRIP_STATIC_SYMS_SECTION_ATTRIBUTE */
+
+#define EH_FRAME_SECTION_ATTR \
+        ",coalesced" APPLE_EH_FRAME_WEAK_DEFINITIONS ",no_toc" APPLE_EH_FRAME_STRIP_STATIC
+
+
+/* Implicit or explicit template instantiations' EH info are GLOBAL
+   symbols.  ("Implicit" here implies "coalesced".)
+   Note that .weak_definition is commented out until 'as' supports it.  */
+
+
+#ifdef APPLE_WEAK_ASSEMBLER_DIRECTIVE
+#define APPLE_ASM_WEAK_DEF_FMT_STRING(LAB) \
+      (name_needs_quotes(LAB) ? ".weak_definition \"%s.eh\"\n" : ".weak_definition %s.eh\n")
+#else /* APPLE_WEAK_ASSEMBLER_DIRECTIVE */
+#define APPLE_ASM_WEAK_DEF_FMT_STRING(LAB) \
+      (name_needs_quotes(LAB) ? ";.weak_definition \"%s.eh\"\n" : ";.weak_definition %s.eh\n")
+#endif /* APPLE_WEAK_ASSEMBLER_DIRECTIVE */
+
+#define ASM_OUTPUT_COAL_UNWIND_LABEL(FILE, LAB, COAL, PUBLIC, PRIVATE_EXTERN) \
+  do {									\
+    if ((COAL) || (PUBLIC) || (PRIVATE_EXTERN))                         \
+      fprintf ((FILE),							\
+	       (name_needs_quotes(LAB) ? "%s \"%s.eh\"\n" : "%s %s.eh\n"), \
+	       ((PUBLIC) ? ".globl" : ".private_extern"),               \
+	       (LAB));							\
+    if (COAL)								\
+      fprintf ((FILE),							\
+	       APPLE_ASM_WEAK_DEF_FMT_STRING(LAB),			\
+	       (LAB));							\
+    fprintf ((FILE), 							\
+	     (name_needs_quotes(LAB) ? "\"%s.eh\":\n" : "%s.eh:\n"),    \
+	     (LAB));							\
+  } while (0)
+
+#endif	/* COALESCED_UNWIND_INFO  */
+
 #undef ASM_PREFERRED_EH_DATA_FORMAT
 #define ASM_PREFERRED_EH_DATA_FORMAT(CODE,GLOBAL)  \
-  (((CODE) == 1 || (GLOBAL) == 0) ? DW_EH_PE_pcrel : DW_EH_PE_absptr)
+  (((CODE) == 2 && (GLOBAL) == 1) \
+   ? (DW_EH_PE_pcrel | DW_EH_PE_indirect) : \
+     ((CODE) == 1 || (GLOBAL) == 0) ? DW_EH_PE_pcrel : DW_EH_PE_absptr)
 
-/* APPLE LOCAL begin EH turly 20020208  */
+/*** temporarily disabled ("XXX_") for compatibility with -all_load ***/
+#define XXX_DW2_ENCODE_PERSONALITY_FUNC(ADDR)				\
+  do {									\
+      const char *str = XSTR (ADDR, 0);					\
+      extern rtx personality_libfunc_used;				\
+      personality_libfunc_used = (ADDR);				\
+      str += strlen (str) - 2;						\
+      dw2_asm_output_data (1, 0, "(encoding");				\
+      dw2_asm_output_data (1, 'g', "for");				\
+      dw2_asm_output_data (1, str[0], "personality");			\
+      dw2_asm_output_data (1, str[1], "function");			\
+      STRIP_NAME_ENCODING (str, XSTR (ADDR, 0));			\
+      dw2_asm_output_data (1, 0xff, "%s)", str);			\
+  } while (0)
+
+/* TRUE if PTR encodes a personality function.
+   For now, all we know about is __gxx_personality_v0, encoded
+   by {0, 'g', 'v', '0', 0xff}.  */
+
+/*** temporarily disabled ("XXX_") for compatibility with -all_load ***/
+#define XXX_DW2_PERSONALITY_FUNC_ENCODED_P(PTR)				\
+  (PTR[0] == 0 && PTR[1] == 'g' && PTR[2] == 'v'			\
+				&& PTR[3] == '0' && PTR[4] == 0xFF)
+
+/* Fromage to "extract" the encoded personality function.  Bump PTR.  */
+/*** temporarily disabled ("XXX_") for compatibility with -all_load ***/
+#define XXX_DW2_DECODE_PERSONALITY_FUNC(PTR, PFUNC)			\
+  do {									\
+    if (DW2_PERSONALITY_FUNC_ENCODED_P (PTR)) {				\
+      extern int __gxx_personality_v0 ();				\
+      PFUNC = __gxx_personality_v0;					\
+      PTR += 5;								\
+    }									\
+  } while (0)
+
+#define ASM_MAYBE_OUTPUT_ENCODED_ADDR_RTX(ASM_OUT_FILE, ENCODING, SIZE, ADDR, DONE)	\
+      if (ENCODING == ASM_PREFERRED_EH_DATA_FORMAT (2, 1)) {				\
+	darwin_non_lazy_pcrel (ASM_OUT_FILE, ADDR);					\
+	goto DONE;									\
+      }
+
+
 /* Node of KEYMGR_GCC3_LIVE_IMAGE_LIST.  Info about each resident image.  */
 struct __live_images {
   unsigned long this_size;                      /* sizeof (live_images)  */
@@ -1085,7 +1294,7 @@ struct __live_images {
    with a "dwarf_fde_end" field.  */
 #define DWARF2_OBJECT_END_PTR_EXTENSION
 
-/* APPLE LOCAL end EH turly 20020208  */
+/* APPLE LOCAL end C++ EH turly 20020208  */
 
 #define REGISTER_TARGET_PRAGMAS(PFILE)                          \
   do {                                                          \
@@ -1096,12 +1305,15 @@ struct __live_images {
     /* APPLE LOCAL end Macintosh alignment 2002-1-22 ff */  \
     cpp_register_pragma (PFILE, 0, "segment", darwin_pragma_ignore);  \
     cpp_register_pragma (PFILE, 0, "unused", darwin_pragma_unused);  \
-    /* APPLE LOCAL begin CALL_ON_LOAD/CALL_ON_UNLOAD 20020202 turly  */ \
+    /* APPLE LOCAL begin CALL_ON_LOAD/CALL_ON_UNLOAD pragmas  20020202 turly  */ \
     cpp_register_pragma (PFILE, 0, "CALL_ON_LOAD", \
 					darwin_pragma_call_on_load); \
     cpp_register_pragma (PFILE, 0, "CALL_ON_UNLOAD", \
 					darwin_pragma_call_on_unload); \
-    /* APPLE LOCAL end CALL_ON_LOAD/CALL_ON_UNLOAD 20020202 turly  */ \
+    /* APPLE LOCAL end CALL_ON_LOAD/CALL_ON_UNLOAD pragmas  20020202 turly  */ \
+    /* APPLE LOCAL begin CALL_ON_MODULE_BIND deprecated 2002-4-10 ff */  \
+    cpp_register_pragma (PFILE, 0, "CALL_ON_MODULE_BIND", darwin_pragma_call_on_module_bind);  \
+    /* APPLE LOCAL end CALL_ON_MODULE_BIND deprecated 2002-4-10 ff */  \
     /* APPLE LOCAL begin temporary pragmas 2001-07-05 sts */  \
     cpp_register_pragma (PFILE, 0, "CC_NO_MACH_TEXT_SECTIONS", darwin_pragma_cc_no_mach_text_sections);  \
     cpp_register_pragma (PFILE, 0, "CC_OPT_OFF", darwin_pragma_cc_opt_off);  \
@@ -1119,57 +1331,54 @@ struct __live_images {
 #define ASM_APP_OFF ""
 
 /* APPLE LOCAL  coalescing  */
-#define HAVE_COALESCED_SYMBOLS
+extern void make_decl_coalesced (tree, int private_extern_p);
 
-#define __MAKE_DECL_COALESCED(DECL, PRIVATE_EXTERN_P, NO_TOC_P)	\
-	do {							\
-	  const char *sec;					\
-	  /* Do nothing if we're not PIC.  */			\
-	  if (!MACHOPIC_INDIRECT)				\
-	    break;						\
-	  DECL_COALESCED (DECL) = 1;				\
-	  if (PRIVATE_EXTERN_P)					\
-	    DECL_PRIVATE_EXTERN (DECL) = 1;			\
-	  TREE_PUBLIC (DECL) = 1;				\
-	  if (TREE_CODE (DECL) == FUNCTION_DECL)		\
-	    sec = (NO_TOC_P) ? "__TEXT,__textcoal_nt,coalesced,no_toc"	\
-			     : "__TEXT,__textcoal,coalesced";		\
-	  else								\
-	    sec = (NO_TOC_P) ? "__DATA,__datacoal_nt,coalesced,no_toc"	\
-			     : "__DATA,__datacoal,coalesced";		\
-	  DECL_SECTION_NAME (DECL) = build_string (strlen (sec), sec);	\
-	} while (0)
+/* Coalesced symbols are private extern by default.  This behavior can
+   be changed with the EXPERIMENTAL export-coalesced flag.  There is 
+   not (yet?) any means for coalesced symbols to be selectively exported.  */
 
-/* Coalesced Symbols are private extern by default as ld doesn't properly
-   support 'global' ones just yet.  */
-#define MAKE_DECL_COALESCED(DECL)	 __MAKE_DECL_COALESCED (DECL, 1, 0)
-#define MAKE_DECL_COALESCED_GLOBAL(DECL) __MAKE_DECL_COALESCED (DECL, 0, 0)
-#define MAKE_DECL_COALESCED_NO_TOC(DECL) __MAKE_DECL_COALESCED (DECL, 1, 1)
+#define MAKE_DECL_COALESCED(DECL) \
+        make_decl_coalesced (DECL, !flag_export_coalesced)
 
-/* Thunks can be coalesced provided they're not public.  */
-#define COALESCE_STATIC_THUNK(DECL)	MAKE_DECL_COALESCED_NO_TOC (DECL)
+#define COALESCE_STATIC_THUNK(DECL, PUBLIC) \
+        make_decl_coalesced (DECL, !PUBLIC)
 
-#define SUPPORTS_ONE_ONLY	(0 && flag_coalesce && MACHOPIC_INDIRECT)	
-#define MAKE_DECL_ONE_ONLY(DECL)				\
-	do {							\
-	  if (SUPPORTS_ONE_ONLY)				\
-	    {							\
-	      MAKE_DECL_COALESCED (DECL);			\
-	      DECL_WEAK (DECL) = 1;				\
-	    }							\
-	} while (0)
+extern int flag_coalescing_enabled,
+	   flag_coalesce_templates, flag_weak_coalesced_definitions;
+
+/* Coalesced symbols are private extern by default.  This EXPERIMENTAL
+   flag will make them global instead.  */
+extern int flag_export_coalesced;
+
+#define COALESCING_ENABLED_P()  (flag_coalescing_enabled && MACHOPIC_INDIRECT)
+
+#define COALESCING_TEMPLATES_P(DECL)				\
+        (COALESCING_ENABLED_P () && flag_coalesce_templates)
+
+#define MARK_TEMPLATE_COALESCED(DECL)					\
+  do {									\
+    if (COALESCING_TEMPLATES_P (DECL)) {				\
+      int explicit = TREE_PUBLIC (DECL)					\
+	&& (DECL_EXPLICIT_INSTANTIATION (DECL)				\
+	    /* Or an explicitly instantiated function.  */		\
+	    || (TREE_CODE (DECL) == FUNCTION_DECL			\
+		&& DECL_INTERFACE_KNOWN (DECL)				\
+		&& DECL_NOT_REALLY_EXTERN (DECL))			\
+	    /* Or a non-common VAR_DECL.  */				\
+	    || (TREE_CODE (DECL) == VAR_DECL && ! DECL_COMMON (DECL)));	\
+      if (!explicit							\
+	  || /*it IS explicit, but*/ !flag_weak_coalesced_definitions)	\
+        MAKE_DECL_COALESCED (DECL);					\
+    }							\
+  } while (0)
 
 #undef TARGET_ASM_NAMED_SECTION
 #define TARGET_ASM_NAMED_SECTION darwin_asm_named_section
 #undef TARGET_SECTION_TYPE_FLAGS
 #define TARGET_SECTION_TYPE_FLAGS darwin_section_type_flags
 
-#ifdef HAVE_COALESCED_SYMBOLS
 #define DECL_IS_COALESCED_OR_WEAK(DECL)			\
 	(DECL_COALESCED (DECL) || DECL_WEAK (DECL))
-#else
-#define DECL_IS_COALESCED_OR_WEAK(DECL)	DECL_WEAK (DECL)
-#endif
 
 extern int machopic_var_referred_to_p PARAMS ((const char*)); 
 #define MACHOPIC_VAR_REFERRED_TO_P(NAME) machopic_var_referred_to_p (NAME)

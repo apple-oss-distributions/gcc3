@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 36;
+	objectVersion = 38;
 	objects = {
 		8928587D02108C4F0CCA2CB6 = {
 			buildArgumentsString = "$ACTION $ALL_SETTINGS";
@@ -60,6 +60,7 @@
 			refType = 4;
 		};
 		8C18C7DD00C5731506CA2AC8 = {
+			includeInIndex = 0;
 			isa = PBXFolderReference;
 			name = gcc3;
 			path = ..;

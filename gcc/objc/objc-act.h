@@ -41,7 +41,8 @@ void continue_method_def			PARAMS ((void));
 void finish_method_def				PARAMS ((void));
 tree start_protocol				PARAMS ((enum tree_code, tree, tree));
 void finish_protocol				PARAMS ((tree));
-void add_objc_decls				PARAMS ((void));
+/* APPLE LOCAL msg send super  */
+/* The 'add_objc_decls' routine is no more.  */
 
 tree is_ivar					PARAMS ((tree, tree));
 int is_private					PARAMS ((tree));
@@ -67,7 +68,8 @@ void objc_declare_alias				PARAMS ((tree, tree));
 void objc_declare_class				PARAMS ((tree));
 void objc_declare_protocols			PARAMS ((tree));
 
-extern int objc_receiver_context;
+/* APPLE LOCAL designated initializers */
+/* 'int objc_receiver_context' is no more.  */
 
 /* the following routines are used to implement statically typed objects */
 

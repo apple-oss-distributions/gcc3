@@ -31,6 +31,15 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include <sys/resource.h>
 #endif
 
+/* APPLE LOCAL begin Mach time */
+#ifdef HAVE_MACH_MACH_TIME_H
+#include <mach/mach_time.h>
+#define HAVE_MACH_TIME
+static double timeBaseRatio;
+static struct mach_timebase_info tbase;
+#endif
+/* APPLE LOCAL end Mach time */
+
 #ifndef HAVE_CLOCK_T
 typedef int clock_t;
 #endif
@@ -75,13 +84,19 @@ extern clock_t clock PARAMS ((void));
 # endif
 #endif
 
-/* APPLE LOCAL PFE - use getrusage instead of times */
-#ifdef PFE
-#undef HAVE_TIMES
-#endif
-
 /* Prefer times to getrusage to clock (each gives successively less
    information).  */
+/* APPLE LOCAL begin Mach time */
+/* On Darwin, prefer getrusage, plus Mach absolute time for the wall
+   clock time.  */
+#ifdef HAVE_MACH_TIME
+# define USE_GETRUSAGE
+# define USE_MACH_TIME
+# define HAVE_USER_TIME
+# define HAVE_SYS_TIME
+# define HAVE_WALL_TIME
+#else
+/* APPLE LOCAL end Mach time */
 #ifdef HAVE_TIMES
 # define USE_TIMES
 # define HAVE_USER_TIME
@@ -99,6 +114,8 @@ extern clock_t clock PARAMS ((void));
 #endif
 #endif
 #endif
+/* APPLE LOCAL Mach time */
+#endif /* HAVE_MACH_TIME */
 
 /* libc is very likely to have snuck a call to sysconf() into one of
    the underlying constants, and that can be very slow, so we have to
@@ -210,6 +227,11 @@ get_time (now)
 #ifdef USE_CLOCK
     now->user = clock () * clocks_to_msec;
 #endif
+    /* APPLE LOCAL begin Mach time */
+#ifdef USE_MACH_TIME
+    now->wall = mach_absolute_time() * timeBaseRatio;
+#endif
+    /* APPLE LOCAL end Mach time */
   }
 }
 
@@ -249,6 +271,12 @@ init_timevar ()
 #ifdef USE_CLOCK
   clocks_to_msec = CLOCKS_TO_MSEC;
 #endif
+  /* APPLE LOCAL begin Mach time */
+#ifdef USE_MACH_TIME
+  mach_timebase_info(&tbase);
+  timeBaseRatio = ((double) tbase.numer / (double) tbase.denom) * 1e-9;
+#endif
+  /* APPLE LOCAL end Mach time */
 }
 
 /* Push TIMEVAR onto the timing stack.  No further elapsed time is
@@ -502,14 +530,18 @@ timevar_print (fp)
   /* Print total time.  */
   fputs (_(" TOTAL                 :"), fp);
 #ifdef HAVE_USER_TIME
+  /* APPLE LOCAL time formatting */
   fprintf (fp, "%7.2f", total->user);
 #endif 
 #ifdef HAVE_SYS_TIME
+  /* APPLE LOCAL time formatting */
   fprintf (fp, "          %7.2f", total->sys);
 #endif
 #ifdef HAVE_WALL_TIME
+  /* APPLE LOCAL time formatting */
   fprintf (fp, "          %7.2f", total->wall);
 #endif
+  /* APPLE LOCAL time formatting */
   putc ('\n', fp);
   
 #endif /* defined (HAVE_USER_TIME) || defined (HAVE_SYS_TIME) 

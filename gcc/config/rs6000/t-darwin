@@ -68,8 +68,19 @@ darwin-c.o: $(srcdir)/config/darwin-c.c $(CONFIG_H) $(SYSTEM_H) \
 # APPLE LOCAL no soft-float multilibs
 
 # APPLE LOCAL PFE
-darwin.o : config.h $(PFE_H)
+darwin.o : config.h $(PFE_H) $(PFE_HEADER_H)
 rs6000.o : config.h $(PFE_H) $(PFE_HEADER_H)
 
 # Should the big block of PFE macro definitions currently in Makefile.in
 # be moved into this file instead?  [ILR]
+
+# APPLE LOCAL AltiVec
+# The following adds adds a dependency of vec.h to rs6000.o and ensures
+# that vec.h is built before building rs6000.o
+# This is currently disabled since it gnerates a source file in the
+# source directory.
+#rs6000.o : $(srcdir)/config/rs6000/vec.h
+
+#$(srcdir)/config/rs6000/vec.h: $(srcdir)/config/rs6000/vec.ops \
+#	                       $(srcdir)/config/rs6000/builtin.ops
+#	(cd $(srcdir)/config/rs6000; ops-to-gp -gcc vec.ops builtin.ops)

@@ -1,4 +1,4 @@
-/* APPLE LOCAL PFE */
+/* APPLE LOCAL file PFE */
 /* Memory management allocation definitions.
    Copyright (C) 2001
    Free Software Foundation, Inc.
@@ -32,6 +32,7 @@ statistics are gathered or whatever.  Keep the string lengths < 30.
 
 /* These are for non-GC related allocations in PFE memory...					*/
 DEF_PFE_ALLOC (PFE_ALLOC_TARGET_ADDITIONS, "target additions")		/* config/...		*/
+DEF_PFE_ALLOC (PFE_ALLOC_FUNCTION_BASE, "function_base")		/* config/darwin.h		*/
 DEF_PFE_ALLOC (PFE_ALLOC_BINDING_LEVEL, "binding_level")		/* c-decl.c, cp/decl.c	*/
 DEF_PFE_ALLOC (PFE_ALLOC_SAVED_SCOPE, "c++ saved_scope")		/* cp/decl.c		*/
 DEF_PFE_ALLOC (PFE_ALLOC_LANGUAGE_FUNCTION, "c++ language_function")	/* cp/decl.c		*/

@@ -1,4 +1,4 @@
-/* APPLE LOCAL Objective-C++ */
+/* APPLE LOCAL file Objective-C++ */
 /* Language-specific hook definitions for C front end.
    Copyright (C) 1991, 1995, 1997, 1998,
    1999, 2000, 2001 Free Software Foundation, Inc.
@@ -60,6 +60,8 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #define LANG_HOOKS_DUMP_BLANK_LINE_P c_dump_blank_line_p
 #undef LANG_HOOKS_DUMP_LINENO_P
 #define LANG_HOOKS_DUMP_LINENO_P c_dump_lineno_p
+#undef LANG_HOOKS_DMP_TREE3
+#define LANG_HOOKS_DMP_TREE3 c_dmp_tree3
 /* APPLE LOCAL end new tree dump */
 /* APPLE LOCAL begin PFE */
 #ifdef PFE
@@ -75,6 +77,8 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #define LANG_HOOKS_PFE_FREEZE_THAW_SPECIAL c_pfe_freeze_thaw_special
 #undef LANG_HOOKS_PFE_CHECK_ALL_STRUCT_SIZES
 #define LANG_HOOKS_PFE_CHECK_ALL_STRUCT_SIZES c_pfe_check_all_struct_sizes
+#undef LANG_HOOKS_PFE_CHECK_SETTINGS
+#define LANG_HOOKS_PFE_CHECK_SETTINGS c_pfe_check_settings
 #endif
 /* APPLE LOCAL end PFE */
 

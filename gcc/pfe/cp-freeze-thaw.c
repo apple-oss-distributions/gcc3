@@ -26,6 +26,7 @@ Boston, MA 02111-1307, USA.  */
 
 #include "system.h"
 #include "tree.h"
+#include "toplev.h"
 #include "c-common.h"
 #include "hashtab.h"
 #include "varray.h"
@@ -41,10 +42,18 @@ Boston, MA 02111-1307, USA.  */
 
 /* Initialize language specific compiler state.  */
 void
-cxx_pfe_lang_init ()
+cxx_pfe_lang_init (lang)
+  int lang;
 {
+  if (pfe_operation == PFE_DUMP)
+    pfe_set_lang ((enum pfe_lang) lang == PFE_LANG_UNKNOWN ?
+		  PFE_LANG_CXX : lang);
+  else if (pfe_operation == PFE_LOAD)
+    pfe_check_lang ((enum pfe_lang) lang == PFE_LANG_UNKNOWN ?
+		    PFE_LANG_CXX : lang);
+  
   /* Initialize the language specific compiler state */
-  if (pfe_compiler_state_ptr)
+  if (pfe_operation == PFE_DUMP)
     pfe_compiler_state_ptr->lang_specific  = (struct pfe_lang_compiler_state *)
       pfe_calloc (1, sizeof (struct pfe_lang_compiler_state));
 }
@@ -83,6 +92,10 @@ cxx_freeze_thaw_compiler_state (pp)
   PFE_GLOBAL_TO_HDR_IF_FREEZING (static_dtors);
   PFE_FREEZE_THAW_WALK (hdr->static_dtors);
   PFE_HDR_TO_GLOBAL_IF_THAWING (static_dtors);
+  
+  /* We only freeze this because we are going to validate the
+     consistency of the setting of this option on a load.  */
+  PFE_GLOBAL_TO_HDR_IF_FREEZING (flag_apple_kext);
 
   /* cp/class.c */
   PFE_GLOBAL_TO_HDR_IF_FREEZING (local_classes);
@@ -135,6 +148,16 @@ cxx_freeze_thaw_compiler_state (pp)
     }
 }
 
+/* Check language-specific compiler options.  */
+void 
+cxx_pfe_check_settings (lang_specific)
+    struct pfe_lang_compiler_state *lang_specific;
+{
+  if (pfe_operation == PFE_LOAD)
+    if (lang_specific->flag_apple_kext != flag_apple_kext)
+      fatal_error ("Inconsistent setting of -fapple-kext on pre-compiled header dump and load.");
+}
+
 /*-------------------------------------------------------------------*/
 
 /* See freeze-thaw.c for documentation of these routines.  */
@@ -144,17 +167,26 @@ int
 cxx_pfe_freeze_thaw_decl (node)
      tree node;
 {
+  struct lang_decl *ld = DECL_LANG_SPECIFIC (node);
+  
+  if (ld
+      && !DECL_GLOBAL_CTOR_P (node)
+      && !DECL_GLOBAL_DTOR_P (node)
+      && !DECL_THUNK_P (node)
+      && !DECL_DISCRIMINATOR_P (node))
+      PFE_FREEZE_THAW_WALK (DECL_ACCESS (node));
+
   switch (TREE_CODE (node))
     {
       case NAMESPACE_DECL:
-        if (DECL_LANG_SPECIFIC (node)) 
+        if (ld) 
 	  pfe_freeze_thaw_binding_level (&NAMESPACE_LEVEL (node));
       	PFE_FREEZE_THAW_WALK (DECL_NAMESPACE_USING (node));
       	PFE_FREEZE_THAW_WALK (DECL_NAMESPACE_USERS (node));
       	return 1;
       
       case TYPE_DECL:
-        if (DECL_LANG_SPECIFIC (node))
+        if (ld)
           {
       	    PFE_FREEZE_THAW_WALK (DECL_TEMPLATE_INFO (node));
       	    PFE_FREEZE_THAW_WALK (DECL_SORTED_FIELDS (node)); /* NEEDED? */
@@ -162,16 +194,13 @@ cxx_pfe_freeze_thaw_decl (node)
         return 0; /* let normal processing continue */
       	  
       case FUNCTION_DECL:
-        if (DECL_LANG_SPECIFIC (node))
+        if (ld)
           {
       	    PFE_FREEZE_THAW_WALK (DECL_TEMPLATE_INFO (node));
       	    if (DECL_THUNK_P (node))
       	      PFE_FREEZE_THAW_WALK (THUNK_VCALL_OFFSET (node));
-      	    else if (!DECL_GLOBAL_CTOR_P (node)
-      	             && !DECL_GLOBAL_DTOR_P (node))
-      	      PFE_FREEZE_THAW_WALK (DECL_ACCESS (node));
       	    PFE_FREEZE_THAW_WALK (DECL_BEFRIENDING_CLASSES (node));
-      	    PFE_FREEZE_THAW_WALK (DECL_LANG_SPECIFIC (node)->context);
+      	    PFE_FREEZE_THAW_WALK (ld->context);
       	    if (DECL_CLONED_FUNCTION_P (node))
       	      PFE_FREEZE_THAW_WALK (DECL_CLONED_FUNCTION (node));
       	    if (DECL_PENDING_INLINE_P (node))
@@ -183,18 +212,15 @@ cxx_pfe_freeze_thaw_decl (node)
         return 0; /* let normal processing continue */
 
       case VAR_DECL:
-        if (DECL_LANG_SPECIFIC (node))
-          {
-      	    PFE_FREEZE_THAW_WALK (DECL_TEMPLATE_INFO (node));
-      	    PFE_FREEZE_THAW_WALK (DECL_ACCESS (node));
-      	  }
+        if (ld)
+      	  PFE_FREEZE_THAW_WALK (DECL_TEMPLATE_INFO (node));
         return 0; /* let normal processing continue */
 
       case TEMPLATE_DECL:
         PFE_FREEZE_THAW_WALK (DECL_TEMPLATE_PARMS (node));
         PFE_FREEZE_THAW_WALK (DECL_TEMPLATE_INSTANTIATIONS (node));
         PFE_FREEZE_THAW_WALK (DECL_TEMPLATE_SPECIALIZATIONS (node));
-        if (DECL_LANG_SPECIFIC (node))
+        if (ld)
       	  {
             if (DECL_TEMPLATE_INFO (node))
               {
@@ -221,7 +247,12 @@ int
 cxx_pfe_freeze_thaw_type (node)
      tree node;
 {
-  if (TYPE_LANG_SPECIFIC (node))
+  /* The qualification on the following code is patterned after the
+     test done in cp/decl.c:lang_mark_tree().  */
+     
+  if (TYPE_LANG_SPECIFIC (node) &&
+      !(TREE_CODE (node) == POINTER_TYPE
+	&& TREE_CODE (TREE_TYPE (node)) == METHOD_TYPE))
     {
       PFE_FREEZE_THAW_WALK (CLASSTYPE_PRIMARY_BINFO (node)); 		/* NEEDED? */
       PFE_FREEZE_THAW_WALK (CLASSTYPE_VFIELDS (node));			/* NEEDED? */
@@ -233,7 +264,9 @@ cxx_pfe_freeze_thaw_type (node)
       PFE_FREEZE_THAW_WALK (CLASSTYPE_FRIEND_CLASSES (node));		/* NEEDED? */
       PFE_FREEZE_THAW_WALK (CLASSTYPE_RTTI (node));			/* NEEDED? */
       PFE_FREEZE_THAW_WALK (CLASSTYPE_METHOD_VEC (node));		/* NEEDED? */
-      PFE_FREEZE_THAW_WALK (CLASSTYPE_TEMPLATE_INFO (node));		/* NEEDED? */
+      if (TREE_CODE (node) == RECORD_TYPE
+          || TREE_CODE (node) == UNION_TYPE)
+        PFE_FREEZE_THAW_WALK (CLASSTYPE_TEMPLATE_INFO (node));		/* NEEDED? */
       PFE_FREEZE_THAW_WALK (CLASSTYPE_BEFRIENDING_CLASSES (node));	/* NEEDED? */
     }
   
@@ -264,8 +297,19 @@ cxx_pfe_freeze_thaw_type (node)
          PFE_FREEZE_THAW_WALK (TEMPLATE_TYPE_PARM_INDEX (node));
          PFE_FREEZE_THAW_WALK (TEMPLATE_TEMPLATE_PARM_TEMPLATE_INFO (node));
          PFE_FREEZE_THAW_WALK (TYPE_NAME (node));
-         PFE_FREEZE_THAW_WALK (TYPE_TI_TEMPLATE (node));
-         PFE_FREEZE_THAW_WALK (TYPE_TI_ARGS (node));
+         if (PFE_FREEZING)
+	   {
+	    if (!PFE_IS_FROZEN (TYPE_TEMPLATE_INFO(node)))
+	       {
+		 PFE_FREEZE_THAW_WALK (TYPE_TI_TEMPLATE (node));
+		 PFE_FREEZE_THAW_WALK (TYPE_TI_ARGS (node));
+	       }
+           }
+         else if (PFE_IS_FROZEN (TYPE_TEMPLATE_INFO(node)))
+           {
+             PFE_FREEZE_THAW_WALK (TYPE_TI_TEMPLATE (node));
+             PFE_FREEZE_THAW_WALK (TYPE_TI_ARGS (node));
+           }
          return 0; /* let normal processing continue */
 
       case TYPEOF_TYPE:
@@ -414,7 +458,6 @@ pfe_freeze_thaw_saved_scope (pp)
   PFE_FREEZE_THAW_WALK (p->x_previous_class_type);
   PFE_FREEZE_THAW_WALK (p->x_previous_class_values);
   PFE_FREEZE_THAW_WALK (p->x_saved_tree);
-  PFE_FREEZE_THAW_WALK (p->incomplete);
   PFE_FREEZE_THAW_WALK (p->lookups);
   /* struct stmt_tree_s x_stmt_tree; Needed ??? */
   pfe_freeze_thaw_binding_level (&p->class_bindings);

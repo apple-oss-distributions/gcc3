@@ -1,5 +1,5 @@
 /* Definitions of target machine for GNU compiler, for DEC Alpha w/ELF.
-   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001
+   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002
    Free Software Foundation, Inc.
    Contributed by Richard Henderson (rth@tamu.edu).
 
@@ -23,6 +23,9 @@ Boston, MA 02111-1307, USA.    */
 #undef OBJECT_FORMAT_COFF
 #undef EXTENDED_COFF
 #define OBJECT_FORMAT_ELF
+
+/* ??? Move all SDB stuff from alpha.h to osf.h.  */
+#undef SDB_DEBUGGING_INFO
 
 #define DBX_DEBUGGING_INFO
 #define DWARF2_DEBUGGING_INFO
@@ -163,6 +166,16 @@ do {									\
   ASM_OUTPUT_ALIGN ((FILE), exact_log2((ALIGN) / BITS_PER_UNIT));	\
   ASM_OUTPUT_LABEL(FILE, NAME);						\
   ASM_OUTPUT_SKIP((FILE), (SIZE));					\
+} while (0)
+
+/* This says how to output assembler code to declare an
+   uninitialized external linkage data object.  */
+
+#undef  ASM_OUTPUT_ALIGNED_BSS
+#define ASM_OUTPUT_ALIGNED_BSS(FILE, DECL, NAME, SIZE, ALIGN)		\
+do {									\
+  ASM_GLOBALIZE_LABEL (FILE, NAME);					\
+  ASM_OUTPUT_ALIGNED_LOCAL (FILE, NAME, SIZE, ALIGN);			\
 } while (0)
 
 /* Biggest alignment supported by the object file format of this
@@ -470,11 +483,32 @@ do {									\
 /* This is how we tell the assembler that two symbols have the same value.  */
 
 #undef  ASM_OUTPUT_DEF
-#define ASM_OUTPUT_DEF(FILE, NAME1, NAME2) \
-  do { assemble_name(FILE, NAME1); 	 \
-       fputs(" = ", FILE);		 \
-       assemble_name(FILE, NAME2);	 \
-       fputc('\n', FILE); } while (0)
+#define ASM_OUTPUT_DEF(FILE, ALIAS, NAME)			\
+  do {								\
+    assemble_name(FILE, ALIAS);					\
+    fputs(" = ", FILE);						\
+    assemble_name(FILE, NAME);					\
+    fputc('\n', FILE);						\
+  } while (0)
+
+#undef  ASM_OUTPUT_DEF_FROM_DECLS
+#define ASM_OUTPUT_DEF_FROM_DECLS(FILE, DECL, TARGET)		\
+  do {								\
+    const char *alias = XSTR (XEXP (DECL_RTL (DECL), 0), 0);	\
+    const char *name = IDENTIFIER_POINTER (TARGET);		\
+    if (TREE_CODE (DECL) == FUNCTION_DECL)			\
+      {								\
+	fputc ('$', FILE);					\
+	assemble_name (FILE, alias);				\
+	fputs ("..ng = $", FILE);				\
+	assemble_name (FILE, name);				\
+	fputs ("..ng\n", FILE);					\
+      }								\
+    assemble_name(FILE, alias);					\
+    fputs(" = ", FILE);						\
+    assemble_name(FILE, name);					\
+    fputc('\n', FILE);						\
+  } while (0)
 
 /* The following macro defines the format used to output the second
    operand of the .type assembler directive.  Different svr4 assemblers
@@ -599,17 +633,14 @@ do {									\
 /* Provide a STARTFILE_SPEC appropriate for ELF.  Here we add the
    (even more) magical crtbegin.o file which provides part of the
    support for getting C++ file-scope static object constructed
-   before entering `main'. 
+   before entering `main'.   */
 
-   Don't bother seeing crtstuff.c -- there is absolutely no hope
-   of getting that file to understand multiple GPs.  We provide a
-   hand-coded assembly version.  */
-   
 #undef	STARTFILE_SPEC
 #define STARTFILE_SPEC \
   "%{!shared: \
      %{pg:gcrt1.o%s} %{!pg:%{p:gcrt1.o%s} %{!p:crt1.o%s}}}\
-   crti.o%s %{shared:crtbeginS.o%s}%{!shared:crtbegin.o%s}"
+   crti.o%s %{static:crtbeginT.o%s}\
+   %{!static:%{shared:crtbeginS.o%s}%{!shared:crtbegin.o%s}}"
 
 /* Provide a ENDFILE_SPEC appropriate for ELF.  Here we tack on the
    magical crtend.o file which provides part of the support for
@@ -642,3 +673,25 @@ do {									\
   alpha_this_gpdisp_sequence_number = 0)
 extern int alpha_this_literal_sequence_number;
 extern int alpha_this_gpdisp_sequence_number;
+
+/* Since the bits of the _init and _fini function is spread across
+   many object files, each potentially with its own GP, we must assume
+   we need to load our GP.  Further, the .init/.fini section can
+   easily be more than 4MB away from the function to call so we can't
+   use bsr.  */
+#define CRT_CALL_STATIC_FUNCTION(SECTION_OP, FUNC)	\
+   asm (SECTION_OP "\n"					\
+"	br $29,1f\n"					\
+"1:	ldgp $29,0($29)\n"				\
+"	unop\n"						\
+"	jsr $26," USER_LABEL_PREFIX #FUNC "\n"		\
+"	.align 3\n"					\
+"	.previous");
+
+/* If we have the capability create headers for efficient EH lookup.
+   As of Jan 2002, only glibc 2.2.4 can actually make use of this, but
+   I imagine that other systems will catch up.  In the meantime, it
+   doesn't harm to make sure that the data exists to be used later.  */
+#if defined(HAVE_LD_EH_FRAME_HDR)
+#define LINK_EH_SPEC "%{!static:--eh-frame-hdr} "
+#endif

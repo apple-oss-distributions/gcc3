@@ -95,12 +95,6 @@ TUNING:
 =====================================================================
 */
 
-/* Control whether this gets built to run as a stand-alone test.  */
-#ifndef TEST_PFEM
-#define TEST_PFEM 0
-/* command line: cc pfe-mem.c -DTEST_PFEM -no-cpp-precomp */
-#endif
-
 /* Control whether priting memory statistics is enabled.  The actual
    diagnostic messages are controlled by a command line option
    controlling similar PFE diagnostics.  */
@@ -122,19 +116,11 @@ TUNING:
    Macintosh OS X.  */
 #define APPLE_OS_X_IMPLEMENTATION 1
 
-#if TEST_PFEM
-#define PARAMS(x) x
-#define xmalloc malloc
-#else
 #include "config.h"
 #include "system.h"
-#endif
 
 #include <stddef.h>
 #include <stdlib.h>
-#if TEST_PFEM
-#include <stdio.h>
-#endif
 
 #if APPLE_OS_X_IMPLEMENTATION
 #include <mach/mach.h>
@@ -282,11 +268,7 @@ static int pfem_initialization_complete = 0;
 
 /* Variables to collect statistics on PFE memory utilization.   */
 #if PFEM_MEMORY_STATS
-#if TEST_PFEM
-static int pfe_display_memory_stats = 1;
-#else
 extern int pfe_display_memory_stats;
-#endif
 static size_t pfem_malloc_total_size = 0;
 static int pfem_mallocs = 0;
 static int pfem_callocs = 0;
@@ -559,10 +541,10 @@ pfem_add_block_to_range_table (block_addr, size)
 	     range table, so we move the following entries up to
 	     make room for the new entry.  Then we drop out of the
 	     loop to where the new entry is added.  */
-	  memcpy (&pfem_range_table[range_idx + 1], 
-		  &pfem_range_table[range_idx], 
-		  sizeof (pfem_range) 
-		  * (pfem_range_table_nitems - range_idx));
+	  memmove (&pfem_range_table[range_idx + 1], 
+		   &pfem_range_table[range_idx], 
+		   sizeof (pfem_range) 
+		   * (pfem_range_table_nitems - range_idx));
 	  break;
 	}
     else if (start_addr == pfem_range_table[range_idx].end_addr)
@@ -609,10 +591,10 @@ pfem_remove_block_from_range_table (block_addr, size)
                 /* We are removing a whole range.  Remove the entry
                    and move the rest of the table down.  */
 		pfem_range_table_nitems--;
-		memcpy (&pfem_range_table[range_idx], 
-			&pfem_range_table[range_idx + 1], 
-			sizeof (pfem_range) 
-			* (pfem_range_table_nitems - range_idx));
+		memmove (&pfem_range_table[range_idx], 
+			 &pfem_range_table[range_idx + 1], 
+			 sizeof (pfem_range) 
+			 * (pfem_range_table_nitems - range_idx));
               }
             else
               {
@@ -654,10 +636,10 @@ pfem_remove_block_from_range_table (block_addr, size)
 		
 		/* Move the remainder of the dump table up to make
 		   room for the new entry.  */
-		memcpy (&pfem_range_table[range_idx + 2], 
-			&pfem_range_table[range_idx + 1], 
-			sizeof (pfem_range) 
-			* (pfem_range_table_nitems - range_idx));
+		memmove (&pfem_range_table[range_idx + 2], 
+			 &pfem_range_table[range_idx + 1], 
+			 sizeof (pfem_range) 
+			 * (pfem_range_table_nitems - range_idx));
 		pfem_range_table_nitems++;
 		range_idx++;
                 pfem_range_table[range_idx].start_addr = new_start_addr;
@@ -1396,82 +1378,3 @@ pfem_is_pfe_mem (ptr)
     }
   return 0;
 }
-
-#if TEST_PFEM
-/* Stand-alone test programs.  */
-
-#if 1
-/* Memory allocation test program.  */
-
-int main ()
-{
-  typedef void * ptr;
-  ptr p1, p2, p3, p4, p5, p6, p7, p8, p9, p10;
-  
-  pfem_init ();
-  
-  // mallocs
-  p1 = pfem_malloc (64);
-  p2 = pfem_malloc (3);
-  p3 = pfem_malloc (4);
-  p4 = pfem_malloc (512);
-  p5 = pfem_malloc (32 * 1024);
-  
-  // test allocations bigger than the standard max block size
-  p6 = pfem_malloc (65 * 1024);
-  
-  // test enough allocations to require multiple blocks
-  p7 = pfem_malloc (32 * 1024);
-  
-  // test frees
-  pfem_free (p1);
-  pfem_free (p6);
-  p1 = pfem_malloc (64);
-  p6 = pfem_malloc (65 * 1024);
-  
-  // test test other flavors of allocations
-  p1 = pfem_realloc (p1, 32);
-  p6 = pfem_realloc (p6, 69 * 1024);
-  
-  // test whether pointer is in PFE memory
-  if (!pfem_is_pfe_mem (p5))
-    printf ("pfem_is_pfe_mem test 1 failed\n");
-  if (pfem_is_pfe_mem (&p5))
-    printf ("pfem_is_pfe_mem test 2 failed\n");
-    
-  pfem_term ();
-}
-#endif
-#if 0
-/* Range table test program.  */
-
-int main ()
-{
-  pfem_init ();
-  
-  // define some ranges
-  pfem_add_block_to_range_table (0x0, 0x8);
-  pfem_add_block_to_range_table (0x8, 0x8);
-  pfem_add_block_to_range_table (0x20, 0x10);
-  pfem_add_block_to_range_table (0x32, 0x2);
-  pfem_add_block_to_range_table (0x40, 0x10);
-  // Now we should have: 0-10, 20-30, 32-34, 40-50
-      
-  pfem_term ();
-
-#if MINIMIZE_RANGES
-  // remove some ranges
-  pfem_remove_block_from_range_table (0x0, 0x2);
-  pfem_term ();
-  pfem_remove_block_from_range_table (0x32, 0x2);
-  pfem_term ();
-  pfem_remove_block_from_range_table (0x28, 0x8);
-  pfem_term ();
-  pfem_remove_block_from_range_table (0x43, 0x3);
-  // Now we should have: 2-10, 20-28, 40-43, 46-50
-#endif
-
-  pfem_term ();
-}
-#endif
-#endif

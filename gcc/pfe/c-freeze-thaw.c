@@ -40,8 +40,20 @@ Boston, MA 02111-1307, USA.  */
 
 /* Initialize language specific compiler state.  */
 void 
-c_pfe_lang_init ()
+c_pfe_lang_init (lang)
+  int lang;
 {
+  if (pfe_operation == PFE_DUMP)
+    pfe_set_lang ((enum pfe_lang) lang == PFE_LANG_UNKNOWN ?
+		  PFE_LANG_C : lang);
+  else if (pfe_operation == PFE_LOAD)
+    pfe_check_lang ((enum pfe_lang) lang == PFE_LANG_UNKNOWN ?
+		    PFE_LANG_C : lang);
+
+  /* Initialize the language specific compiler state */
+  if (pfe_operation == PFE_DUMP)
+    pfe_compiler_state_ptr->lang_specific  = (struct pfe_lang_compiler_state *)
+      pfe_calloc (1, sizeof (struct pfe_lang_compiler_state));
 }
 
 /* Freeze/thaw language specific compiler state.  */
@@ -53,11 +65,14 @@ c_freeze_thaw_compiler_state (pp)
   
   hdr = (struct pfe_lang_compiler_state *)pfe_freeze_thaw_ptr_fp (pp);
   
-  /* When somebody resolves the issue of why in the hell we have 3
-     versions of staticcally defined deferred_fns variables (in c-lang.c,
-     cp/decl2.c, and objc/objc-act.c) then we can fix this.  Until then
-     screw it!  I've spent all the time I'm going to on it!.  */
-  //pfe_freeze_thaw_c_lang_globals (hdr);
+  pfe_freeze_thaw_c_lang_globals (hdr);
+}
+
+/* Check language-specific compiler options.  */
+void 
+c_pfe_check_settings (lang_specific)
+    struct pfe_lang_compiler_state *lang_specific ATTRIBUTE_UNUSED;
+{
 }
 
 /* See freeze-thaw.c for documentation of these routines.  */

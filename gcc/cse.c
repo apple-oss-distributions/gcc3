@@ -2272,10 +2272,10 @@ canon_hash (x, mode)
 		|| CLASS_LIKELY_SPILLED_P (REGNO_REG_CLASS (regno))
 		|| (SMALL_REGISTER_CLASSES
 		    && ! fixed_regs[regno]
-		    && regno != FRAME_POINTER_REGNUM
-		    && regno != HARD_FRAME_POINTER_REGNUM
-		    && regno != ARG_POINTER_REGNUM
-		    && regno != STACK_POINTER_REGNUM
+		    && x != frame_pointer_rtx
+		    && x != hard_frame_pointer_rtx
+		    && x != arg_pointer_rtx
+		    && x != stack_pointer_rtx
 		    && GET_MODE_CLASS (GET_MODE (x)) != MODE_CC)))
 	  {
 	    do_not_record = 1;
@@ -2323,14 +2323,21 @@ canon_hash (x, mode)
 		 + (unsigned) CONST_DOUBLE_HIGH (x));
       return hash;
 
-/* APPLE LOCAL: AltiVec - not written in target-independent manner!!! */
     case CONST_VECTOR:
-      hash += (unsigned) code + (unsigned) GET_MODE (x);
-      hash += (unsigned) CONST_VECTOR_0 (x);
-      hash += (unsigned) CONST_VECTOR_1 (x);
-      hash += (unsigned) CONST_VECTOR_2 (x);
-      hash += (unsigned) CONST_VECTOR_3 (x);
-      return hash;
+      {
+	int units;
+	rtx elt;
+
+	units = CONST_VECTOR_NUNITS (x);
+
+	for (i = 0; i < units; ++i)
+	  {
+	    elt = CONST_VECTOR_ELT (x, i);
+	    hash += canon_hash (elt, GET_MODE (elt));
+	  }
+
+	return hash;
+      }
 
       /* Assume there is only one rtx object for any given label.  */
     case LABEL_REF:
@@ -2785,6 +2792,7 @@ canon_reg (x, insn)
     case CONST:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case SYMBOL_REF:
     case LABEL_REF:
     case ADDR_VEC:
@@ -3326,6 +3334,7 @@ fold_rtx (x, insn)
     case CONST:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case SYMBOL_REF:
     case LABEL_REF:
     case REG:
@@ -3857,6 +3866,7 @@ fold_rtx (x, insn)
 	  case SYMBOL_REF:
 	  case LABEL_REF:
 	  case CONST_DOUBLE:
+	  case CONST_VECTOR:
 	    const_arg = arg;
 	    break;
 
@@ -5925,7 +5935,7 @@ cse_insn (insn, libcall_insn)
 	  else
 	    INSN_CODE (insn) = -1;
 
-	  never_reached_warning (insn);
+	  never_reached_warning (insn, NULL);
 
 	  /* Do not bother deleting any unreachable code,
 	     let jump/flow do that.  */
@@ -6555,6 +6565,7 @@ cse_process_notes (x, object)
     case SYMBOL_REF:
     case LABEL_REF:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case PC:
     case CC0:
     case LO_SUM:
@@ -7546,6 +7557,7 @@ count_reg_usage (x, counts, dest, incr)
     case CONST:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case SYMBOL_REF:
     case LABEL_REF:
       return;

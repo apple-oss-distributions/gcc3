@@ -1,4 +1,4 @@
-/* APPLE LOCAL PFE */
+/* APPLE LOCAL file PFE */
 /* Memory management definitions to simplify building pfe and non-pfe
    enabled compilers.
    Copyright (C) 2001

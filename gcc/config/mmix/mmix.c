@@ -228,6 +228,12 @@ mmix_conditional_register_usage ()
 	 mmixware ABI.  */
       for (i = 15; i <= 30; i++)
 	call_used_regs[i] = 0;
+
+      /* "Unfix" the parameter registers.  */
+      for (i = MMIX_RESERVED_GNU_ARG_0_REGNUM;
+	   i < MMIX_RESERVED_GNU_ARG_0_REGNUM + MMIX_MAX_ARGS_IN_REGS;
+	   i++)
+	fixed_regs[i] = 0;
     }
 
   /* Step over the ":" in special register names.  */
@@ -334,14 +340,34 @@ mmix_extra_constraint (x, c, strict)
       ? strict_memory_address_p (Pmode, x)
       : memory_address_p (Pmode, x);
 
+  /* R asks whether x is to be loaded with GETA or something else.  Right
+     now, only a SYMBOL_REF and LABEL_REF can fit for
+     TARGET_BASE_ADDRESSES.
+
+     Only constant symbolic addresses apply.  With TARGET_BASE_ADDRESSES,
+     we just allow straight LABEL_REF or SYMBOL_REFs with SYMBOL_REF_FLAG
+     set right now; only function addresses and code labels.  If we change
+     to let SYMBOL_REF_FLAG be set on other symbols, we have to check
+     inside CONST expressions.  When TARGET_BASE_ADDRESSES is not in
+     effect, a "raw" constant check together with mmix_constant_address_p
+     is all that's needed; we want all constant addresses to be loaded
+     with GETA then.  */
+  if (c == 'R')
+    return
+      GET_CODE (x) != CONST_INT && GET_CODE (x) != CONST_DOUBLE
+      && mmix_constant_address_p (x)
+      && (! TARGET_BASE_ADDRESSES
+	  || (GET_CODE (x) == LABEL_REF
+	      || (GET_CODE (x) == SYMBOL_REF && SYMBOL_REF_FLAG (x))));
+
   if (GET_CODE (x) != CONST_DOUBLE || GET_MODE (x) != VOIDmode)
     return 0;
 
   value = mmix_intval (x);
 
   /* We used to map Q->J, R->K, S->L, T->N, U->O, but we don't have to any
-     more ('U' taken for address_operand).  Some letters map outside of
-     CONST_INT, though; we still use 'S' and 'T'.  */
+     more ('U' taken for address_operand, 'R' similarly).  Some letters map
+     outside of CONST_INT, though; we still use 'S' and 'T'.  */
   if (c == 'S')
     return mmix_shiftable_wyde_value (value);
   else if (c == 'T')
@@ -388,7 +414,10 @@ mmix_return_addr_rtx (count, frame)
 {
   return count == 0
     ? (MMIX_CFUN_NEEDS_SAVED_EH_RETURN_ADDRESS
-       /* FIXME: Set frame_alias_set on the following.  */
+       /* FIXME: Set frame_alias_set on the following.  (Why?)
+	  See mmix_initial_elimination_offset for the reason we can't use
+	  get_hard_reg_initial_val for both.  Always using a stack slot
+	  and not a register would be suboptimal.  */
        ? validize_mem (gen_rtx_MEM (Pmode, plus_constant (frame_pointer_rtx, -16)))
        : get_hard_reg_initial_val (Pmode, MMIX_INCOMING_RETURN_ADDRESS_REGNUM))
     : NULL_RTX;
@@ -414,7 +443,10 @@ mmix_initial_elimination_offset (fromreg, toreg)
   int fp_sp_offset
     = (get_frame_size () + current_function_outgoing_args_size + 7) & ~7;
 
-  /* There is no actual difference between these two.  */
+  /* There is no actual offset between these two virtual values, but for
+     the frame-pointer, we have the old one in the stack position below
+     it, so the offset for the frame-pointer to the stack-pointer is one
+     octabyte larger.  */
   if (fromreg == MMIX_ARG_POINTER_REGNUM
       && toreg == MMIX_FRAME_POINTER_REGNUM)
     return 0;
@@ -635,14 +667,8 @@ mmix_target_asm_function_prologue (stream, locals_size)
   int stack_space_to_allocate
     = (current_function_outgoing_args_size
        + current_function_pretend_args_size
-       + (int) locals_size + 8 + 7) & ~7;
+       + (int) locals_size + 7) & ~7;
   int offset = -8;
-  int empty_stack_frame
-    = (current_function_outgoing_args_size == 0
-       && locals_size == 0
-       && current_function_pretend_args_size == 0
-       && current_function_varargs == 0
-       && current_function_stdarg == 0);
   int doing_dwarf = dwarf2out_do_frame ();
   long cfa_offset = 0;
 
@@ -708,8 +734,9 @@ mmix_target_asm_function_prologue (stream, locals_size)
 		     setting; they don't accumulate.  We must keep track
 		     of the offset ourselves.  */
 		  cfa_offset += stack_chunk;
-		  dwarf2out_def_cfa ("", MMIX_STACK_POINTER_REGNUM,
-				     cfa_offset);
+		  if (!frame_pointer_needed)
+		    dwarf2out_def_cfa ("", MMIX_STACK_POINTER_REGNUM,
+				       cfa_offset);
 		}
 	      offset += stack_chunk;
 	      stack_space_to_allocate -= stack_chunk;
@@ -726,16 +753,10 @@ mmix_target_asm_function_prologue (stream, locals_size)
 	}
     }
 
-  /* In any case, skip over the return-address slot.  FIXME: Not needed
-     now.  */
-  offset -= 8;
-
   /* Store the frame-pointer.  */
 
   if (frame_pointer_needed)
     {
-      empty_stack_frame = 0;
-
       if (offset < 0)
 	{
 	  /* Get 8 less than otherwise, since we need to reach offset + 8.  */
@@ -748,11 +769,7 @@ mmix_target_asm_function_prologue (stream, locals_size)
 		   reg_names[MMIX_STACK_POINTER_REGNUM],
 		   stack_chunk);
 	  if (doing_dwarf)
-	    {
-	      cfa_offset += stack_chunk;
-	      dwarf2out_def_cfa ("", MMIX_STACK_POINTER_REGNUM,
-				 cfa_offset);
-	    }
+	    cfa_offset += stack_chunk;
 	  offset += stack_chunk;
 	  stack_space_to_allocate -= stack_chunk;
 	}
@@ -765,16 +782,27 @@ mmix_target_asm_function_prologue (stream, locals_size)
 	       reg_names[MMIX_STACK_POINTER_REGNUM],
 	       offset + 8);
       if (doing_dwarf)
-	dwarf2out_reg_save ("", MMIX_FRAME_POINTER_REGNUM,
-			    -cfa_offset + offset);
+	{
+	  /* If we're using the frame-pointer, then we just need this CFA
+	     definition basing on that value (often equal to the CFA).
+	     Further changes to the stack-pointer do not affect the
+	     frame-pointer, so we conditionalize them below on
+	     !frame_pointer_needed.  */
+	  dwarf2out_def_cfa ("", MMIX_FRAME_POINTER_REGNUM,
+			     -cfa_offset + offset + 8);
+
+	  dwarf2out_reg_save ("", MMIX_FRAME_POINTER_REGNUM,
+			      -cfa_offset + offset);
+	}
 
       offset -= 8;
     }
 
   if (MMIX_CFUN_NEEDS_SAVED_EH_RETURN_ADDRESS)
     {
-      /* Store the return-address, if one is needed on the stack.  */
-      empty_stack_frame = 0;
+      /* Store the return-address, if one is needed on the stack.  We
+	 usually store it in a register when needed, but that doesn't work
+	 with -fexceptions.  */
 
       if (offset < 0)
 	{
@@ -790,8 +818,9 @@ mmix_target_asm_function_prologue (stream, locals_size)
 	  if (doing_dwarf)
 	    {
 	      cfa_offset += stack_chunk;
-	      dwarf2out_def_cfa ("", MMIX_STACK_POINTER_REGNUM,
-				 cfa_offset);
+	      if (!frame_pointer_needed)
+		dwarf2out_def_cfa ("", MMIX_STACK_POINTER_REGNUM,
+				   cfa_offset);
 	    }
 	  offset += stack_chunk;
 	  stack_space_to_allocate -= stack_chunk;
@@ -812,8 +841,6 @@ mmix_target_asm_function_prologue (stream, locals_size)
       /* Store the register defining the numbering of local registers, so
 	 we know how long to unwind the register stack.  */
 
-      empty_stack_frame = 0;
-
       if (offset < 0)
 	{
 	  /* Get 8 less than otherwise, since we need to reach offset + 8.  */
@@ -831,7 +858,8 @@ mmix_target_asm_function_prologue (stream, locals_size)
 	  if (doing_dwarf)
 	    {
 	      cfa_offset += stack_chunk;
-	      dwarf2out_def_cfa ("", MMIX_STACK_POINTER_REGNUM,
+	      if (!frame_pointer_needed)
+		dwarf2out_def_cfa ("", MMIX_STACK_POINTER_REGNUM,
 				 cfa_offset);
 	    }
 	}
@@ -868,8 +896,6 @@ mmix_target_asm_function_prologue (stream, locals_size)
 	 && regs_ever_live[regno] && ! call_used_regs[regno])
 	|| IS_MMIX_EH_RETURN_DATA_REG (regno))
       {
-	empty_stack_frame = 0;
-
 	if (offset < 0)
 	  {
 	    int stack_chunk;
@@ -893,8 +919,9 @@ mmix_target_asm_function_prologue (stream, locals_size)
 		if (doing_dwarf)
 		  {
 		    cfa_offset += stack_chunk;
-		    dwarf2out_def_cfa ("", MMIX_STACK_POINTER_REGNUM,
-				       cfa_offset);
+		    if (!frame_pointer_needed)
+		      dwarf2out_def_cfa ("", MMIX_STACK_POINTER_REGNUM,
+					 cfa_offset);
 		  }
 	      }
 	    else
@@ -908,8 +935,9 @@ mmix_target_asm_function_prologue (stream, locals_size)
 		if (doing_dwarf)
 		  {
 		    cfa_offset += stack_chunk;
-		    dwarf2out_def_cfa ("", MMIX_STACK_POINTER_REGNUM,
-				       cfa_offset);
+		    if (!frame_pointer_needed)
+		      dwarf2out_def_cfa ("", MMIX_STACK_POINTER_REGNUM,
+					 cfa_offset);
 		  }
 	      }
 
@@ -924,11 +952,10 @@ mmix_target_asm_function_prologue (stream, locals_size)
 	offset -= 8;
       }
 
-  /* Finally, allocate room for local vars (if they weren't allocated for
-     above) and outgoing args.  This might be any number of bytes (well,
-     we assume it fits in a host-int).
-     Don't allocate (the return-address slot) if the stack frame is empty.  */
-  if (stack_space_to_allocate && ! empty_stack_frame)
+  /* Finally, allocate room for outgoing args and local vars if room
+     wasn't allocated above.  This might be any number of bytes (well, we
+     assume it fits in a host-int).  */
+  if (stack_space_to_allocate)
     {
       if (stack_space_to_allocate < 256)
 	{
@@ -949,8 +976,9 @@ mmix_target_asm_function_prologue (stream, locals_size)
       if (doing_dwarf)
 	{
 	  cfa_offset += stack_space_to_allocate;
-	  dwarf2out_def_cfa ("", MMIX_STACK_POINTER_REGNUM,
-			     cfa_offset);
+	  if (!frame_pointer_needed)
+	    dwarf2out_def_cfa ("", MMIX_STACK_POINTER_REGNUM,
+			       cfa_offset);
 	}
     }
 
@@ -966,52 +994,6 @@ mmix_target_asm_function_prologue (stream, locals_size)
       break;
 
   mmix_highest_saved_stack_register = regno;
-
-  /* FIXME: Remove this when a corrected mmix version is released.
-
-     This kludge is a work-around for a presumed bug in the mmix simulator
-     (reported to knuth-bug), all versions up and including "Version of 14
-     October 2001".  When the circular register stack fills up, the parts
-     that would be overwritten need to be written to memory.  If the
-     "filling" instruction is a PUSHJ or PUSHGO, rL == 0 afterwards.  That
-     precise condition (rS == rO && rL == 0) is the same as for an empty
-     register stack, which means no more data is written to memory for
-     that round.  A hack is to remove the "&& L!=0" from "@<Increase
-     rL@>=" in mmix-sim.w: the register stack isn't empty under normal
-     circumstances, unless SAVE or UNSAVE is used, interrupts are enabled
-     or cases where rS == rO and rL is explicitly written to 0 as in
-     "PUT rL,0".
-
-     A workaround is to make sure PUSHJ or PUSHGO isn't filling up the
-     register stac.  This is accomplished if $16 or higher is written
-     before the function call.  This doesn't happen from a leaf functions
-     of course.  For the MMIXware ABI, this can't happen if all called
-     functions have parameters, because parameters start at $16.
-     Otherwise, and for the GNU ABI, if any register $16 and up is used,
-     we can see if it's mentioned before any function-call without
-     parameters.  This isn't too important; the bug will probably be fixed
-     soon and there's an option to not emit the work-around code.  The
-     call-with-parameters kludge wouldn't be there if it hadn't been for
-     it being left-over from a previous mmix version.
-
-     The actual code makes sure any register stack fill happens as early
-     as in the function prologue with a "SET $16,$16" (essentially a nop
-     except for the effects on the register stack).  */
-  if (TARGET_REG_STACK_FILL_BUG
-      && ((TARGET_ABI_GNU && !leaf_function_p ())
-	  || (!TARGET_ABI_GNU
-	      && cfun->machine->has_call_without_parameters)))
-    {
-      /* We don't have a specific macro or derivable expression for the
-	 first non-call-saved register.  If we need it in other places
-	 than here (which is temporary code anyway), such a macro should
-	 be added.  */
-      int flush_regno
-	= TARGET_ABI_GNU ? mmix_highest_saved_stack_register + 2 : 16;
-
-      fprintf (stream, "\tSET %s,%s\n",
-	       reg_names[flush_regno], reg_names[flush_regno]);
-    }
 }
 
 /* TARGET_ASM_FUNCTION_EPILOGUE.  */
@@ -1026,19 +1008,13 @@ mmix_target_asm_function_epilogue (stream, locals_size)
   int stack_space_to_deallocate
     = (current_function_outgoing_args_size
        + current_function_pretend_args_size
-       + (int) locals_size + 8 + 7) & ~7;
+       + (int) locals_size + 7) & ~7;
 
   /* The assumption that locals_size fits in an int is asserted in
      mmix_target_asm_function_prologue.  */
 
   /* The first address to access is beyond the outgoing_args area.  */
   int offset = current_function_outgoing_args_size;
-  int empty_stack_frame
-    = (current_function_outgoing_args_size == 0
-       && locals_size == 0
-       && current_function_pretend_args_size == 0
-       && ! MMIX_CFUN_NEEDS_SAVED_EH_RETURN_ADDRESS
-       && ! MMIX_CFUN_HAS_LANDING_PAD);
 
   /* Add the space for global non-register-stack registers.
      It is assumed that the frame-pointer register can be one of these
@@ -1063,7 +1039,7 @@ mmix_target_asm_function_epilogue (stream, locals_size)
   if (frame_pointer_needed)
     stack_space_to_deallocate += 8;
 
-  /* Make sure we don't get an unaligned stack. */
+  /* Make sure we don't get an unaligned stack.  */
   if ((stack_space_to_deallocate % 8) != 0)
     internal_error ("stack frame not a multiple of octabyte: %d",
 		    stack_space_to_deallocate);
@@ -1079,8 +1055,6 @@ mmix_target_asm_function_epilogue (stream, locals_size)
 	 && regs_ever_live[regno] && !call_used_regs[regno])
 	|| IS_MMIX_EH_RETURN_DATA_REG (regno))
       {
-	empty_stack_frame = 0;
-
 	if (offset > 255)
 	  {
 	    if (offset > 65535)
@@ -1126,8 +1100,6 @@ mmix_target_asm_function_epilogue (stream, locals_size)
   /* Get back the old frame-pointer-value.  */
   if (frame_pointer_needed)
     {
-      empty_stack_frame = 0;
-
       if (offset > 255)
 	{
 	  if (offset > 65535)
@@ -1155,27 +1127,22 @@ mmix_target_asm_function_epilogue (stream, locals_size)
       offset += 8;
     }
 
-  /* Do not deallocate the return-address slot if the stack frame is
-     empty, because then it was never allocated.  */
-  if (! empty_stack_frame)
+  /* We do not need to restore pretended incoming args, just add back
+     offset to sp.  */
+  if (stack_space_to_deallocate > 65535)
     {
-      /* We do not need to restore pretended incoming args, just add
-	 back offset to sp.  */
-      if (stack_space_to_deallocate > 65535)
-	{
-	  /* There's better support for incrementing than decrementing, so
-	     we might be able to optimize this as we see a need.  */
-	  mmix_output_register_setting (stream, 255,
-					stack_space_to_deallocate, 1);
-	  fprintf (stream, "\tADDU %s,%s,$255\n",
-		   reg_names[MMIX_STACK_POINTER_REGNUM],
-		   reg_names[MMIX_STACK_POINTER_REGNUM]);
-	}
-      else
-	fprintf (stream, "\tINCL %s,%d\n",
-		 reg_names[MMIX_STACK_POINTER_REGNUM],
-		 stack_space_to_deallocate);
+      /* There's better support for incrementing than decrementing, so
+	 we might be able to optimize this as we see a need.  */
+      mmix_output_register_setting (stream, 255,
+				    stack_space_to_deallocate, 1);
+      fprintf (stream, "\tADDU %s,%s,$255\n",
+	       reg_names[MMIX_STACK_POINTER_REGNUM],
+	       reg_names[MMIX_STACK_POINTER_REGNUM]);
     }
+  else if (stack_space_to_deallocate != 0)
+    fprintf (stream, "\tINCL %s,%d\n",
+	     reg_names[MMIX_STACK_POINTER_REGNUM],
+	     stack_space_to_deallocate);
 
   if (current_function_calls_eh_return)
     /* Adjustment the (normal) stack-pointer to that of the receiver.
@@ -1291,17 +1258,31 @@ mmix_expand_builtin_va_arg (valist, type)
      tree valist;
      tree type;
 {
-  tree addr_tree, t;
-  HOST_WIDE_INT align;
-  HOST_WIDE_INT rounded_size;
+  tree ptr_size = size_int (BITS_PER_WORD / BITS_PER_UNIT);
+  tree addr_tree, type_size = NULL;
+  tree align, alignm1;
+  tree rounded_size;
   rtx addr;
 
   /* Compute the rounded size of the type.  */
-  align = PARM_BOUNDARY / BITS_PER_UNIT;
-  rounded_size = (((int_size_in_bytes (type) + align - 1) / align) * align);
 
   /* Get AP.  */
   addr_tree = valist;
+  align = size_int (PARM_BOUNDARY / BITS_PER_UNIT);
+  alignm1 = size_int (PARM_BOUNDARY / BITS_PER_UNIT - 1);
+  if (type == error_mark_node
+      || (type_size = TYPE_SIZE_UNIT (TYPE_MAIN_VARIANT (type))) == NULL
+      || TREE_OVERFLOW (type_size))
+    /* Presumably an error; the size isn't computable.  A message has
+       supposedly been emitted elsewhere.  */
+    rounded_size = size_zero_node;
+  else
+    rounded_size = fold (build (MULT_EXPR, sizetype,
+				fold (build (TRUNC_DIV_EXPR, sizetype,
+					     fold (build (PLUS_EXPR, sizetype,
+							  type_size, alignm1)),
+					     align)),
+				align));
 
  if (AGGREGATE_TYPE_P (type)
      && GET_MODE_UNIT_SIZE (TYPE_MODE (type)) < 8
@@ -1316,38 +1297,58 @@ mmix_expand_builtin_va_arg (valist, type)
 	cheaper than a wider memory access on MMIX.)  */
      addr_tree
        = build (PLUS_EXPR, TREE_TYPE (addr_tree), addr_tree,
-		build_int_2 ((BITS_PER_WORD / BITS_PER_UNIT)
-			     - GET_MODE_UNIT_SIZE (TYPE_MODE (type)), 0));
+		size_int ((BITS_PER_WORD / BITS_PER_UNIT)
+			  - GET_MODE_UNIT_SIZE (TYPE_MODE (type))));
    }
- else
+ else if (!integer_zerop (rounded_size))
    {
-    HOST_WIDE_INT adj;
-    adj = TREE_INT_CST_LOW (TYPE_SIZE (type)) / BITS_PER_UNIT;
-    if (rounded_size > align)
-      adj = rounded_size;
+     if (!really_constant_p (type_size))
+       /* Varying-size types come in by reference.  */
+       addr_tree
+	 = build1 (INDIRECT_REF, build_pointer_type (type), addr_tree);
+     else
+       {
+	 /* If the size is less than a register, then we need to pad the
+	    address by adding the difference.  */
+	 tree addend
+	   = fold (build (COND_EXPR, sizetype,
+			  fold (build (GT_EXPR, sizetype,
+				       rounded_size,
+				       align)),
+			  size_zero_node,
+			  fold (build (MINUS_EXPR, sizetype,
+				       rounded_size,
+				       type_size))));
+	 tree addr_tree1
+	   = fold (build (PLUS_EXPR, TREE_TYPE (addr_tree), addr_tree,
+			  addend));
 
-    addr_tree = build (PLUS_EXPR, TREE_TYPE (addr_tree), addr_tree,
-		       build_int_2 (rounded_size - adj, 0));
-
-    /* If this type is larger than what fits in a register, then it is
-       passed by reference.  */
-    if (rounded_size > BITS_PER_WORD / BITS_PER_UNIT)
-      {
-	tree type_ptr = build_pointer_type (type);
-	addr_tree = build1 (INDIRECT_REF, type_ptr, addr_tree);
-      }
-  }
+	 /* If this type is larger than what fits in a register, then it
+	    is passed by reference.  */
+	 addr_tree
+	   = fold (build (COND_EXPR, TREE_TYPE (addr_tree1),
+			  fold (build (GT_EXPR, sizetype,
+				       rounded_size,
+				       ptr_size)),
+			  build1 (INDIRECT_REF, build_pointer_type (type),
+				  addr_tree1),
+			  addr_tree1));
+       }
+   }
 
   addr = expand_expr (addr_tree, NULL_RTX, Pmode, EXPAND_NORMAL);
   addr = copy_to_reg (addr);
 
-  /* Compute new value for AP.  For MMIX, it is always advanced by the
-     size of a register.  */
-  t = build (MODIFY_EXPR, TREE_TYPE (valist), valist,
-	     build (PLUS_EXPR, TREE_TYPE (valist), valist,
-		    build_int_2 (BITS_PER_WORD / BITS_PER_UNIT, 0)));
-  TREE_SIDE_EFFECTS (t) = 1;
-  expand_expr (t, const0_rtx, VOIDmode, EXPAND_NORMAL);
+  if (!integer_zerop (rounded_size))
+    {
+      /* Compute new value for AP.  For MMIX, it is always advanced by the
+	 size of a register.  */
+      tree t = build (MODIFY_EXPR, TREE_TYPE (valist), valist,
+		      build (PLUS_EXPR, TREE_TYPE (valist), valist,
+			     ptr_size));
+      TREE_SIDE_EFFECTS (t) = 1;
+      expand_expr (t, const0_rtx, VOIDmode, EXPAND_NORMAL);
+    }
 
   return addr;
 }
@@ -1363,9 +1364,9 @@ void
 mmix_trampoline_template (stream)
      FILE * stream;
 {
-  /* Read a value from to static-chain, jump somewhere.  The static chain
-     is stored at offset 16, and the function address is stored at offset
-     24.  */
+  /* Read a value into the static-chain register and jump somewhere.  The
+     static chain is stored at offset 16, and the function address is
+     stored at offset 24.  */
   /* FIXME: GCC copies this using *intsize* (tetra), when it should use
      register size (octa).  */
   fprintf (stream, "\tGETA $255,1F\n\t");
@@ -1400,7 +1401,7 @@ mmix_initialize_trampoline (trampaddr, fnaddr, static_chain)
 
 /* We must exclude constant addresses that have an increment that is not a
    multiple of four bytes because of restrictions of the GETA
-   instruction.  FIXME: No, I don't think so.  Just add a constraint.  */
+   instruction, unless TARGET_BASE_ADDRESSES.  */
 
 int
 mmix_constant_address_p (x)
@@ -1408,13 +1409,15 @@ mmix_constant_address_p (x)
 {
   RTX_CODE code = GET_CODE (x);
   int addend = 0;
+  /* When using "base addresses", anything constant goes.  */
+  int constant_ok = TARGET_BASE_ADDRESSES != 0;
 
   if (code == LABEL_REF || code == SYMBOL_REF)
     return 1;
 
   if (code == CONSTANT_P_RTX || code == HIGH)
     /* FIXME: Don't know how to dissect these.  Avoid them for now.  */
-    return 0;
+    return constant_ok;
 
   switch (code)
     {
@@ -1422,12 +1425,11 @@ mmix_constant_address_p (x)
     case SYMBOL_REF:
       return 1;
 
-    case PLUS:
-      /* Can we get a naked PLUS? */
     case CONSTANT_P_RTX:
     case HIGH:
-      /* FIXME: Don't know how to dissect these.  Avoid them for now.  */
-      return 0;
+      /* FIXME: Don't know how to dissect these.  Avoid them for now,
+	 except we know they're constants.  */
+      return constant_ok;
 
     case CONST_INT:
       addend = INTVAL (x);
@@ -1436,7 +1438,7 @@ mmix_constant_address_p (x)
     case CONST_DOUBLE:
       if (GET_MODE (x) != VOIDmode)
 	/* Strange that we got here.  FIXME: Check if we do.  */
-	return 0;
+	return constant_ok;
       addend = CONST_DOUBLE_LOW (x);
       break;
 
@@ -1456,17 +1458,17 @@ mmix_constant_address_p (x)
 		      && GET_MODE (x1) == VOIDmode)))
 	    addend = mmix_intval (x1);
 	  else
-	    return 0;
+	    return constant_ok;
 	}
       else
-	return 0;
+	return constant_ok;
       break;
 
     default:
       return 0;
     }
 
-  return (addend & 3) == 0;
+  return constant_ok || (addend & 3) == 0;
 }
 
 /* Return 1 if the address is OK, otherwise 0.
@@ -1491,7 +1493,9 @@ mmix_legitimate_address (mode, x, strict_checking)
   /* We only accept:
      (mem reg)
      (mem (plus reg reg))
-     (mem (plus reg 0..255)).  */
+     (mem (plus reg 0..255)).
+     unless TARGET_BASE_ADDRESSES, in which case we accept all
+     (mem constant_address) too.  */
 
 
     /* (mem reg) */
@@ -1511,21 +1515,23 @@ mmix_legitimate_address (mode, x, strict_checking)
 	  x2 = tem;
 	}
 
-      /* (mem (plus (reg) (?))) */
+      /* (mem (plus (reg?) (?))) */
       if (!REG_P (x1) || !MMIX_REG_OK (x1))
-	return 0;
+	return TARGET_BASE_ADDRESSES && mmix_constant_address_p (x);
 
-      /* (mem (plus (reg) (reg))) */
+      /* (mem (plus (reg) (reg?))) */
       if (REG_P (x2) && MMIX_REG_OK (x2))
 	return 1;
 
-      /* (mem (plus (reg) (0..255))) */
+      /* (mem (plus (reg) (0..255?))) */
       if (GET_CODE (x2) == CONST_INT
 	  && CONST_OK_FOR_LETTER_P (INTVAL (x2), 'I'))
 	return 1;
+
+      return 0;
     }
 
-  return 0;
+  return TARGET_BASE_ADDRESSES && mmix_constant_address_p (x);
 }
 
 /* LEGITIMATE_CONSTANT_P.  */
@@ -1722,34 +1728,41 @@ mmix_encode_section_info (decl)
     {
       /* For non-visible declarations, add a "@" prefix, which we skip
 	 when the label is output.  If the label does not have this
-	 prefix, a ":" is output.
+	 prefix, a ":" is output if -mtoplevel-symbols.
 
 	 Note that this does not work for data that is declared extern and
 	 later defined as static.  If there's code in between, that code
-	 will refer to the extern declaration.  And vice versa.  Until we
-	 can get rid of mmixal, we have to assume that code is
-	 well-behaved.  */
+	 will refer to the extern declaration, and vice versa.  This just
+	 means that when -mtoplevel-symbols is in use, we can just handle
+	 well-behaved ISO-compliant code.  */
 
       const char *str = XSTR (XEXP (DECL_RTL (decl), 0), 0);
       int len = strlen (str);
       char *newstr;
 
-      /* Doing as rs6000 seems safe; always use ggc.  Except don't copy
-	 the suspected off-by-one bug.
-	 FIXME: Is it still there? yes 2001-08-23
-	 Why is the return type of ggc_alloc_string const?  */
-      newstr = (char *) ggc_alloc_string ("", len + 2);
+      /* Why is the return type of ggc_alloc_string const?  */
+      newstr = (char *) ggc_alloc_string ("", len + 1);
 
       strcpy (newstr + 1, str);
       *newstr = '@';
       XSTR (XEXP (DECL_RTL (decl), 0), 0) = newstr;
     }
 
-  /* FIXME: Later on, add SYMBOL_REF_FLAG for things that we can reach
-     from here via GETA, to check in LEGITIMATE_CONSTANT_P.  Needs to have
-     different options for the cases where we want *all* to be assumed
-     reachable via GETA, or all constant symbols, or just text symbols in
-     this file, or perhaps just the constant pool.  */
+  /* Set SYMBOL_REF_FLAG for things that we want to access with GETA.  We
+     may need different options to reach for different things with GETA.
+     For now, functions and things we know or have been told are constant.  */
+  if (TREE_CODE (decl) == FUNCTION_DECL
+      || TREE_CONSTANT (decl)
+      || (TREE_CODE (decl) == VAR_DECL
+	  && TREE_READONLY (decl)
+	  && !TREE_SIDE_EFFECTS (decl)
+	  && (!DECL_INITIAL (decl)
+	      || TREE_CONSTANT (DECL_INITIAL (decl)))))
+    {
+      rtx rtl = (TREE_CODE_CLASS (TREE_CODE (decl)) != 'd'
+                 ? TREE_CST_RTL (decl) : DECL_RTL (decl));
+      SYMBOL_REF_FLAG (XEXP (rtl, 0)) = 1;
+    }
 }
 
 /* STRIP_NAME_ENCODING.  */
@@ -1831,17 +1844,6 @@ mmix_asm_file_end (stream)
 {
   /* Make sure each file ends with the data section. */
   data_section ();
-}
-
-/* ASM_IDENTIFY_GCC.  */
-
-void
-mmix_asm_identify_gcc (stream)
-     FILE * stream;
-{
-  /* No real need for the time being.  May be useful to GDB later on.  */
-  fprintf (stream, "# Compiled by GCC version %s\n",
-	   version_string);
 }
 
 /* ASM_OUTPUT_SOURCE_FILENAME.  */
@@ -1928,19 +1930,42 @@ mmix_assemble_integer (x, size, aligned_p)
   if (aligned_p)
     switch (size)
       {
+	/* We handle a limited number of types of operands in here.  But
+	   that's ok, because we can punt to generic functions.  We then
+	   pretend that aligned data isn't needed, so the usual .<pseudo>
+	   syntax is used (which works for aligned data too).  We actually
+	   *must* do that, since we say we don't have simple aligned
+	   pseudos, causing this function to be called.  We just try and
+	   keep as much compatibility as possible with mmixal syntax for
+	   normal cases (i.e. without GNU extensions and C only).  */
       case 1:
+	if (GET_CODE (x) != CONST_INT)
+	  {
+	    aligned_p = 0;
+	    break;
+	  }
 	fputs ("\tBYTE\t", asm_out_file);
 	mmix_print_operand (asm_out_file, x, 'B');
 	fputc ('\n', asm_out_file);
 	return true;
 
       case 2:
+	if (GET_CODE (x) != CONST_INT)
+	  {
+	    aligned_p = 0;
+	    break;
+	  }
 	fputs ("\tWYDE\t", asm_out_file);
 	mmix_print_operand (asm_out_file, x, 'W');
 	fputc ('\n', asm_out_file);
 	return true;
 
       case 4:
+	if (GET_CODE (x) != CONST_INT)
+	  {
+	    aligned_p = 0;
+	    break;
+	  }
 	fputs ("\tTETRA\t", asm_out_file);
 	mmix_print_operand (asm_out_file, x, 'L');
 	fputc ('\n', asm_out_file);
@@ -1948,9 +1973,11 @@ mmix_assemble_integer (x, size, aligned_p)
 
       case 8:
 	if (GET_CODE (x) == CONST_DOUBLE)
-	  mmix_output_octa (asm_out_file, mmix_intval (x), 0);
-	else
-	  assemble_integer_with_op ("\tOCTA\t", x);
+	  /* We don't get here anymore for CONST_DOUBLE, because DImode
+	     isn't expressed as CONST_DOUBLE, and DFmode is handled
+	     elsewhere.  */
+	  abort ();
+	assemble_integer_with_op ("\tOCTA\t", x);
 	return true;
       }
   return default_assemble_integer (x, size, aligned_p);
@@ -2408,6 +2435,12 @@ mmix_print_operand_address (stream, x)
 	}
     }
 
+  if (TARGET_BASE_ADDRESSES && mmix_legitimate_constant_p (x))
+    {
+      output_addr_const (stream, x);
+      return;
+    }
+
   fatal_insn ("MMIX Internal: This is not a recognized address", x);
 }
 
@@ -2571,25 +2604,52 @@ mmix_output_register_setting (stream, regno, value, do_begin_end)
       static const char *const higher_parts[] = {"L", "ML", "MH", "H"};
       const char *op = "SET";
       const char *line_begin = "";
+      int insns = 0;
       int i;
+      HOST_WIDEST_INT tmpvalue = value;
 
-      /* Output pertinent parts of the 4-wyde sequence.
-	 Still more to do if we want this to be optimal, but hey...
-	 Note that the zero case has been handled above.  */
-      for (i = 0; i < 4 && value != 0; i++)
+      /* Compute the number of insns needed to output this constant.  */
+      for (i = 0; i < 4 && tmpvalue != 0; i++)
 	{
-	  if (value & 65535)
-	    {
-	      fprintf (stream, "%s%s%s %s,#%x", line_begin, op,
-		       higher_parts[i], reg_names[regno],
-		       (int) (value & 65535));
-	      /* The first one sets the rest of the bits to 0, the next
-		 ones add set bits.  */
-	      op = "INC";
-	      line_begin = "\n\t";
-	    }
+	  if (tmpvalue & 65535)
+	    insns++;
+	  tmpvalue >>= 16;
+	}
+      if (TARGET_BASE_ADDRESSES && insns == 3)
+	{
+	  /* The number three is based on a static observation on
+	     ghostscript-6.52.  Two and four are excluded because there
+	     are too many such constants, and each unique constant (maybe
+	     offset by 1..255) were used few times compared to other uses,
+	     e.g. addresses.
 
-	  value >>= 16;
+	     We use base-plus-offset addressing to force it into a global
+	     register; we just use a "LDA reg,VALUE", which will cause the
+	     assembler and linker to DTRT (for constants as well as
+	     addresses).  */
+	  fprintf (stream, "LDA %s,", reg_names[regno]);
+	  mmix_output_octa (stream, value, 0);
+	}
+      else
+	{
+	  /* Output pertinent parts of the 4-wyde sequence.
+	     Still more to do if we want this to be optimal, but hey...
+	     Note that the zero case has been handled above.  */
+	  for (i = 0; i < 4 && value != 0; i++)
+	    {
+	      if (value & 65535)
+		{
+		  fprintf (stream, "%s%s%s %s,#%x", line_begin, op,
+			   higher_parts[i], reg_names[regno],
+			   (int) (value & 65535));
+		  /* The first one sets the rest of the bits to 0, the next
+		     ones add set bits.  */
+		  op = "INC";
+		  line_begin = "\n\t";
+		}
+
+	      value >>= 16;
+	    }
 	}
     }
 

@@ -1,5 +1,5 @@
 /* Subroutines used for code generation on the Mitsubishi M32R cpu.
-   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001
+   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002
    Free Software Foundation, Inc.
 
 This file is part of GNU CC.
@@ -793,7 +793,13 @@ move_src_operand (op, mode)
 	 loadable with one insn, and split the rest into two.  The instances
 	 where this would help should be rare and the current way is
 	 simpler.  */
-      return UINT32_P (INTVAL (op));
+      if (HOST_BITS_PER_WIDE_INT > 32)
+	{
+	  HOST_WIDE_INT rest = INTVAL (op) >> 31;
+	  return (rest == 0 || rest == -1);
+	}
+      else
+	return 1;
     case LABEL_REF :
       return TARGET_ADDR24;
     case CONST_DOUBLE :
@@ -1271,9 +1277,9 @@ gen_split_move_double (operands)
      subregs to make this code simpler.  It is safe to call
      alter_subreg any time after reload.  */
   if (GET_CODE (dest) == SUBREG)
-    dest = alter_subreg (dest);
+    alter_subreg (&dest);
   if (GET_CODE (src) == SUBREG)
-    src = alter_subreg (src);
+    alter_subreg (&src);
 
   start_sequence ();
   if (GET_CODE (dest) == REG)
@@ -2239,14 +2245,14 @@ m32r_print_operand (file, x, code)
       if (GET_CODE (x) == REG)
 	fprintf (file, "@+%s", reg_names [REGNO (x)]);
       else
-	output_operand_lossage ("invalid operand to %s code");
+	output_operand_lossage ("invalid operand to %%s code");
       return;
       
     case 'p':
       if (GET_CODE (x) == REG)
 	fprintf (file, "@%s+", reg_names [REGNO (x)]);
       else
-	output_operand_lossage ("invalid operand to %p code");
+	output_operand_lossage ("invalid operand to %%p code");
       return;
 
     case 'R' :
@@ -2269,7 +2275,7 @@ m32r_print_operand (file, x, code)
 	  fputc (')', file);
 	}
       else
-	output_operand_lossage ("invalid operand to %R code");
+	output_operand_lossage ("invalid operand to %%R code");
       return;
 
     case 'H' : /* High word */
@@ -2292,7 +2298,7 @@ m32r_print_operand (file, x, code)
 		   code == 'L' ? INTVAL (first) : INTVAL (second));
 	}
       else
-	output_operand_lossage ("invalid operand to %H/%L code");
+	output_operand_lossage ("invalid operand to %%H/%%L code");
       return;
 
     case 'A' :
@@ -2354,7 +2360,7 @@ m32r_print_operand (file, x, code)
 	  fputc (')', file);
 	  return;
 	default :
-	  output_operand_lossage ("invalid operand to %T/%B code");
+	  output_operand_lossage ("invalid operand to %%T/%%B code");
 	  return;
 	}
       break;
@@ -2369,7 +2375,7 @@ m32r_print_operand (file, x, code)
 	    fputs (".a", file);
 	}
       else
-	output_operand_lossage ("invalid operand to %U code");
+	output_operand_lossage ("invalid operand to %%U code");
       return;
 
     case 'N' :
@@ -2377,7 +2383,7 @@ m32r_print_operand (file, x, code)
       if (GET_CODE (x) == CONST_INT)
 	output_addr_const (file, GEN_INT (- INTVAL (x)));
       else
-	output_operand_lossage ("invalid operand to %N code");
+	output_operand_lossage ("invalid operand to %%N code");
       return;
 
     case 'X' :

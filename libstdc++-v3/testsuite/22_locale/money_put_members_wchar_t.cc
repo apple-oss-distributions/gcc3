@@ -1,6 +1,6 @@
 // 2001-09-09 Benjamin Kosnik  <bkoz@redhat.com>
 
-// Copyright (C) 2001 Free Software Foundation
+// Copyright (C) 2001, 2002 Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -79,12 +79,12 @@ void test01()
   const money_put<wchar_t>& mon_put = use_facet<money_put<wchar_t> >(oss.getloc()); 
 
 
-  iterator_type os_it01 = mon_put.put(oss.rdbuf(), true, oss, '*', digits1);
+  iterator_type os_it01 = mon_put.put(oss.rdbuf(), true, oss, ' ', digits1);
   wstring result1 = oss.str();
   VERIFY( result1 == L"7.200.000.000,00 ");
 
   oss.str(empty);
-  iterator_type os_it02 = mon_put.put(oss.rdbuf(), false, oss, '*', digits1);
+  iterator_type os_it02 = mon_put.put(oss.rdbuf(), false, oss, ' ', digits1);
   wstring result2 = oss.str();
   VERIFY( result2 == L"7.200.000.000,00 ");
 
@@ -95,12 +95,12 @@ void test01()
   oss.setf(ios_base::showbase);
 
   oss.str(empty);
-  iterator_type os_it03 = mon_put.put(oss.rdbuf(), true, oss, '*', digits1);
+  iterator_type os_it03 = mon_put.put(oss.rdbuf(), true, oss, ' ', digits1);
   wstring result3 = oss.str();
   VERIFY( result3 == L"7.200.000.000,00 DEM ");
 
   oss.str(empty);
-  iterator_type os_it04 = mon_put.put(oss.rdbuf(), false, oss, '*', digits1);
+  iterator_type os_it04 = mon_put.put(oss.rdbuf(), false, oss, ' ', digits1);
   wstring result4 = oss.str();
   VERIFY( result4 == L"7.200.000.000,00 DM");
 
@@ -112,26 +112,26 @@ void test01()
   // test sign of more than one digit, say hong kong.
   oss.imbue(loc_hk);
   oss.str(empty);
-  iterator_type os_it05 = mon_put.put(oss.rdbuf(), false, oss, '*', digits1);
+  iterator_type os_it05 = mon_put.put(oss.rdbuf(), false, oss, ' ', digits1);
   wstring result5 = oss.str();
   VERIFY( result5 == L"HK$7,200,000,000.00");
 
   oss.str(empty);
-  iterator_type os_it06 = mon_put.put(oss.rdbuf(), true, oss, '*', digits2);
+  iterator_type os_it06 = mon_put.put(oss.rdbuf(), true, oss, ' ', digits2);
   wstring result6 = oss.str();
   VERIFY( result6 == L"(HKD 100,000,000,000.00)");
 
   // test one-digit formats without zero padding
   oss.imbue(loc_c);
   oss.str(empty);
-  iterator_type os_it07 = mon_put.put(oss.rdbuf(), true, oss, '*', digits4);
+  iterator_type os_it07 = mon_put.put(oss.rdbuf(), true, oss, ' ', digits4);
   wstring result7 = oss.str();
   VERIFY( result7 == L"1");
 
   // test one-digit formats with zero padding, zero frac widths
   oss.imbue(loc_hk);
   oss.str(empty);
-  iterator_type os_it08 = mon_put.put(oss.rdbuf(), true, oss, '*', digits4);
+  iterator_type os_it08 = mon_put.put(oss.rdbuf(), true, oss, ' ', digits4);
   wstring result8 = oss.str();
   VERIFY( result8 == L"(HKD .01)");
 
@@ -139,7 +139,7 @@ void test01()
 
   // test bunk input
   oss.str(empty);
-  iterator_type os_it09 = mon_put.put(oss.rdbuf(), true, oss, '*', digits3);
+  iterator_type os_it09 = mon_put.put(oss.rdbuf(), true, oss, ' ', digits3);
   wstring result9 = oss.str();
   VERIFY( result9 == L"");
 
@@ -151,7 +151,7 @@ void test01()
   oss.width(20);
   iterator_type os_it10 = mon_put.put(oss.rdbuf(), true, oss, '*', digits4);
   wstring result10 = oss.str();
-  VERIFY( result10 == L"***************-,01 ");
+  VERIFY( result10 == L"***************-,01*");
 
   oss.str(empty);
   oss.width(20);
@@ -210,12 +210,12 @@ void test02()
   const money_put<wchar_t>& mon_put = use_facet<money_put<wchar_t> >(oss.getloc()); 
 
 
-  iterator_type os_it01 = mon_put.put(oss.rdbuf(), true, oss, '*', digits1);
+  iterator_type os_it01 = mon_put.put(oss.rdbuf(), true, oss, ' ', digits1);
   wstring result1 = oss.str();
   VERIFY( result1 == L"7.200.000.000,00 ");
 
   oss.str(empty);
-  iterator_type os_it02 = mon_put.put(oss.rdbuf(), false, oss, '*', digits1);
+  iterator_type os_it02 = mon_put.put(oss.rdbuf(), false, oss, ' ', digits1);
   wstring result2 = oss.str();
   VERIFY( result2 == L"7.200.000.000,00 ");
 
@@ -226,12 +226,12 @@ void test02()
   oss.setf(ios_base::showbase);
 
   oss.str(empty);
- iterator_type os_it03 = mon_put.put(oss.rdbuf(), true, oss, '*', digits1);
+  iterator_type os_it03 = mon_put.put(oss.rdbuf(), true, oss, ' ', digits1);
   wstring result3 = oss.str();
   VERIFY( result3 == L"7.200.000.000,00 DEM ");
 
   oss.str(empty);
-  iterator_type os_it04 = mon_put.put(oss.rdbuf(), false, oss, '*', digits1);
+  iterator_type os_it04 = mon_put.put(oss.rdbuf(), false, oss, ' ', digits1);
   wstring result4 = oss.str();
   VERIFY( result4 == L"7.200.000.000,00 DM");
 
@@ -240,6 +240,133 @@ void test02()
   VERIFY( result3 != result1 );
   VERIFY( result4 != result2 );
 }
+
+void test03()
+{
+  using namespace std;
+  bool test = true;
+
+  // Check money_put works with other iterators besides streambuf
+  // output iterators. (As long as output_iterator requirements are met.)
+  typedef wstring::iterator iter_type;
+  typedef money_put<wchar_t, iter_type> mon_put_type;
+  const ios_base::iostate goodbit = ios_base::goodbit;
+  const ios_base::iostate eofbit = ios_base::eofbit;
+  ios_base::iostate err = goodbit;
+  const locale loc_c = locale::classic();
+  // woman, art, thief (stole the blues)
+  const wstring str(L"1943 Janis Joplin");
+  const long double ld = 1943;
+  const wstring x(str.size(), 'x'); // have to have allocated string!
+  wstring res;
+
+  wostringstream oss; 
+  oss.imbue(locale(loc_c, new mon_put_type));
+
+  // Iterator advanced, state, output.
+  const mon_put_type& mp = use_facet<mon_put_type>(oss.getloc());
+
+  // 01 string
+  res = x;
+  iter_type ret1 = mp.put(res.begin(), false, oss, ' ', str);
+  wstring sanity1(res.begin(), ret1);
+  VERIFY( err == goodbit );
+  VERIFY( res == L"1943xxxxxxxxxxxxx" );
+  VERIFY( sanity1 == L"1943" );
+
+  // 02 long double
+  res = x;
+  iter_type ret2 = mp.put(res.begin(), false, oss, ' ', ld);
+  wstring sanity2(res.begin(), ret2);
+  VERIFY( err == goodbit );
+  VERIFY( res == L"1943xxxxxxxxxxxxx" );
+  VERIFY( sanity2 == L"1943" );
+}
+
+// libstdc++/5280
+void test04()
+{
+#ifdef _GLIBCPP_HAVE_SETENV 
+  // Set the global locale to non-"C".
+  std::locale loc_de("de_DE");
+  std::locale::global(loc_de);
+
+  // Set LANG environment variable to de_DE.
+  const char* oldLANG = getenv("LANG");
+  if (!setenv("LANG", "de_DE", 1))
+    {
+      test01();
+      test02();
+      test03();
+      setenv("LANG", oldLANG ? oldLANG : "", 1);
+    }
+#endif
+}
+
+struct My_money_io : public std::moneypunct<wchar_t,false>
+{
+  char_type do_decimal_point() const { return L'.'; }
+  char_type do_thousands_sep() const { return L','; }
+  std::string do_grouping() const { return "\003"; }
+  
+  std::wstring do_negative_sign() const { return L"()"; }
+  
+  int do_frac_digits() const { return 2; }
+
+  pattern do_neg_format() const
+  {
+    pattern pat = { { symbol, space, sign, value } };
+    return pat;
+  }
+};
+
+// libstdc++/5708
+void test05()
+{
+  using namespace std;
+  typedef ostreambuf_iterator<wchar_t> OutIt;
+
+  locale loc(locale::classic(), new My_money_io);
+
+  bool intl = false;
+
+  wstring val(L"-123456");
+  const money_put<wchar_t,OutIt>& mp  =
+    use_facet<money_put<wchar_t, OutIt> >(loc);
+
+  wostringstream fmt;
+  fmt.imbue(loc);
+  OutIt out(fmt);
+  mp.put(out,intl,fmt,L'*',val);
+  VERIFY( fmt.str() == L"*(1,234.56)" );
+}
+
+struct My_money_io_2 : public std::moneypunct<wchar_t,false>
+{
+  char_type do_thousands_sep() const { return L','; }
+  std::string do_grouping() const { return "\001"; }
+};
+
+// Make sure we can output a very big amount of money (with grouping too).
+void test06()
+{
+  using namespace std;
+  typedef ostreambuf_iterator<wchar_t> OutIt;
+
+  locale loc(locale::classic(), new My_money_io_2);
+
+  bool intl = false;
+
+  long double val = 1e50L;
+  const money_put<wchar_t,OutIt>& mp  =
+    use_facet<money_put<wchar_t, OutIt> >(loc);
+
+  wostringstream fmt;
+  fmt.imbue(loc);
+  OutIt out(fmt);
+  mp.put(out,intl,fmt,'*',val);
+  VERIFY( fmt );
+}
 #endif
 
 int main()
@@ -247,6 +374,10 @@ int main()
 #ifdef _GLIBCPP_USE_WCHAR_T
   test01();
   test02();
+  test03();
+  test04();
+  test05();
+  test06();
 #endif
   return 0;
 }

@@ -90,7 +90,6 @@ extern struct rtx_def *mmix_compare_op1;
    mmix.md too.  */
 struct machine_function
  {
-   int has_call_without_parameters;
    int has_landing_pad;
  };
 
@@ -120,13 +119,15 @@ struct machine_function
 
 /* Pass on -mset-program-start=N and -mset-data-start=M to the linker.
    Provide default program start 0x100 unless -mno-set-program-start.
-   Link to ELF if requested.  */
+   Don't do this if linking relocatably, with -r.  For a final link,
+   produce mmo, unless ELF is requested or when linking relocatably.  */
 #define LINK_SPEC \
  "%{mset-program-start=*:--defsym __.MMIX.start..text=%*}\
   %{mset-data-start=*:--defsym __.MMIX.start..data=%*}\
   %{!mset-program-start=*:\
-    %{!mno-set-program-start:--defsym __.MMIX.start..text=0x100}}\
-  %{!melf:-m mmo}%{melf:-m elf64mmix}"
+    %{!mno-set-program-start:\
+     %{!r:--defsym __.MMIX.start..text=0x100}}}\
+  %{!melf:%{!r:-m mmo}}%{melf|r:-m elf64mmix}"
 
 /* Put unused option values here.  */
 extern const char *mmix_cc1_ignored_option;
@@ -157,7 +158,16 @@ extern int target_flags;
 #define TARGET_MASK_KNUTH_DIVISION 16
 #define TARGET_MASK_TOPLEVEL_SYMBOLS 32
 #define TARGET_MASK_BRANCH_PREDICT 64
-#define TARGET_MASK_REG_STACK_FILL_BUG 128
+
+/* We use the term "base address" since that's what Knuth uses.  The base
+   address goes in a global register.  When addressing, it's more like
+   "base address plus offset", with the offset being 0..255 from the base,
+   which itself can be a symbol plus an offset.  The effect is like having
+   a constant pool in global registers, code offseting from those
+   registers (automatically causing a request for a suitable constant base
+   address register) without having to know the specific register or the
+   specific offset.  */
+#define TARGET_MASK_BASE_ADDRESSES 128
 
 /* FIXME: Get rid of this one.  */
 #define TARGET_LIBFUNC (target_flags & TARGET_MASK_LIBFUNCS)
@@ -167,11 +177,10 @@ extern int target_flags;
 #define TARGET_KNUTH_DIVISION (target_flags & TARGET_MASK_KNUTH_DIVISION)
 #define TARGET_TOPLEVEL_SYMBOLS (target_flags & TARGET_MASK_TOPLEVEL_SYMBOLS)
 #define TARGET_BRANCH_PREDICT (target_flags & TARGET_MASK_BRANCH_PREDICT)
-#define TARGET_REG_STACK_FILL_BUG \
- (target_flags & TARGET_MASK_REG_STACK_FILL_BUG)
+#define TARGET_BASE_ADDRESSES (target_flags & TARGET_MASK_BASE_ADDRESSES)
 
 #define TARGET_DEFAULT \
- (TARGET_MASK_BRANCH_PREDICT | TARGET_MASK_REG_STACK_FILL_BUG)
+ (TARGET_MASK_BRANCH_PREDICT | TARGET_MASK_BASE_ADDRESSES)
 
 /* FIXME: Provide a way to *load* the epsilon register.  */
 #define TARGET_SWITCHES							\
@@ -202,12 +211,10 @@ extern int target_flags;
    N_("Use P-mnemonics for branches statically predicted as taken")},	\
   {"no-branch-predict",	-TARGET_MASK_BRANCH_PREDICT,			\
    N_("Don't use P-mnemonics for branches")},				\
-  {"reg-stack-fill-bug-workaround",	TARGET_MASK_REG_STACK_FILL_BUG,	\
-   N_("Work around inconsistent behavior when a PUSHJ or PUSHGO\
- instruction fills the register stack")},				\
-  {"no-reg-stack-fill-bug-workaround",	-TARGET_MASK_REG_STACK_FILL_BUG,\
-   N_("Don't work around inconsistent behavior when a PUSHJ or PUSHGO\
- instruction fills the register stack")},	\
+  {"base-addresses",	TARGET_MASK_BASE_ADDRESSES,			\
+   N_("Use addresses that allocate global registers")},			\
+  {"no-base-addresses",	-TARGET_MASK_BASE_ADDRESSES,			\
+   N_("Do not use addresses that allocate global registers")},		\
   {"",			TARGET_DEFAULT, ""}}
 
 /* Unfortunately, this must not reference anything in "mmix.c".  */
@@ -341,10 +348,6 @@ extern int target_flags;
 
 #define DEFAULT_SIGNED_CHAR 1
 
-/* I have no rationale for this other than pointing at Alpha.  */
-#define	WCHAR_TYPE "unsigned int"
-#define	WCHAR_TYPE_SIZE 32
-
 
 /* Node: Register Basics */
 /* We tell GCC about all 256 general registers, and we also include
@@ -376,8 +379,8 @@ extern int target_flags;
    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, \
    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, \
    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, \
-   1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, \
-   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, \
+   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, \
+   1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, \
    1, 1, 0, 0, 0, 1 \
  }
 
@@ -429,8 +432,6 @@ extern int target_flags;
    24, 25, 26, 27, 28, 29, 30, 31,    		\
 						\
    252, 251, 250, 249, 248, 247, 		\
-   246, 245, 244, 243, 242, 241, 240, 239,	\
-   238, 237, 236, 235, 234, 233, 232, 231,	\
 						\
    253,						\
 						\
@@ -461,6 +462,9 @@ extern int target_flags;
    208, 209, 210, 211, 212, 213, 214, 215,	\
    216, 217, 218, 219, 220, 221, 222, 223,	\
    224, 225, 226, 227, 228, 229, 230, 231,	\
+   232, 233, 234, 235, 236, 237, 238, 239,	\
+   240, 241, 242, 243, 244, 245, 246,		\
+						\
    254, 255, 256, 257, 261 			\
  }
 
@@ -477,9 +481,9 @@ extern int target_flags;
    assuming it is referenced a very limited number of times.  Other global
    and fixed registers come next; they are never allocated.  */
 #define MMIX_GNU_ABI_REG_ALLOC_ORDER		\
-{  252, 251, 250, 249, 248, 247, 246,		\
+ { 252, 251, 250, 249, 248, 247, 246,		\
    245, 244, 243, 242, 241, 240, 239, 238,	\
-   237, 236, 235, 234, 233, 232,		\
+   237, 236, 235, 234, 233, 232, 231,		\
 						\
    0, 1, 2, 3, 4, 5, 6, 7,			\
    8, 9, 10, 11, 12, 13, 14, 15,		\
@@ -514,7 +518,8 @@ extern int target_flags;
    200, 201, 202, 203, 204, 205, 206, 207,	\
    208, 209, 210, 211, 212, 213, 214, 215,	\
    216, 217, 218, 219, 220, 221, 222, 223,	\
-   224, 225, 226, 227, 228, 229, 230, 231,	\
+   224, 225, 226, 227, 228, 229, 230,		\
+						\
    254, 255, 256, 257, 261 			\
  }
 
@@ -542,10 +547,10 @@ extern int target_flags;
 /* Node: Register Classes */
 
 enum reg_class
-{
-  NO_REGS, GENERAL_REGS, REMAINDER_REG, HIMULT_REG,
-  SYSTEM_REGS, ALL_REGS, LIM_REG_CLASSES
-};
+ {
+   NO_REGS, GENERAL_REGS, REMAINDER_REG, HIMULT_REG,
+   SYSTEM_REGS, ALL_REGS, LIM_REG_CLASSES
+ };
 
 #define N_REG_CLASSES (int) LIM_REG_CLASSES
 
@@ -619,10 +624,7 @@ enum reg_class
 #define STARTING_FRAME_OFFSET \
   mmix_starting_frame_offset ()
 
-/* There is a stack slot between the frame-pointer and the first
-   parameter, where the return address is sometimes stored.  FIXME:
-   Unnecessary.  */
-#define FIRST_PARM_OFFSET(FUNDECL) 8
+#define FIRST_PARM_OFFSET(FUNDECL) 0
 
 #define DYNAMIC_CHAIN_ADDRESS(FRAMEADDR) \
  mmix_dynamic_chain_address (FRAMEADDR)
@@ -696,7 +698,7 @@ enum reg_class
 #define CAN_ELIMINATE(FROM, TO) 1
 
 #define INITIAL_ELIMINATION_OFFSET(FROM, TO, OFFSET) \
- (OFFSET) = mmix_initial_elimination_offset (FROM, TO);
+ (OFFSET) = mmix_initial_elimination_offset (FROM, TO)
 
 
 /* Node: Stack Arguments */
@@ -953,9 +955,6 @@ const_section ()						\
 #define ASM_FILE_END(STREAM) \
  mmix_asm_file_end (STREAM)
 
-#define ASM_IDENTIFY_GCC(STREAM) \
- mmix_asm_identify_gcc (STREAM)
-
 /* While any other punctuation character but ";" would do, we prefer "%"
    or "!"; "!" is an unary operator and so will not be mistakenly included
    in correctly formed expressions.  The hash character adds mass; catches
@@ -1100,10 +1099,6 @@ const_section ()						\
 #define PRINT_OPERAND_ADDRESS(STREAM, X) \
  mmix_print_operand_address (STREAM, X)
 
-#if 0
-#define USER_LABEL_PREFIX "_"
-#endif
-
 #define ASM_OUTPUT_REG_PUSH(STREAM, REGNO) \
  mmix_asm_output_reg_push (STREAM, REGNO)
 
@@ -1200,10 +1195,6 @@ const_section ()						\
    gut feeling is currently that SIGN_EXTEND wins; "int" is more frequent
    than "unsigned int", and we have signed characters.  FIXME: measure.  */
 #define LOAD_EXTEND_OP(MODE) (TARGET_ZERO_EXTEND ? ZERO_EXTEND : SIGN_EXTEND)
-
-/* Whatever.  I don't really know.  This has worked before.  It's also
-   what everybody else is using.  */
-#define EASY_DIV_EXPR TRUNC_DIV_EXPR
 
 #define MOVE_MAX 8
 

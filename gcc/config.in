@@ -252,6 +252,11 @@
 /* Define if you have the <sys/resource.h> header file.  */
 #undef HAVE_SYS_RESOURCE_H
 
+/* APPLE LOCAL begin Mach time */
+/* Define if you have the <mach/mach_time.h> header file.  */
+#undef HAVE_MACH_MACH_TIME_H
+/* APPLE LOCAL end Mach time */
+
 /* Define if you have the <sys/stat.h> header file.  */
 #undef HAVE_SYS_STAT_H
 
@@ -421,9 +426,6 @@
 #undef HAVE_DECL_STRSTR
 
 /* Define to 1 if we found this declaration otherwise define to 0. */
-#undef HAVE_DECL_ENVIRON
-
-/* Define to 1 if we found this declaration otherwise define to 0. */
 #undef HAVE_DECL_ERRNO
 
 /* Define to 1 if we found this declaration otherwise define to 0. */
@@ -468,14 +470,13 @@
 /* Define if host mkdir takes a single argument. */
 #undef MKDIR_TAKES_ONE_ARG
 
-/* Define to the name of the distribution. */
-#undef PACKAGE
-
-/* Define to the version of the distribution. */
-#undef VERSION
-
 /* Define if you have the iconv() function. */
 #undef HAVE_ICONV
+
+/* APPLE LOCAL begin fat builds  ilr */
+/* Define to the version of the distribution. */
+#undef VERSION
+/* APPLE LOCAL end fat builds  ilr */
 
 /* Define as const if the declaration of iconv() needs const. */
 #undef ICONV_CONST
@@ -538,8 +539,8 @@
 /* Define if your assembler and linker support unaligned PC relative relocs. */
 #undef HAVE_AS_SPARC_UA_PCREL
 
-/* Define if the assembler supports 64bit sparc. */
-#undef AS_SPARC64_FLAG
+/* Define if your assembler and linker support unaligned PC relative relocs against hidden symbols. */
+#undef HAVE_AS_SPARC_UA_PCREL_HIDDEN
 
 /* Define if your assembler supports offsetable %lo(). */
 #undef HAVE_AS_OFFSETABLE_LO10
@@ -553,6 +554,18 @@
 
 /* Define if your assembler supports the --gdwarf2 option. */
 #undef HAVE_AS_GDWARF2_DEBUG_FLAG
+
+/* APPLE LOCAL coalescing
+Define if your assembler supports weak section attribute. */
+#undef APPLE_WEAK_SECTION_ATTRIBUTE
+
+/* APPLE LOCAL coalescing
+Define if your assembler supports weak assembler directives. */
+#undef APPLE_WEAK_ASSEMBLER_DIRECTIVE
+
+/* APPLE LOCAL coalescing
+Define if your assembler supports strip static syms section attribute */
+#undef APPLE_STRIP_STATIC_SYMS_SECTION_ATTRIBUTE
 
 /* Define if your assembler supports the --gstabs option. */
 #undef HAVE_AS_GSTABS_DEBUG_FLAG

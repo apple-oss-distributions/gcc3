@@ -28,7 +28,7 @@ Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 /* MULTIBYTE_CHARS support only works for native compilers.
    ??? Ideally what we want is to model widechar support after
    the current floating point support.  */
-/* APPLE LOCAL  PHAT builds  */
+/* APPLE LOCAL fat builds  */
 #if defined (CROSS_COMPILE) && !defined (PHAT)
 #undef MULTIBYTE_CHARS
 #endif
@@ -942,29 +942,31 @@ _cpp_lex_direct (pfile)
 	      handle_newline (pfile);
 	    }
 
-  /* APPLE LOCAL begin indexing dpatel */
-  if (flag_gen_index_original
-      && strcmp (pfile->map->to_file, "<built-in>")
-      && strcmp (pfile->map->to_file, "<command line>"))
-    if (buffer->prev)
-      process_header_indexing ((char *)pfile->map->to_file, PB_INDEX_END);
-    else
-      {     
-	if (pfile->map->to_file[0] != '/')
-          {     
-            /* Append current pwd. We need absolute path.  */
-            char *apath;
-	    int alen = MAXPATHLEN + strlen (pfile->map->to_file) + 2;
-            apath = (char *) xmalloc (sizeof (char) * alen);
-            apath = getcwd(apath, alen);
-            strcat (apath, "/");
-	    strcat (apath, pfile->map->to_file);
-            gen_indexing_info (INDEX_FILE_END, apath, -1);
-            free (apath);
-          }         
-        else      
-          gen_indexing_info (INDEX_FILE_END, pfile->map->to_file, -1);
-      }      
+      /* APPLE LOCAL begin indexing dpatel */
+      if (flag_gen_index_original
+          && strcmp (pfile->map->to_file, "<built-in>")
+          && strcmp (pfile->map->to_file, "<command line>"))
+        {
+          if (buffer->prev)
+            process_header_indexing ((char *)pfile->map->to_file, PB_INDEX_END);
+          else
+            {     
+    	      if (pfile->map->to_file[0] != '/')
+                {     
+                  /* Append current pwd. We need absolute path.  */
+                  char *apath;
+  	          int alen = MAXPATHLEN + strlen (pfile->map->to_file) + 2;
+                  apath = (char *) xmalloc (sizeof (char) * alen);
+                  apath = getcwd(apath, alen);
+                  strcat (apath, "/");
+	          strcat (apath, pfile->map->to_file);
+                  gen_indexing_info (INDEX_FILE_END, apath, -1);
+                  free (apath);
+                }         
+              else      
+                gen_indexing_info (INDEX_FILE_END, pfile->map->to_file, -1);
+            }      
+        }
   /* APPLE LOCAL end indexing dpatel */
 
 	  /* Don't pop the last buffer.  */
@@ -1895,6 +1897,7 @@ cpp_interpret_charconst (pfile, token, warn_multi, warn_four, force_unsigned, tr
   unsigned int width, max_chars, c;
   unsigned HOST_WIDE_INT mask;
   HOST_WIDE_INT result = 0;
+  bool unsigned_p;
 
 #ifdef MULTIBYTE_CHARS
   (void) local_mbtowc (NULL, NULL, 0);
@@ -1902,9 +1905,15 @@ cpp_interpret_charconst (pfile, token, warn_multi, warn_four, force_unsigned, tr
 
   /* Width in bits.  */
   if (token->type == CPP_CHAR)
-    width = MAX_CHAR_TYPE_SIZE;
+    {
+      width = MAX_CHAR_TYPE_SIZE;
+      unsigned_p = CPP_OPTION (pfile, signed_char) == 0;
+    }
   else
-    width = MAX_WCHAR_TYPE_SIZE;
+    {
+      width = MAX_WCHAR_TYPE_SIZE;
+      unsigned_p = WCHAR_UNSIGNED;
+    }
 
   if (width < HOST_BITS_PER_WIDE_INT)
     mask = ((unsigned HOST_WIDE_INT) 1 << width) - 1;
@@ -1963,19 +1972,14 @@ cpp_interpret_charconst (pfile, token, warn_multi, warn_four, force_unsigned, tr
 	   && (warn_four || chars_seen != 4))
     cpp_warning (pfile, "multi-character character constant");
 
-  /* If char type is signed, sign-extend the constant.  The
-     __CHAR_UNSIGNED__ macro is set by the driver if appropriate.  */
-  /* APPLE LOCAL -funsigned-char */
-  /* The __CHAR_UNSIGNED__ approach is idiotic and Neil Booth should
-     be told about this.  */   
-  if (token->type == CPP_CHAR && chars_seen)
+  /* If relevant type is signed, sign-extend the constant.  */
+  if (chars_seen)
     {
       unsigned int nbits = chars_seen * width;
 
       mask = (unsigned HOST_WIDE_INT) ~0 >> (HOST_BITS_PER_WIDE_INT - nbits);
       /* APPLE LOCAL -funsigned-char */
-      if (force_unsigned || pfile->spec_nodes.n__CHAR_UNSIGNED__->type == NT_MACRO
-	  || ((result >> (nbits - 1)) & 1) == 0)
+      if (force_unsigned || unsigned_p || ((result >> (nbits - 1)) & 1) == 0)
 	result &= mask;
       else
 	result |= ~mask;

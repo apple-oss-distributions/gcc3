@@ -1,4 +1,4 @@
-/* APPLE LOCAL pascal-strings-1.c Positive C test cases 2001-07-05 zll */
+/* APPLE LOCAL file Positive C test cases 2001-07-05 zll */
 /* Origin: Ziemowit Laski <zlaski@apple.com> */
 /* { dg-do run } */
 /* { dg-options "-std=iso9899:1999 -fpascal-strings" } */

@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler,
    for Motorola M*CORE Processor.
-   Copyright (C) 1993, 1999, 2000, 2001 Free Software Foundation, Inc.
+   Copyright (C) 1993, 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
 This file is part of GNU CC.
 
@@ -178,9 +178,10 @@ extern const char * mcore_stack_increment_string;
      N_("Maximum amount for a single stack increment operation")}	\
 }
 
+#ifndef CC1_SPEC
 /* The MCore ABI says that bitfields are unsigned by default. */
-/* The EPOC C++ environment does not support exceptions.  */
-#define CC1_SPEC "-funsigned-bitfields %{!DIN_GCC:-fno-rtti} %{!DIN_GCC:-fno-exceptions}"
+#define CC1_SPEC "-funsigned-bitfields"
+#endif
 
 /* What options are we going to default to specific settings when
    -O* happens; the user can subsequently override these settings.
@@ -826,8 +827,8 @@ extern const enum reg_class reg_class_from_letter[];
 /* Length in units of the trampoline for entering a nested function.  */
 #define TRAMPOLINE_SIZE  12
 
-/* Alignment required for a trampoline in units.  */
-#define TRAMPOLINE_ALIGN  4
+/* Alignment required for a trampoline in bits.  */
+#define TRAMPOLINE_ALIGNMENT  32
 
 /* Emit RTL insns to initialize the variable parts of a trampoline.
    FNADDR is an RTX for the address of the function's pure code.
@@ -967,12 +968,6 @@ extern const enum reg_class reg_class_from_letter[];
    to contain offsets from the address of the table.
    Do not define this if the table should contain absolute addresses.  */
 /* #define CASE_VECTOR_PC_RELATIVE */
-
-/* Specify the tree operation to be used to convert reals to integers.  */
-#define IMPLICIT_FIX_EXPR  FIX_ROUND_EXPR
-
-/* This is the kind of divide that is easiest to do in the general case.  */
-#define EASY_DIV_EXPR  TRUNC_DIV_EXPR
 
 /* 'char' is signed by default.  */
 #define DEFAULT_SIGNED_CHAR  0

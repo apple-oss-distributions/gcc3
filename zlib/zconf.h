@@ -1,9 +1,9 @@
 /* zconf.h -- configuration of the zlib compression library
- * Copyright (C) 1995-1998 Jean-loup Gailly.
+ * Copyright (C) 1995-2002 Jean-loup Gailly.
  * For conditions of distribution and use, see copyright notice in zlib.h 
  */
 
-/* @(#) $Id: zconf.h,v 1.3 2001/09/17 20:38:36 zlaski Exp $ */
+/* @(#) $Id: zconf.h,v 1.4 2002/03/14 07:38:19 shebs Exp $ */
 
 #ifndef _ZCONF_H
 #define _ZCONF_H

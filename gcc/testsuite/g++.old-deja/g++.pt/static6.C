@@ -1,5 +1,6 @@
 // Build don't run:
-// excess errors test - XFAIL *-*-aout *-*-coff *-*-hpux* *-*-hms
+// APPLE LOCAL darwin native
+// excess errors test - XFAIL *-*-aout *-*-coff *-*-hpux* *-*-hms *-*-darwin*
 
 // Simplified from testcase by Erez Louidor Lior <s3824888@techst02.technion.ac.il>
 

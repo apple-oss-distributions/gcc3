@@ -60,7 +60,7 @@ darwin-c.o: $(srcdir)/config/darwin-c.c $(CONFIG_H) $(SYSTEM_H) \
 # APPLE LOCAL no soft-float multilibs
 
 # APPLE LOCAL PFE
-darwin.o : config.h $(PFE_H)
+darwin.o : config.h $(PFE_H) $(PFE_HEADER_H)
 i386.o : config.h $(PFE_H) $(PFE_HEADER_H)
 
 # Should the big block of PFE macro definitions currently in Makefile.in

@@ -1564,8 +1564,6 @@ final_start_function (first, file, optimize)
   if (! HAVE_prologue)
 #endif
     profile_after_prologue (file);
-
-  profile_label_no++;
 }
 
 static void
@@ -1681,6 +1679,8 @@ final_end_function ()
       && dwarf2out_do_frame ())
     dwarf2out_end_epilogue ();
 #endif
+
+  profile_label_no++;
 }
 
 /* Output assembler code for some insns: all or part of a function.
@@ -1855,6 +1855,7 @@ final_scan_insn (insn, file, optimize, prescan, nopeepholes)
 	case NOTE_INSN_DELETED:
 	case NOTE_INSN_LOOP_BEG:
 	case NOTE_INSN_LOOP_END:
+	case NOTE_INSN_LOOP_END_TOP_COND:
 	case NOTE_INSN_LOOP_CONT:
 	case NOTE_INSN_LOOP_VTOP:
 	case NOTE_INSN_FUNCTION_END:
@@ -2968,13 +2969,26 @@ alter_cond (cond)
    In an `asm', it's the user's fault; otherwise, the compiler's fault.  */
 
 void
-output_operand_lossage (msgid)
-     const char *msgid;
+output_operand_lossage VPARAMS ((const char *msgid, ...))
 {
+  char *fmt_string;
+  char *new_message;
+  const char *pfx_str;
+  VA_OPEN (ap, msgid);
+  VA_FIXEDARG (ap, const char *, msgid);
+
+  pfx_str = this_is_asm_operands ? _("invalid `asm': ") : "output_operand: ";
+  asprintf (&fmt_string, "%s%s", pfx_str, _(msgid));
+  vasprintf (&new_message, fmt_string, ap);
+  
   if (this_is_asm_operands)
-    error_for_asm (this_is_asm_operands, "invalid `asm': %s", _(msgid));
+    error_for_asm (this_is_asm_operands, "%s", new_message);
   else
-    internal_error ("output_operand: %s", _(msgid));
+    internal_error ("%s", new_message);
+
+  free (fmt_string);
+  free (new_message);
+  VA_CLOSE (ap);
 }
 
 /* Output of assembler code from a template, and its subroutines.  */
@@ -3220,7 +3234,7 @@ output_asm_insn (template, operands)
 	    c = atoi (p);
 
 	    if (! ISDIGIT (*p))
-	      output_operand_lossage ("operand number missing after %-letter");
+	      output_operand_lossage ("operand number missing after %%-letter");
 	    else if (this_is_asm_operands
 		     && (c < 0 || (unsigned int) c >= insn_noperands))
 	      output_operand_lossage ("operand number out of range");
@@ -3312,7 +3326,7 @@ output_asm_label (x)
 	  && NOTE_LINE_NUMBER (x) == NOTE_INSN_DELETED_LABEL))
     ASM_GENERATE_INTERNAL_LABEL (buf, "L", CODE_LABEL_NUMBER (x));
   else
-    output_operand_lossage ("`%l' operand isn't a label");
+    output_operand_lossage ("`%%l' operand isn't a label");
 
   assemble_name (asm_out_file, buf);
 }
@@ -3464,6 +3478,7 @@ output_addr_const (file, x)
 
     case ZERO_EXTEND:
     case SIGN_EXTEND:
+    case SUBREG:
       output_addr_const (file, XEXP (x, 0));
       break;
 

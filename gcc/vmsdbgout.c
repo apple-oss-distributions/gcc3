@@ -1,6 +1,6 @@
 /* Output VMS debug format symbol table information from the GNU C compiler.
    Copyright (C) 1987, 1988, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001 Free Software Foundation, Inc.
+   1999, 2000, 2001, 2002 Free Software Foundation, Inc.
    Contributed by Douglas B. Rupp (rupp@gnat.com).
 
 This file is part of GNU CC.
@@ -72,7 +72,7 @@ dst_file_info_entry;
 #define ASM_COMMENT_START ";#"
 #endif
 
-/* Maximum size (in bytes) of an artificially generated label.   */
+/* Maximum size (in bytes) of an artificially generated label.  */
 #define MAX_ARTIFICIAL_LABEL_BYTES	30
 
 /* Make sure we know the sizes of the various types debug can describe. These
@@ -277,37 +277,49 @@ static char text_end_label[MAX_ARTIFICIAL_LABEL_BYTES];
 #endif
 
 #ifndef ASM_OUTPUT_DEBUG_DELTA2
-#define ASM_OUTPUT_DEBUG_DELTA2(FILE,LABEL1,LABEL2)			\
- do {	fprintf ((FILE), "\t%s\t", UNALIGNED_SHORT_ASM_OP);		\
-	assemble_name (FILE, LABEL1);					\
-	fprintf (FILE, "-");						\
-	assemble_name (FILE, LABEL2);					\
-  } while (0)
+#define ASM_OUTPUT_DEBUG_DELTA2(FILE,LABEL1,LABEL2)			 \
+  do									 \
+    {									 \
+      fprintf ((FILE), "\t%s\t", UNALIGNED_SHORT_ASM_OP);		 \
+      assemble_name (FILE, LABEL1);					 \
+      fprintf (FILE, "-");						 \
+      assemble_name (FILE, LABEL2);					 \
+    }									 \
+  while (0)
 #endif
 
 #ifndef ASM_OUTPUT_DEBUG_DELTA4
-#define ASM_OUTPUT_DEBUG_DELTA4(FILE,LABEL1,LABEL2)			\
- do {	fprintf ((FILE), "\t%s\t", UNALIGNED_INT_ASM_OP);		\
-	assemble_name (FILE, LABEL1);					\
-	fprintf (FILE, "-");						\
-	assemble_name (FILE, LABEL2);					\
-  } while (0)
+#define ASM_OUTPUT_DEBUG_DELTA4(FILE,LABEL1,LABEL2)			 \
+  do									 \
+    {									 \
+      fprintf ((FILE), "\t%s\t", UNALIGNED_INT_ASM_OP);			 \
+      assemble_name (FILE, LABEL1);					 \
+      fprintf (FILE, "-");						 \
+      assemble_name (FILE, LABEL2);					 \
+    }									 \
+  while (0)
 #endif
 
 #ifndef ASM_OUTPUT_DEBUG_ADDR_DELTA
-#define ASM_OUTPUT_DEBUG_ADDR_DELTA(FILE,LABEL1,LABEL2)			\
- do {	fprintf ((FILE), "\t%s\t", UNALIGNED_PTR_ASM_OP);		\
-	assemble_name (FILE, LABEL1);					\
-	fprintf (FILE, "-");						\
-	assemble_name (FILE, LABEL2);					\
-  } while (0)
+#define ASM_OUTPUT_DEBUG_ADDR_DELTA(FILE,LABEL1,LABEL2)			 \
+  do									 \
+    {									 \
+      fprintf ((FILE), "\t%s\t", UNALIGNED_PTR_ASM_OP);			 \
+      assemble_name (FILE, LABEL1);					 \
+      fprintf (FILE, "-");						 \
+      assemble_name (FILE, LABEL2);					 \
+    }									 \
+  while (0)
 #endif
 
 #ifndef ASM_OUTPUT_DEBUG_ADDR
-#define ASM_OUTPUT_DEBUG_ADDR(FILE,LABEL)				\
- do {	fprintf ((FILE), "\t%s\t", UNALIGNED_PTR_ASM_OP);		\
-	assemble_name (FILE, LABEL);					\
-  } while (0)
+#define ASM_OUTPUT_DEBUG_ADDR(FILE,LABEL)				 \
+  do									 \
+    {									 \
+      fprintf ((FILE), "\t%s\t", UNALIGNED_PTR_ASM_OP);			 \
+      assemble_name (FILE, LABEL);					 \
+    }									 \
+  while (0)
 #endif
 
 #ifndef ASM_OUTPUT_DEBUG_ADDR_CONST
@@ -352,24 +364,25 @@ static char text_end_label[MAX_ARTIFICIAL_LABEL_BYTES];
    newline is produced.  When flag_verbose_asm is asserted, we add commnetary
    at the end of the line, so we must avoid output of a newline here.  */
 #ifndef ASM_OUTPUT_DEBUG_STRING
-#define ASM_OUTPUT_DEBUG_STRING(FILE,P)	\
-  do {					\
-    register int slen = strlen(P);      \
-    register char *p = (P);  	        \
-    register int i;			\
-    fprintf (FILE, "\t.ascii \"");	\
-    for (i = 0; i < slen; i++)		\
-      {					\
-	  register int c = p[i];	\
-	  if (c == '\"' || c == '\\')	\
-	    putc ('\\', FILE);		\
-	  if (c >= ' ' && c < 0177)	\
-	    putc (c, FILE);		\
-	  else				\
-	    fprintf (FILE, "\\%o", c);	\
-      }					\
-    fprintf (FILE, "\"");		\
-  }					\
+#define ASM_OUTPUT_DEBUG_STRING(FILE,P)		\
+  do						\
+    {						\
+      register int slen = strlen(P);		\
+      register char *p = (P);			\
+      register int i;				\
+      fprintf (FILE, "\t.ascii \"");		\
+      for (i = 0; i < slen; i++)		\
+	{					\
+	  register int c = p[i];		\
+	  if (c == '\"' || c == '\\')		\
+	    putc ('\\', FILE);			\
+	  if (c >= ' ' && c < 0177)		\
+	    putc (c, FILE);			\
+	  else					\
+	    fprintf (FILE, "\\%o", c);		\
+	}					\
+      fprintf (FILE, "\"");			\
+    }						\
   while (0)
 #endif
 
@@ -377,13 +390,14 @@ static char text_end_label[MAX_ARTIFICIAL_LABEL_BYTES];
    macro has the same effect as ASM_OUTPUT_LABELREF, but copies to
    a string rather than writing to a file.  */
 #ifndef ASM_NAME_TO_STRING
-#define ASM_NAME_TO_STRING(STR, NAME) \
-  do {									      \
-      if ((NAME)[0] == '*')						      \
-	strcpy (STR, NAME+1);						      \
-      else								      \
-	strcpy (STR, NAME);                                                   \
-  }                                                                           \
+#define ASM_NAME_TO_STRING(STR, NAME) 		\
+  do						\
+    {						\
+      if ((NAME)[0] == '*')			\
+	strcpy (STR, NAME+1);			\
+      else					\
+	strcpy (STR, NAME);			\
+    }						\
   while (0)
 #endif
 
@@ -1317,7 +1331,7 @@ vmsdbgout_end_epilogue ()
   if (debug_info_level > DINFO_LEVEL_NONE)
     {
       /* Output a label to mark the endpoint of the code generated for this
-         function.        */
+         function.  */
       ASM_GENERATE_INTERNAL_LABEL (label, FUNC_END_LABEL,
 				   current_funcdef_number);
       ASM_OUTPUT_LABEL (asm_out_file, label);
@@ -1444,15 +1458,26 @@ lookup_filename (file_name)
 
   if (stat (file_name, &statbuf) == 0)
     {
-      cdt = 10000000 * (statbuf.st_ctime + vms_epoch_offset);
-      ebk = statbuf.st_size / 512 + 1;
-      ffb = statbuf.st_size - ((statbuf.st_size / 512) * 512);
+      long gmtoff;
 #ifdef VMS
+      struct tm *ts;
+
+      /* Adjust for GMT */
+      ts = (struct tm *) localtime (&statbuf.st_ctime);
+      gmtoff = ts->tm_gmtoff;
+
+      /* VMS has multiple file format types */
       rfo = statbuf.st_fab_rfm;
 #else
+      /* Is GMT adjustment an issue with a cross-compiler? */
+      gmtoff = 0;
+
       /* Assume stream LF type file */
       rfo = 2;
 #endif
+      cdt = 10000000 * (statbuf.st_ctime + gmtoff + vms_epoch_offset);
+      ebk = statbuf.st_size / 512 + 1;
+      ffb = statbuf.st_size - ((statbuf.st_size / 512) * 512);
       fnam = full_name (file_name);
       flen = strlen (fnam);
     }
@@ -1625,7 +1650,7 @@ vmsdbgout_init (main_input_filename)
 
   module_producer
     = (char *) xmalloc (strlen (language_string) + 1
-			+ strlen (version_string + 1));
+			+ strlen (version_string) + 1);
   sprintf (module_producer, "%s %s", language_string, version_string);
 
   ASM_GENERATE_INTERNAL_LABEL (text_end_label, TEXT_END_LABEL, 0);

@@ -263,6 +263,9 @@ struct cpp_options
   /* Non-0 means -v, so print the full set of include dirs.  */
   unsigned char verbose;
 
+  /* Nonzero means chars are signed.  */
+  unsigned char signed_char;
+
   /* Nonzero means use extra default include directories for C++.  */
   unsigned char cplusplus;
 
@@ -513,7 +516,7 @@ extern void cpp_set_callbacks PARAMS ((cpp_reader *, cpp_callbacks *));
    structure reliable.  Options processing is not completed until you
    call cpp_finish_options.  */
 extern int cpp_handle_options PARAMS ((cpp_reader *, int, char **));
-extern int cpp_handle_option PARAMS ((cpp_reader *, int, char **));
+extern int cpp_handle_option PARAMS ((cpp_reader *, int, char **, int));
 extern void cpp_post_options PARAMS ((cpp_reader *));
 
 /* This function reads the file, but does not start preprocessing.  It
@@ -671,6 +674,9 @@ extern void cpp_forall_identifiers	PARAMS ((cpp_reader *,
 /* In cppmacro.c */
 extern void cpp_scan_nooutput		PARAMS ((cpp_reader *));
 extern int  cpp_sys_macro_p		PARAMS ((cpp_reader *));
+extern unsigned char *cpp_quote_string	PARAMS ((unsigned char *,
+						 const unsigned char *,
+						 unsigned int));
 
 /* In cppfiles.c */
 extern int cpp_included	PARAMS ((cpp_reader *, const char *));

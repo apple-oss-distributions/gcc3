@@ -6,7 +6,7 @@
  *                                                                          *
  *                          C Implementation File                           *
  *                                                                          *
- *                            $Revision: 1.1.1.6 $
+ *                            $Revision: 1.1.1.8 $
  *                                                                          *
  *          Copyright (C) 1992-2001, Free Software Foundation, Inc.         *
  *                                                                          *
@@ -1797,7 +1797,7 @@ tree_transform (gnat_node)
 	   we need to make sure it gets executed after the LHS.  */
 	gnu_lhs = gnat_to_gnu (Left_Opnd (gnat_node));
 	clear_last_expr ();
-	gnu_rhs_side = expand_start_stmt_expr ();
+	gnu_rhs_side = expand_start_stmt_expr (/*has_scope=*/1);
 	gnu_rhs = gnat_to_gnu (Right_Opnd (gnat_node));
 	expand_end_stmt_expr (gnu_rhs_side);
 	gnu_result_type = get_unpadded_type (Etype (gnat_node));
@@ -2350,7 +2350,7 @@ tree_transform (gnat_node)
 	if (Present (gnat_top_condition))
 	  gnu_top_condition = gnat_to_gnu (gnat_top_condition);
 
-	expand_exit_loop_if_false (0, gnu_top_condition);
+	expand_exit_loop_top_cond (0, gnu_top_condition);
 
         /* Make the loop body into its own block, so any allocated
            storage will be released every iteration.  This is needed

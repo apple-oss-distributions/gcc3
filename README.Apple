@@ -57,18 +57,36 @@ the original crt1.o, just in case).  You will need to have built the
 
 BUILDING, THE APPLE WAY
 
-To build things the Apple way, just say "make RC_ARCHS=" followed by
-"build" or "install".  This will configure and and then do a full
-bootstrap build, and by default will put results into /usr/gcc3 (this
-location will change), except for the drivers and other user-visible
-tools, which go into /usr/bin, but with a "3" suffixed, so for
-instance the driver is /usr/bin/gcc3, and the demangler is
-/usr/bin/c++filt3.
+To build things the Apple way, just say (in the source directory)
+
+	mkdir -p build/obj build/dst build/sym
+	gnumake install RC_OS=macos RC_ARCHS=ppc TARGETS=ppc \
+		SRCROOT=`pwd` OBJROOT=`pwd`/build/obj \
+		DSTROOT=`pwd`/build/dst SYMROOT=`pwd`/build/sym
+
+This will configure and then do a full bootstrap build, with all the
+results going into the subdirectory build/ that you created.  The
+final results will be in the "dest root" directory build/dst, in the
+form of an image of the installed directory structure.  The drivers
+and other user-visible tools have a "3" suffixed, so for instance the
+driver is /usr/bin/gcc3, and the demangler is /usr/bin/c++filt3.
+
+To install the results, become root and do
+
+	ditto build/dst /
 
 Various knobs and switches are available, but even so, the Apple
 makefile machinery is mainly designed for mass builds of all the
 projects that make up Darwin and/or Mac OS X, and is thus not as
 flexible as the standard GCC build process.
+
+To build for i386 Darwin, set TARGETS=i386.  To build fat, set
+RC_ARCHS='i386 ppc' TARGETS='i386 ppc'.  Note that you must have a
+complete set of fat libraries and i386-targeting cctools for this
+all to work.
+
+You can set the four *ROOT variables to point anywhere, but they must
+always be absolute pathnames.
 
 BUILDING, THE GNU WAY
 
@@ -145,6 +163,13 @@ better code for them.  However, 2.95.2 let C++ programs refer to them
 without ever declaring them.  The current C++ compiler now does the
 right thing by requiring you to declare all functions.
 
+alloca is a built-in function
+
+Normally only __builtin_alloca is a built-in function, and user
+code #defines alloca as __builtin_alloca.  This version of GCC
+also recognizes alloca as built-in, and compiles it into a single
+stack adjustment.
+
 va_arg cannot take chars, shorts, or floats
 
 You can no longer pass "char", "short", or "float" as the second
@@ -180,11 +205,6 @@ The C++ compiler is normally strict about adherence to the language
 standard, but the -fpermissive flag is available to convert many
 errors into warnings.  Apple's compiler is set to be permissive
 by default.  This is temporary as of 1/27/02.
-
--Werror by default
-
--Werror normally turns any warning into an error that stops the
-compile, but this has been disabled temporarily (1/27/02).
 
 GNU stddef.h not installed
 
@@ -265,6 +285,20 @@ alignment onto a stack, while align=reset pops the alignment, thus
 allowing nested pragmas to work.  #pragma pack is also available and
 works with the same stack.
 
+private extern symbols
+
+You can declare symbols as "private extern", which means that they
+behave as extern until linking, then they are made private, and are
+not visible outside the library.  To declare something as private
+extern, add "__private_extern__" where you might normally say
+"extern".
+
+Coalescing
+
+Using "-fcoalesce", "-fcoalesce-templates" and "-fweak-coalesced"
+flags can reduce the amount of duplicated code.  Coalescing and
+C++ template coalescing are enabled by default.
+
 -dynamiclib
 
 You can build shared libraries (aka dylibs) by using -dynamiclib.
@@ -299,17 +333,13 @@ switches back to the standard integrated preprocessor, and if you want
 to use cpp-precomp for C++, -cpp-precomp enables it.  The option
 -precomp is available to create precomps.
 
-The option -precomp-trustfile is used by PB.
+The compiler option -precomp-trustfile is used by PB.
 
 -mdynamic-no-pic
 
 The option -mdynamic-no-pic generates code that make references to
 PIC, but is not itself position-independent and thus more efficient.
 This option is suitable for applications but not dylibs.
-
-Coalesced symbols
-
-To get coalescing of symbols, say -fcoalesced.
 
 unavailable attribute
 
@@ -320,6 +350,12 @@ weak_import attribute
 
 The attribute weak_import is available to declare that a symbol
 should be designated as a weak reference.
+
+CALL_ON_LOAD and CALL_ON_UNLOAD pragmas
+
+The pragmas CALL_ON_LOAD and CALL_ON_UNLOAD allow you to declare
+that a given name is the name of a function to be called when
+a module is loaded or unloaded by the system.
 
 IOKit support
 
@@ -380,6 +416,17 @@ present for compatibility with some old projects.
 
 The option -Wno-#warnings suppresses warnings issued by #warning.
 
+-Wno-altivec-long-deprecated
+
+The option -Wno-altivec-long-deprecated suppresses warnings about
+'int' being preferred to 'long' in AltiVec vector types.
+
+-Werror suppression
+
+The environment variable QA_DISABLE_WERROR, if set (to any value),
+disables the effect of -Werror on the command line; warnings will
+not result in an error.
+
 PB indexing
 
 If the environment variable PB_INDEX_SOCKET_PORT is defined, then the
@@ -393,6 +440,12 @@ This is the support for a PB feature where actual pathnames for
 headers come from a given file rather than being searched for in the
 various include paths.  It's not useful outside of the PB environment.
 
+QA_OVERRIDE_GCC3_OPTIONS environment variable
+
+Allows overriding, adding, or changing options sent to toplev.c.  This
+allows you, for example, to override the -O setting that the driver
+sends to the command line.  Documentation is in toplev.c.
+
 * Miscellaneous Issues
 
 GCC uses a syntax for rlwinm instructions that is only supported
@@ -404,8 +457,6 @@ to rlwinm in gcc/config/rs6000/rs6000.md.
 TO DO
 
 This section lists specific features that we're still working on.
-
-Detect and complain about conflicting -static and -dynamic options.
 
 Make fat building work when the compiler is built the GNU way.
 

@@ -1,6 +1,7 @@
 // On targets that don't support weak symbols, we require an explicit
 // instantiation of arr.
-// excess errors test - XFAIL *-*-aout *-*-coff *-*-hpux* *-*-hms
+// APPLE LOCAL darwin native
+// excess errors test - XFAIL *-*-aout *-*-coff *-*-hpux* *-*-hms *-*-darwin*
 
 template<class T>
 struct A {

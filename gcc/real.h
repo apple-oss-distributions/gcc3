@@ -1,6 +1,6 @@
 /* Definitions of floating-point access for GNU compiler.
    Copyright (C) 1989, 1991, 1994, 1996, 1997, 1998,
-   1999, 2000 Free Software Foundation, Inc.
+   1999, 2000, 2002 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -212,7 +212,7 @@ extern REAL_VALUE_TYPE ereal_from_double PARAMS ((HOST_WIDE_INT *));
    (LONG_DOUBLE_TYPE_SIZE == 64 ? etardouble ((IN), (OUT))	\
     : LONG_DOUBLE_TYPE_SIZE == 96 ? etarldouble ((IN), (OUT))	\
     : LONG_DOUBLE_TYPE_SIZE == 128 ? etartdouble ((IN), (OUT))  \
-    : abort())
+    : abort ())
 #define REAL_VALUE_TO_TARGET_DOUBLE(IN, OUT) (etardouble ((IN), (OUT)))
 
 /* IN is a REAL_VALUE_TYPE.  OUT is a long.  */
@@ -285,7 +285,7 @@ do {							\
     HOST_WIDE_INT l;					\
   } u;							\
   if (sizeof(HOST_WIDE_INT) < sizeof(float))		\
-    abort();						\
+    abort ();						\
   u.l = 0;						\
   u.f = (IN);						\
   (OUT) = u.l;						\
@@ -303,7 +303,7 @@ do {									\
     HOST_WIDE_INT l[2];							\
   } u;									\
   if (sizeof(HOST_WIDE_INT) * 2 < sizeof(REAL_VALUE_TYPE))		\
-    abort();								\
+    abort ();								\
   u.l[0] = u.l[1] = 0;							\
   u.f = (IN);								\
   if (HOST_FLOAT_WORDS_BIG_ENDIAN == FLOAT_WORDS_BIG_ENDIAN)		\
@@ -465,25 +465,6 @@ do { union real_extract u;				\
 #define CONST_DOUBLE_FROM_REAL_VALUE(r, m) immed_real_const_1 (r,  m)
 extern struct rtx_def *immed_real_const_1	PARAMS ((REAL_VALUE_TYPE,
 						       enum machine_mode));
-
-
-/* APPLE LOCAL: AltiVec - might not be written in target-independent manner!!! */
-/* For a CONST_VECTOR:
-   The usual four ints that hold the value.
-   For a (128-bit) VXXXmode, that is all there are;
-    and CONST_VECTOR_0 is the low-order word and ..._3 the high-order.
-    So use &CONST_VECTOR_0(r) as the address of an array of ints.  */
-#define CONST_VECTOR_0(r) XWINT (r, 2)
-#define CONST_VECTOR_1(r) XWINT (r, 3)
-#define CONST_VECTOR_2(r) XWINT (r, 4)
-#define CONST_VECTOR_3(r) XWINT (r, 5)
-
-/* Link for chain of all CONST_VECTORs in use in current function.  */
-#define CONST_VECTOR_CHAIN(r) XEXP (r, 1)
-/* The MEM which represents this CONST_VECTOR's value in memory,
-   or const0_rtx if no MEM has been made for it yet,
-   or cc0_rtx if it is not on the chain.  */
-#define CONST_VECTOR_MEM(r) XEXP (r, 0)
 
 
 /* Convert a floating point value `r', that can be interpreted

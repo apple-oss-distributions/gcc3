@@ -51,6 +51,8 @@ static tree handle_noreturn_attribute	PARAMS ((tree *, tree, tree, int,
 						 bool *));
 static tree handle_noinline_attribute	PARAMS ((tree *, tree, tree, int,
 						 bool *));
+static tree handle_always_inline_attribute PARAMS ((tree *, tree, tree, int,
+						    bool *));
 static tree handle_used_attribute	PARAMS ((tree *, tree, tree, int,
 						 bool *));
 static tree handle_unused_attribute	PARAMS ((tree *, tree, tree, int,
@@ -85,12 +87,10 @@ static tree handle_pure_attribute	PARAMS ((tree *, tree, tree, int,
 static tree handle_vector_size_attribute PARAMS ((tree *, tree, tree, int,
 						  bool *));
 static tree vector_size_helper PARAMS ((tree, tree));
-/* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
 static tree handle_deprecated_attribute	PARAMS ((tree *, tree, tree, int,
 						 bool *));
-static void handle_deprecated_attribute_1 PARAMS ((tree *, tree, int, bool *,
-						   int));
-/* APPLE LOCAL end deprecated ilr */
+static tree handle_vector_size_attribute PARAMS ((tree *, tree, tree, int,
+						  bool *));
 /* APPLE LOCAL begin unavailable (Radar 2809697) ilr */
 static tree handle_unavailable_attribute PARAMS ((tree *, tree, tree, int,
 						  bool *));
@@ -121,6 +121,8 @@ static const struct attribute_spec c_common_attribute_table[] =
 			      handle_noreturn_attribute },
   { "noinline",               0, 0, true,  false, false,
 			      handle_noinline_attribute },
+  { "always_inline",          0, 0, true,  false, false,
+			      handle_always_inline_attribute },
   { "used",                   0, 0, true,  false, false,
 			      handle_used_attribute },
   { "unused",                 0, 0, false, false, false,
@@ -152,12 +154,10 @@ static const struct attribute_spec c_common_attribute_table[] =
 			      handle_no_limit_stack_attribute },
   { "pure",                   0, 0, true,  false, false,
 			      handle_pure_attribute },
-  { "vector_size",	      1, 1, false, true, false,
-			      handle_vector_size_attribute },
-  /* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
   { "deprecated",             0, 0, false, false, false,
 			      handle_deprecated_attribute },
-  /* APPLE LOCAL end deprecated ilr */
+  { "vector_size",	      1, 1, false, true, false,
+			      handle_vector_size_attribute },
   /* APPLE LOCAL begin unavailable (Radar 2809697) ilr */
   { "unavailable",            0, 0, false, false, false,
 			      handle_unavailable_attribute },
@@ -360,8 +360,15 @@ decl_attributes (node, attributes, flags)
 	    }
 	}
 
+      /* If we require a type, but were passed a decl, set up to make a
+	 new type and update the one in the decl.  ATTR_FLAG_TYPE_IN_PLACE
+	 would have applied if we'd been passed a type, but we cannot modify
+	 the decl's type in place here.  */
       if (spec->type_required && DECL_P (*anode))
-	anode = &TREE_TYPE (*anode);
+	{
+	  anode = &TREE_TYPE (*anode);
+	  flags &= ~(int) ATTR_FLAG_TYPE_IN_PLACE;
+	}
 
       if (spec->function_type_required && TREE_CODE (*anode) != FUNCTION_TYPE
 	  && TREE_CODE (*anode) != METHOD_TYPE)
@@ -397,7 +404,9 @@ decl_attributes (node, attributes, flags)
 
       /* Layout the decl in case anything changed.  */
       if (spec->type_required && DECL_P (*node)
-	  && TREE_CODE (*node) == VAR_DECL)
+	  && (TREE_CODE (*node) == VAR_DECL
+	      || TREE_CODE (*node) == PARM_DECL
+	      || TREE_CODE (*node) == RESULT_DECL))
 	{
 	  /* Force a recalculation of mode and size.  */
 	  DECL_MODE (*node) = VOIDmode;
@@ -569,6 +578,31 @@ handle_noinline_attribute (node, name, args, flags, no_add_attrs)
 {
   if (TREE_CODE (*node) == FUNCTION_DECL)
     DECL_UNINLINABLE (*node) = 1;
+  else
+    {
+      warning ("`%s' attribute ignored", IDENTIFIER_POINTER (name));
+      *no_add_attrs = true;
+    }
+
+  return NULL_TREE;
+}
+
+/* Handle a "always_inline" attribute; arguments as in
+   struct attribute_spec.handler.  */
+
+static tree
+handle_always_inline_attribute (node, name, args, flags, no_add_attrs)
+     tree *node;
+     tree name;
+     tree args ATTRIBUTE_UNUSED;
+     int flags ATTRIBUTE_UNUSED;
+     bool *no_add_attrs;
+{
+  if (TREE_CODE (*node) == FUNCTION_DECL)
+    {
+      /* Do nothing else, just set the attribute.  We'll get at
+	 it later with lookup_attribute.  */
+    }
   else
     {
       warning ("`%s' attribute ignored", IDENTIFIER_POINTER (name));
@@ -1157,6 +1191,67 @@ handle_pure_attribute (node, name, args, flags, no_add_attrs)
   return NULL_TREE;
 }
 
+/* Handle a "deprecated" attribute; arguments as in
+   struct attribute_spec.handler.  */
+   
+static tree
+handle_deprecated_attribute (node, name, args, flags, no_add_attrs)
+     tree *node;
+     tree name;
+     tree args ATTRIBUTE_UNUSED;
+     int flags;
+     bool *no_add_attrs;
+{
+  tree type = NULL_TREE;
+  int warn = 0;
+  const char *what = NULL;
+  
+  if (DECL_P (*node))
+    {
+      tree decl = *node;
+      type = TREE_TYPE (decl);
+      
+      if (TREE_CODE (decl) == TYPE_DECL
+	  || TREE_CODE (decl) == PARM_DECL
+	  || TREE_CODE (decl) == VAR_DECL
+	  || TREE_CODE (decl) == FUNCTION_DECL
+	  || TREE_CODE (decl) == FIELD_DECL)
+	TREE_DEPRECATED (decl) = 1;
+      else
+	warn = 1;
+    }
+  else if (TYPE_P (*node))
+    {
+      if (!(flags & (int) ATTR_FLAG_TYPE_IN_PLACE))
+	*node = build_type_copy (*node);
+      TREE_DEPRECATED (*node) = 1;
+      type = *node;
+    }
+  else
+    warn = 1;
+  
+  if (warn)
+    {
+      *no_add_attrs = true;
+      if (type && TYPE_NAME (type))
+	{
+	  if (TREE_CODE (TYPE_NAME (type)) == IDENTIFIER_NODE)
+	    what = IDENTIFIER_POINTER (TYPE_NAME (*node));
+	  else if (TREE_CODE (TYPE_NAME (type)) == TYPE_DECL
+		   && DECL_NAME (TYPE_NAME (type)))
+	    what = IDENTIFIER_POINTER (DECL_NAME (TYPE_NAME (type)));
+	}
+      if (what)
+	warning ("`%s' attribute ignored for `%s'",
+		  IDENTIFIER_POINTER (name), what);
+      else
+	warning ("`%s' attribute ignored", 
+		      IDENTIFIER_POINTER (name));
+    }
+
+  return NULL_TREE;
+}
+
 /* Handle a "vector_size" attribute; arguments as in
    struct attribute_spec.handler.  */
 
@@ -1281,20 +1376,17 @@ vector_size_helper (type, bottom)
   return outer;
 }
 
-/* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
 /* APPLE LOCAL begin unavailable (Radar 2809697) ilr */
-/* Common handler for "deprecated" and "unavailable" attributes;
-   arguments as in struct attribute_spec.handler with an
-   additional UNAVAILABLE argument indicating which attribute
-   is being handled.  */
-
-static void
-handle_deprecated_attribute_1 (node, name, flags, no_add_attrs, unavailable)
+/* Handle a "unavailable" attribute; arguments as in
+   struct attribute_spec.handler.  */
+   
+static tree
+handle_unavailable_attribute (node, name, args, flags, no_add_attrs)
      tree *node;
      tree name;
-     int flags;
+     tree args ATTRIBUTE_UNUSED;
+     int flags ATTRIBUTE_UNUSED;
      bool *no_add_attrs;
-     int unavailable;
 {
   tree type = NULL_TREE;
   int warn = 0;
@@ -1312,8 +1404,7 @@ handle_deprecated_attribute_1 (node, name, flags, no_add_attrs, unavailable)
 	  || TREE_CODE (decl) == FIELD_DECL)
 	{
 	  TREE_DEPRECATED (decl) = 1;
-	  if (unavailable)
-	    TREE_UNAVAILABLE (decl) = 1;
+	  TREE_UNAVAILABLE (decl) = 1;
 	}
       else
 	warn = 1;
@@ -1323,8 +1414,7 @@ handle_deprecated_attribute_1 (node, name, flags, no_add_attrs, unavailable)
       if (!(flags & (int) ATTR_FLAG_TYPE_IN_PLACE))
 	*node = build_type_copy (*node);
       TREE_DEPRECATED (*node) = 1;
-      if (unavailable)
-	TREE_UNAVAILABLE (*node) = 1;
+      TREE_UNAVAILABLE (*node) = 1;
       type = *node;
     }
   else
@@ -1343,45 +1433,11 @@ handle_deprecated_attribute_1 (node, name, flags, no_add_attrs, unavailable)
 	}
       if (what)
 	warning ("`%s' attribute ignored for `%s'",
-		  IDENTIFIER_POINTER (name), what);
+		 IDENTIFIER_POINTER (name), what);
       else
-	warning ("`%s' attribute ignored", 
-		      IDENTIFIER_POINTER (name));
+	warning ("`%s' attribute ignored", IDENTIFIER_POINTER (name));
     }
-}
-/* APPLE LOCAL end unavailable ilr */
-/* APPLE LOCAL end deprecated ilr */
 
-/* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
-/* Handle a "deprecated" attribute; arguments as in
-   struct attribute_spec.handler.  */
-   
-static tree
-handle_deprecated_attribute (node, name, args, flags, no_add_attrs)
-     tree *node;
-     tree name;
-     tree args ATTRIBUTE_UNUSED;
-     int flags ATTRIBUTE_UNUSED;
-     bool *no_add_attrs;
-{
-  handle_deprecated_attribute_1 (node, name, flags, no_add_attrs, 0);
-  return NULL_TREE;
-}
-/* APPLE LOCAL end deprecated ilr */
-
-/* APPLE LOCAL begin unavailable (Radar 2809697) ilr */
-/* Handle a "unavailable" attribute; arguments as in
-   struct attribute_spec.handler.  */
-   
-static tree
-handle_unavailable_attribute (node, name, args, flags, no_add_attrs)
-     tree *node;
-     tree name;
-     tree args ATTRIBUTE_UNUSED;
-     int flags ATTRIBUTE_UNUSED;
-     bool *no_add_attrs;
-{
-  handle_deprecated_attribute_1 (node, name, flags, no_add_attrs, 1);
   return NULL_TREE;
 }
 /* APPLE LOCAL end unavailable ilr */
@@ -1401,7 +1457,6 @@ static tree handle_weak_import_attribute (node, name, args, flags, no_add_attrs)
      int flags ATTRIBUTE_UNUSED;
      bool *no_add_attrs;
 {
-  tree type = TREE_TYPE (*node);
   static int ignore_weak_import = 0;
 
   if (! ignore_weak_import)
@@ -1538,3 +1593,4 @@ strip_attrs (specs_attrs)
 
   return specs;
 }
+

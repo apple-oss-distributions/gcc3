@@ -161,6 +161,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "output.h"
 #include "function.h"
 #include "expr.h" 
+#include "except.h"
 #include "ggc.h"
 #include "params.h"
 
@@ -912,7 +913,8 @@ gcse_main (f, file)
   end_alias_analysis ();
   allocate_reg_info (max_reg_num (), FALSE, FALSE);
 
-  if (!optimize_size && flag_gcse_sm)
+  /* Store motion disabled until it is fixed.  */
+  if (0 && !optimize_size && flag_gcse_sm)
     store_motion ();
   /* Record where pseudo-registers are set.  */
   return run_jump_opt_after_gcse;
@@ -1324,6 +1326,7 @@ want_to_gcse_p (x)
     case SUBREG:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case CALL:
       return 0;
 
@@ -1409,6 +1412,7 @@ oprs_unchanged_p (x, insn, avail_p)
     case CONST:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case SYMBOL_REF:
     case LABEL_REF:
     case ADDR_VEC:
@@ -1643,6 +1647,22 @@ hash_expr_1 (x, mode, do_not_record_p)
 	hash += ((unsigned int) CONST_DOUBLE_LOW (x)
 		 + (unsigned int) CONST_DOUBLE_HIGH (x));
       return hash;
+
+    case CONST_VECTOR:
+      {
+	int units;
+	rtx elt;
+
+	units = CONST_VECTOR_NUNITS (x);
+
+	for (i = 0; i < units; ++i)
+	  {
+	    elt = CONST_VECTOR_ELT (x, i);
+	    hash += hash_expr_1 (elt, GET_MODE (elt), do_not_record_p);
+	  }
+
+	return hash;
+      }
 
       /* Assume there is only one rtx object for any given label.  */
     case LABEL_REF:
@@ -2180,6 +2200,10 @@ hash_scan_set (pat, insn, set_p)
 	  && regno >= FIRST_PSEUDO_REGISTER
 	  /* Don't GCSE something if we can't do a reg/reg copy.  */
 	  && can_copy_p [GET_MODE (dest)]
+	  /* GCSE commonly inserts instruction after the insn.  We can't
+	     do that easily for EH_REGION notes so disable GCSE on these
+	     for now.  */
+	  && !can_throw_internal (insn)
 	  /* Is SET_SRC something we want to gcse?  */
 	  && want_to_gcse_p (src)
 	  /* Don't CSE a nop.  */
@@ -2213,9 +2237,7 @@ hash_scan_set (pat, insn, set_p)
 		    && REGNO (src) >= FIRST_PSEUDO_REGISTER
 		    && can_copy_p [GET_MODE (dest)]
 		    && REGNO (src) != regno)
-		   || GET_CODE (src) == CONST_INT
-		   || GET_CODE (src) == SYMBOL_REF
-		   || GET_CODE (src) == CONST_DOUBLE)
+		   || CONSTANT_P (src))
 	       /* A copy is not available if its src or dest is subsequently
 		  modified.  Here we want to search from INSN+1 on, but
 		  oprs_available_p searches from INSN on.  */
@@ -2767,6 +2789,7 @@ oprs_not_set_p (x, insn)
     case CONST:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case SYMBOL_REF:
     case LABEL_REF:
     case ADDR_VEC:
@@ -3100,6 +3123,7 @@ expr_killed_p (x, bb)
     case CONST:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case SYMBOL_REF:
     case LABEL_REF:
     case ADDR_VEC:
@@ -3800,6 +3824,7 @@ compute_transp (x, indx, bmap, set_p)
     case CONST:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case SYMBOL_REF:
     case LABEL_REF:
     case ADDR_VEC:
@@ -4046,28 +4071,20 @@ cprop_jump (bb, insn, from, src)
   if (rtx_equal_p (new, SET_SRC (set)))
     return 0;
  
-  /* If this is now a no-op leave it that way, but update LABEL_NUSED if
-     necessary.  */
+  /* If this is now a no-op delete it, otherwise this must be a valid insn.  */
   if (new == pc_rtx)
+    delete_insn (insn);
+  else
     {
-      SET_SRC (set) = new;
+      if (! validate_change (insn, &SET_SRC (set), new, 0))
+	return 0;
 
-      if (JUMP_LABEL (insn) != 0)
-	{
-	  --LABEL_NUSES (JUMP_LABEL (insn));
-	  JUMP_LABEL (insn) = NULL_RTX;
-	}
-    }
-
-  /* Otherwise, this must be a valid instruction.  */
-  else if (! validate_change (insn, &SET_SRC (set), new, 0))
-    return 0;
-
-  /* If this has turned into an unconditional jump,
-     then put a barrier after it so that the unreachable
-     code will be deleted.  */
-  if (GET_CODE (SET_SRC (set)) == LABEL_REF)
-    emit_barrier_after (insn);
+      /* If this has turned into an unconditional jump,
+	 then put a barrier after it so that the unreachable
+	 code will be deleted.  */
+      if (GET_CODE (SET_SRC (set)) == LABEL_REF)
+	emit_barrier_after (insn);
+     }
 
   run_jump_opt_after_gcse = 1;
 
@@ -4172,8 +4189,7 @@ cprop_insn (bb, insn, alter_jumps)
       src = SET_SRC (pat);
 
       /* Constant propagation.  */
-      if (GET_CODE (src) == CONST_INT || GET_CODE (src) == CONST_DOUBLE
-	  || GET_CODE (src) == SYMBOL_REF)
+      if (CONSTANT_P (src))
 	{
 	  /* Handle normal insns first.  */
 	  if (GET_CODE (insn) == INSN
@@ -4528,7 +4544,7 @@ compute_pre_data ()
   antloc = NULL;
   sbitmap_vector_free (ae_kill);
   ae_kill = NULL; 
-  free (trapping_expr);
+  sbitmap_free (trapping_expr);
 }
 
 /* PRE utilities */
@@ -4666,13 +4682,23 @@ insert_insn_end_bb (expr, bb, pre)
   pat = process_insert_insn (expr);
 
   /* If the last insn is a jump, insert EXPR in front [taking care to
-     handle cc0, etc. properly].  */
+     handle cc0, etc. properly].  Similary we need to care trapping
+     instructions in presence of non-call exceptions.  */
 
-  if (GET_CODE (insn) == JUMP_INSN)
+  if (GET_CODE (insn) == JUMP_INSN
+      || (GET_CODE (insn) == INSN
+	  && (bb->succ->succ_next || (bb->succ->flags & EDGE_ABNORMAL))))
     {
 #ifdef HAVE_cc0
       rtx note;
 #endif
+      /* It should always be the case that we can put these instructions
+	 anywhere in the basic block with performing PRE optimizations.
+	 Check this.  */
+      if (GET_CODE (insn) == INSN && pre
+	  && !TEST_BIT (antloc[bb->index], expr->bitmap_index)
+          && !TEST_BIT (transp[bb->index], expr->bitmap_index))
+	abort ();
 
       /* If this is a jump table, then we can't insert stuff here.  Since
 	 we know the previous real insn must be the tablejump, we insert
@@ -4702,7 +4728,8 @@ insert_insn_end_bb (expr, bb, pre)
 
   /* Likewise if the last insn is a call, as will happen in the presence
      of exception handling.  */
-  else if (GET_CODE (insn) == CALL_INSN)
+  else if (GET_CODE (insn) == CALL_INSN
+	   && (bb->succ->succ_next || (bb->succ->flags & EDGE_ABNORMAL)))
     {
       /* Keeping in mind SMALL_REGISTER_CLASSES and parameters in registers,
 	 we search backward and place the instructions before the first
@@ -5081,7 +5108,7 @@ pre_gcse ()
     }
 
   free (index_map);
-  free (pre_redundant_insns);
+  sbitmap_free (pre_redundant_insns);
   return changed;
 }
 
@@ -6373,6 +6400,7 @@ store_ops_ok (x, bb)
     case CONST:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case SYMBOL_REF:
     case LABEL_REF:
     case ADDR_VEC:
@@ -6574,21 +6602,7 @@ store_killed_in_insn (x, insn)
     {
       /* A normal or pure call might read from pattern,
 	 but a const call will not.  */
-      if (CONST_OR_PURE_CALL_P (insn))
-	{
-	  rtx link;
-
-	  for (link = CALL_INSN_FUNCTION_USAGE (insn);
-	       link;
-	       link = XEXP (link, 1))
-	    if (GET_CODE (XEXP (link, 0)) == USE
-		&& GET_CODE (XEXP (XEXP (link, 0), 0)) == MEM
-		&& GET_CODE (XEXP (XEXP (XEXP (link, 0), 0), 0)) == SCRATCH)
-	      return 1;
-	  return 0;
-	}
-      else
-	return 1;
+      return ! CONST_OR_PURE_CALL_P (insn) || pure_call_p (insn);
     }
   
   if (GET_CODE (PATTERN (insn)) == SET)

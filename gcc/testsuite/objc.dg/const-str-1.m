@@ -2,15 +2,22 @@
 /* { dg-do compile } */
 /* { dg-options "-fgnu-runtime" } */
 
-int foo()
+void foo()
 {
   baz(@"hiya");  /* { dg-error "annot find interface declaration" } */
 }
 
 @interface NXConstantString
+/* APPLE LOCAL begin constant strings */
+{
+  void *isa;
+  char *str;
+  int len;
+}
+/* APPLE LOCAL end constant strings */
 @end
 
-int bar()
+void bar()
 {
   baz(@"howdah");
 }

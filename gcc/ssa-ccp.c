@@ -1,5 +1,5 @@
 /* Conditional constant propagation pass for the GNU compiler.
-   Copyright (C) 2000,2001 Free Software Foundation, Inc.
+   Copyright (C) 2000, 2001, 2002 Free Software Foundation, Inc.
    Original framework by Daniel Berlin <dan@cgsoftware.com>
    Fleshed out and major cleanups by Jeff Law <law@redhat.com>
    
@@ -1102,7 +1102,7 @@ mark_references (current_rtx, data)
      void *data;
 {
   rtx x = *current_rtx;
-  sbitmap worklist = (sbitmap)data;
+  sbitmap worklist = (sbitmap) data;
 
   if (x == NULL_RTX)
     return 0;
@@ -1218,4 +1218,8 @@ ssa_fast_dce (df)
     }
 
   sbitmap_free (worklist);
+
+  /* Update the use-def chains in the df_analyzer as needed.  */
+  df_analyse (df_analyzer, 0,
+              DF_RD_CHAIN | DF_RU_CHAIN | DF_REG_INFO | DF_HARD_REGS);
 }

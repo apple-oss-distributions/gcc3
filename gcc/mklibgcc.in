@@ -1,6 +1,6 @@
 #!/bin/sh
 # Construct makefile for libgcc.
-#   Copyright (C) 2000 Free Software Foundation, Inc.
+#   Copyright (C) 2000, 2002 Free Software Foundation, Inc.
 #
 # This file is part of GCC.
 
@@ -9,7 +9,8 @@
 #
 # objext
 # LIB1ASMFUNCS
-# LIB2FUNCS
+# LIB2FUNCS_1
+# LIB2FUNCS_2
 # LIB2FUNCS_ST
 # LIB2ADD
 # LIB2ADD_ST 
@@ -27,6 +28,7 @@
 # SHLIB_LINK
 # SHLIB_MULTILIB
 # SHLIB_MKMAP
+# SHLIB_MKMAP_OPTS
 # SHLIB_MAPFILES
 # SHLIB_NM_FLAGS
 # SHLIB_INSTALL
@@ -91,9 +93,12 @@ for name in $LIB1ASMFUNCS; do
 
     # Remove any objects from LIB2FUNCS and LIB2_DIVMOD_FUNCS that are
     # defined as optimized assembly code in LIB1ASMFUNCS.
-    LIB2FUNCS=`echo $LIB2FUNCS | sed -e 's/^'$name' //' \
-				     -e 's/ '$name' / /' \
-				     -e 's/ '$name'$//'`
+    LIB2FUNCS_1=`echo $LIB2FUNCS_1 | sed -e 's/^'$name' //' \
+				         -e 's/ '$name' / /' \
+				         -e 's/ '$name'$//'`
+    LIB2FUNCS_2=`echo $LIB2FUNCS_2 | sed -e 's/^'$name' //' \
+				         -e 's/ '$name' / /' \
+				         -e 's/ '$name'$//'`
     LIB2_DIVMOD_FUNCS=`echo $LIB2_DIVMOD_FUNCS | sed -e 's/^'$name' //' \
 				                     -e 's/ '$name' / /' \
 				                     -e 's/ '$name'$//'`
@@ -109,7 +114,7 @@ libgcc2_objs=""
 libgcc2_st_objs=""
 libgcc2_eh_objs=""
 
-for name in $LIB2FUNCS; do
+for name in $LIB2FUNCS_1 $LIB2FUNCS_2; do
   for ml in $MULTILIBS; do
     dir=`echo ${ml} | sed -e 's/;.*$//' -e 's/=/$(EQ)/g'`
     flags=`echo ${ml} | sed -e 's/^[^;]*;//' -e 's/@/ -/g'`;
@@ -331,6 +336,7 @@ done
 # APPLE LOCAL end libcc_kext
 
 # SHLIB_MKMAP
+# SHLIB_MKMAP_OPTS
 # SHLIB_MAPFILES
 for ml in $MULTILIBS; do
   dir=`echo ${ml} | sed -e 's/;.*$//' -e 's/=/$(EQ)/g'`
@@ -367,12 +373,13 @@ for ml in $MULTILIBS; do
   done
   # APPLE LOCAL end libcc_kext
 
-  if [ "$SHLIB_LINK" -a "$SHLIB_MKMAP" -a -z "$mapfile" ]; then
-    mapfile="libgcc.map"
+  if [ "$SHLIB_LINK" -a "$SHLIB_MKMAP" ]; then
+    mapfile="libgcc/${dir}/libgcc.map"
+    tmpmapfile="libgcc/${dir}/tmp-libgcc.map"
     echo ""
     echo "${mapfile}: $SHLIB_MKMAP $SHLIB_MAPFILES $libgcc_sh_objs"
-    echo '	{ $(NM_FOR_TARGET)'" $SHLIB_NM_FLAGS $libgcc_sh_objs; echo %%; cat $SHLIB_MAPFILES; } | "'$(AWK)'" -f $SHLIB_MKMAP > "'tmp-$@'
-    echo '	mv tmp-$@ $@'
+    echo '	{ $(NM_FOR_TARGET)'" $SHLIB_NM_FLAGS $libgcc_sh_objs; echo %%; cat $SHLIB_MAPFILES; } | "'$(AWK)'" -f $SHLIB_MKMAP $SHLIB_MKMAP_OPTS > ${tmpmapfile}"
+    echo '	mv '"$tmpmapfile"' $@'
   fi
   shlib_deps="$shlib_deps $mapfile"
 
@@ -382,10 +389,24 @@ for ml in $MULTILIBS; do
     shlib_deps="$shlib_deps $dir/$f"
   done
 
+  libgcc_a_objs="$libgcc_objs $libgcc_st_objs"
+
+  if [ "@libgcc_visibility@" = yes -a "$SHLIB_LINK" ]; then
+    libgcc_a_objs=
+    echo ""
+    for o in $libgcc_objs $libgcc_st_objs; do
+      # .oS objects will have all non-local symbol definitions .hidden
+      oS=`echo ${o} | sed s~${objext}'$~.oS~g'`
+      echo "${oS}: stmp-dirs ${o}"
+      echo '	@$(NM_FOR_TARGET) '${SHLIB_NM_FLAGS} ${o}' | $(AWK) '\''NF == 3 { print "\t.hidden", $$3 }'\'' | $(GCC_FOR_TARGET) $(LIBGCC2_CFLAGS) '${flags}' -r -nostdinc -nostdlib -o $@ '${o}' -xassembler -'
+      libgcc_a_objs="${libgcc_a_objs} ${oS}"
+    done
+  fi
+
   echo ""
-  echo "${dir}/libgcc.a: $libgcc_objs $libgcc_st_objs"
+  echo "${dir}/libgcc.a: $libgcc_a_objs"
   echo "	-rm -rf ${dir}/libgcc.a"
-  echo '	$(AR_CREATE_FOR_TARGET)' ${dir}/libgcc.a $libgcc_objs $libgcc_st_objs
+  echo '	$(AR_CREATE_FOR_TARGET)' ${dir}/libgcc.a $libgcc_a_objs
   echo '	if $(RANLIB_TEST_FOR_TARGET) ; then' \\
   echo '	  $(RANLIB_FOR_TARGET)' ${dir}/libgcc.a ';' \\
   echo '	else true; fi;'

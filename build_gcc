@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #!/bin/sh
+# APPLE LOCAL file build machinery
 # Note, lines marked with еее need to be revisited and/or reworked.
-#####################################################################################
-#####################################################################################
+#############################################################################
+#############################################################################
 #
 ## Implementation of the main B&I build targets for the top-level GNUmakefile
 ## executed by the 'buildit' tool.
@@ -13,8 +14,8 @@
 ##
 ## Copyright Apple Computer, Inc., 2002
 #
-#####################################################################################
-#####################################################################################
+#############################################################################
+#############################################################################
 #
 ## build_gcc_main - main build_gcc control function
 #
@@ -64,14 +65,17 @@ build_gcc_main()
     gcc_version=`fgrep version_string < $SRCROOT/gcc/version.c | \
                  sed -e 's/.*\"\([^ \"]*\)[ \"].*/\1/'`
     
+    # grope around for build # of associated compiler
+    APPLE_CC=`sed -ne '/apple_version_str/ s/^.*"\([0-9]*\)".*$/\1/p' < $SRCROOT/gcc/version.c`
+
     #
     # What compilers to configure and build...
     #
     ENABLE_LANGUAGES="c++,c,objc,objc++"
     COMPILERS="cpp cc1 cc1plus cc1obj cc1objplus"
     # Name (and install_name!) of libstdc++.dylib to build (if any.)
-    #LIBSTDCPP_DYLIB=libstdc++.A.dylib
-    LIBSTDCPP_DYLIB=
+    LIBSTDCPP_DYLIB=libstdc++.dylib			# formerly libstdc++.${APPLE_CC}.dylib
+    LIBSTDCPP_DYLIB_VERSION=A
     LIBRARIES="libgcc.a libcc_kext.a libgcc_static.a libsupc++.a $LIBSTDCPP_DYLIB libstdc++.a libcc_noc++.a"
     TOOLS="gcc3 g++3 c++3 c++filt3 gcov3 cpp3" # c++3 must be afer g++3 in the list
     CRTS="crtbegin.o"
@@ -90,6 +94,7 @@ build_gcc_main()
 
     # Paddy McHackery
     #box_title "WARNING -- HACK ALERT!  Build & Install libstdc++ stuff"
+    #DO_SYMLINKS=yes
     #$n build_libstdcpp
     #$n install_fat 
     #exit -1
@@ -222,8 +227,8 @@ build_gcc_main()
     fi
 }
 
-#####################################################################################
-#####################################################################################
+#############################################################################
+#############################################################################
 #
 ## Process build_gcc's options and arguments...
 #
@@ -453,8 +458,8 @@ getargs()
     HOSTS=`echo $HOSTS | fgrep "$arch" >/dev/null && echo -n "$arch "; echo $HOSTS | sed "s/$arch//"`
 }
 
-#####################################################################################
-#####################################################################################
+#############################################################################
+#############################################################################
 #
 ## Check that cross compilers are available, i.e., make sure we have a
 ## compiler to build with that can generated code for the desired TARGETS.
@@ -487,7 +492,7 @@ check_for_cross_compilers()
     fi
 }
 
-#-----------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------#
 #
 ## configure_gcc - configure for all hosts and targets...
 ##
@@ -558,7 +563,7 @@ configure_gcc()
     done
 }
 
-#-----------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------#
 #
 ## Configure and build all of libiberty.
 #
@@ -616,7 +621,7 @@ configure_and_build_libiberty()
     check_status $status "*** gnumake failed building libiberty ***"
 }
 
-#-----------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------#
 #
 ## Build the compilers for all combinations of hosts and targets.
 ## Also builds c++filt.
@@ -763,7 +768,7 @@ build_compiler()
     done
 }
 
-#-----------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------#
 #
 ## Run the libstdc++-v3/configure for each target.
 ## Only need targets because its a lib which will get linked into executables.
@@ -832,7 +837,7 @@ configure_libstdcpp()
     done
 }
 
-#-----------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------#
 #
 ## Build the various flavors of libgcc runtime libraries and also specs.
 ## This builds the kext, static, and dynamic versions of libgcc.
@@ -1105,7 +1110,7 @@ install_new_cc()
     exit 1
 }
 
-#-----------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------#
 #
 ## Build libstdc++.a
 #
@@ -1154,8 +1159,8 @@ build_libstdcpp()
 	    $n ranlib    						              	          $sym/lib/$target/libstdc++.a
 
 	    # keep a "clean" copy which never gets 'nmedit -p'
-	    if [ "" != "$LIBSTDCPP_DYLIB" ]; then
-		$nc cp -p $sym/lib/$target/libstdc++.a $sym/lib/$target/libstdc++.clean.a
+	    if [ "$LIBSTDCPP_DYLIB" != "" ]; then
+		$nc install_newer "" $OBJROOT/$target/libstdc++-v3/src/.libs/libstdc++.a          $sym/lib/$target/libstdc++.clean.a
 	    fi
 
 	    $nc install_newer  "-m 444" $OBJROOT/$target/libstdc++-v3/libsupc++/.libs/libsupc++.a $sym/lib/$target/libsupc++.a
@@ -1164,7 +1169,7 @@ build_libstdcpp()
     done
 }
 
-#-----------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------#
 #
 ## Combine the thin compilers, libraries, and tools into fat versions and install
 ## then into the DSTROOT.  Also install the c++ headers.
@@ -1196,7 +1201,7 @@ build_libstdcpp()
 ##                            /libgcc_static.a
 ##                            /libgcc.a
 ##                            /crtbegin.o
-##			      /libstdc++.A.dylib  (not actually used, but here for future reference)
+##			      /libstdc++.${APPLE_CC}.dylib
 ##                    /default --> VERSION
 ## 
 ## /usr/lib/libstdc++.a     --> gcc/darwin/default/libstdc++.a
@@ -1243,11 +1248,13 @@ install_fat()
     fat=$DSTROOT
     sym=$SYMROOT
     lib=$PREFIX/lib/gcc/darwin/$gcc_version
+    privatelib=$lib/private/$LIBSTDCPP_DYLIB_VERSION
     libexec=$PREFIX/libexec/gcc/darwin
     
     $n mkdir -p $fat
     $n mkdir -p $fat/$PREFIX/bin
     $n mkdir -p $fat/$lib
+    $n mkdir -p $privatelib
     $n mkdir -p $fat/$libexec
     
     for target in $TARGETS; do
@@ -1326,14 +1333,17 @@ install_fat()
 		if [ "$file" = "$LIBSTDCPP_DYLIB" ]; then
 		    # Keep a "clean" (non-nmedited) copy of libstdc++.a.
 		    thin_files="$thin_files $sym/$host/lib/$target/libstdc++.clean.a"
+		    fat_file="$fat/$privatelib/$file"
 		else
 		    thin_files="$thin_files $sym/$host/lib/$target/$file"
 		    # Change all global public data into private externs.
 		    $n nmedit -p $sym/$host/lib/$target/$file
+		    # touch the 'clean' copy to make it *newer* than the nmedit-ed version
+		    $n touch $sym/$host/lib/$target/libstdc++.clean.a
+		    fat_file="$fat/$lib/$file"
 		fi
 	    done
 	    
-	    fat_file="$fat/$lib/$file"
 	    $n rm -f "$fat_file"
 	    
 	    box_title -+ "Creating fat library" \
@@ -1352,7 +1362,7 @@ install_fat()
 		    libtool_cmd="libtool -o $fat_file -arch_only ppc $sym/$host/lib/ppc/libstdc++.clean.a"
 		fi
 
-		libtool_cmd="$libtool_cmd -dynamic -L$fat/$lib -lSystem -lgcc -install_name /usr/lib/$LIBSTDCPP_DYLIB -v -current_version 1 -compatibility_version 1"
+		libtool_cmd="mkdir -p $fat/$privatelib && $libtool_cmd -dynamic -L$fat/$lib -lSystem -lgcc -install_name $privatelib/$LIBSTDCPP_DYLIB -v -current_version 1 -compatibility_version 1"
 	    fi
 
 	    # libtool makes libraries fat...
@@ -1363,13 +1373,6 @@ install_fat()
 				 "chmod 444 $fat_file"
 
 	    if [ "$DO_SYMLINKS" = "yes" ]; then
-		if [ "$file" = "$LIBSTDCPP_DYLIB" ] ; then
-		    # Make libstdc++.dylib point at libstdc++.A.dylib.
-		    # When linking -dynamic, libstdc++.dylib will be
-		    # used by ld instead of libstdc++.a
-		    # $n ln -s $LIBSTDCPP_DYLIB libstdc++.dylib
-		    echo "(Not Linking $LIBSTDCPP_DYLIB to libstdc++.dylib.)"
-		fi
 		if [ "$file" = "libcc_noc++.a" ]; then
 		    $n ln -s ../../lib/gcc/darwin/default/libcc_noc++.a \
 			     $fat/$PREFIX/local/lib/libcc_noc++.a
@@ -1379,6 +1382,11 @@ install_fat()
 		if [ "$file" = "libgcc.a" ]; then
 		    $n ln -s gcc/darwin/default/libgcc.a $fat/$PREFIX/lib/libcc_dynamic.a
 		fi
+	    fi
+	    if [ "$file" = "$LIBSTDCPP_DYLIB" ] ; then
+		# Make libstdc++.dylib point at libstdc++.${APPLE_CC}.dylib.
+		# Note this file "belongs" to the OS; it should NOT routinely change when a new compiler is installed.
+		$n ln -s $LIBSTDCPP_DYLIB_VERSION/$LIBSTDCPP_DYLIB $fat/$privatelib/../libstdc++.dylib
 	    fi
 	done
 	
@@ -1457,7 +1465,7 @@ install_fat()
     done
 }
   
-#-----------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------#
 #
 ## Install the c++ headers...
 ##
@@ -1510,7 +1518,7 @@ install_cpp_headers()
     $n rm -rf $CPP_INCLUDE_DIR/lib
 }
 
-#-----------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------#
 #
 ## clean_gcc - clean the object directories
 #
@@ -1542,8 +1550,8 @@ clean_gcc()
     fi
 }
 
-#####################################################################################
-#####################################################################################
+#############################################################################
+#############################################################################
 #
 ## box_title [-c] line1 line2 ...
 ##
@@ -1619,7 +1627,7 @@ test2()
     box_title -+ "in test2"
 }
 
-#-----------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------#
 #
 ## trace_script_call cmd args...
 ##
@@ -1667,7 +1675,7 @@ trace_script_call()
     : $((nc_depth--))
 }
 
-#-----------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------#
 #
 ## save_exec cmd args ... - execute cmd args ... and return only if cmd succeeds.
 #
@@ -1683,7 +1691,7 @@ safe_exec()
     fi
 }
 
-#-----------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------#
 #
 ## check_status status msg - check the status of the most recent command.
 ##
@@ -1698,7 +1706,7 @@ check_status()
     fi
 } 
 
-#-----------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------#
 #
 ## exec_cmds_using_make target prerequisite cmd ...
 ##
@@ -1757,7 +1765,7 @@ exec_cmds_using_make()
     fi
 }
 
-#-----------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------#
 #
 ## install-newer mode what where-dir - install 'what' ind directory 'where' giving
 ##				       it the speified mode
@@ -1778,7 +1786,7 @@ install_newer()
     fi
 }
 
-#####################################################################################
-#####################################################################################
+#############################################################################
+#############################################################################
 
 build_gcc_main "$@"

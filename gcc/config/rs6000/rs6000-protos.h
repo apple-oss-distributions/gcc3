@@ -24,14 +24,15 @@ Boston, MA 02111-1307, USA.  */
 #ifdef RTX_CODE
 
 #ifdef TREE_CODE
-/* APPLE LOCAL: AltiVec */
+/* APPLE LOCAL begin AltiVec */
 extern struct rtx_def *expand_target_intrinsic PARAMS ((tree, rtx,
 							enum machine_mode,
 							tree));
+extern int no_reg_parm_stack_space PARAMS((CUMULATIVE_ARGS *, rtx));
+extern int function_ok_for_sibcall PARAMS ((tree));
+/* APPLE LOCAL end AltiVec */
 extern void init_cumulative_args PARAMS ((CUMULATIVE_ARGS *, tree, rtx, int));
 extern void rs6000_va_start PARAMS ((int, tree, rtx));
-/* APPLE LOCAL: Altivec */
-extern int function_ok_for_sibcall PARAMS ((tree));
 #endif /* TREE_CODE */
 
 extern struct rtx_def *rs6000_got_register PARAMS ((rtx));
@@ -50,6 +51,7 @@ extern int cc_reg_not_cr0_operand PARAMS ((rtx, enum machine_mode));
 extern int reg_or_zero_operand PARAMS ((rtx, enum machine_mode));
 extern int reg_or_short_operand PARAMS ((rtx, enum machine_mode));
 extern int reg_or_neg_short_operand PARAMS ((rtx, enum machine_mode));
+extern int reg_or_aligned_short_operand PARAMS ((rtx, enum machine_mode));
 extern int reg_or_u_short_operand PARAMS ((rtx, enum machine_mode));
 extern int reg_or_cint_operand PARAMS ((rtx, enum machine_mode));
 extern int reg_or_arith_cint_operand PARAMS ((rtx, enum machine_mode));
@@ -64,6 +66,7 @@ extern int easy_fp_constant PARAMS ((rtx, enum machine_mode));
 extern int easy_vector_constant PARAMS ((rtx));
 extern const char *choose_vec_easy PARAMS ((rtx, const char *, const char *));
 extern int zero_fp_constant PARAMS ((rtx, enum machine_mode));
+extern int zero_constant PARAMS ((rtx, enum machine_mode));
 extern int volatile_mem_operand PARAMS ((rtx, enum machine_mode));
 extern int offsettable_mem_operand PARAMS ((rtx, enum machine_mode));
 extern int mem_or_easy_const_operand PARAMS ((rtx, enum machine_mode));

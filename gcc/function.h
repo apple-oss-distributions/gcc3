@@ -434,6 +434,14 @@ struct function
      we should try to cut corners where we can.  */
   unsigned int is_thunk : 1;
 
+  /* APPLE LOCAL */
+  /* This bit is used by the exception handling logic.  It is set if all
+     calls (if any) are sibling calls.  Such functions do not have to
+     have EH tables generated, as they cannot throw.  A call to such a
+     function, however, should treat is as throwing if any of its callees
+     can throw. */
+  unsigned int all_throwers_are_sibcalls : 1;
+
   /* Nonzero if instrumentation calls for function entry and exit should be
      generated.  */
   unsigned int instrument_entry_exit : 1;
@@ -479,6 +487,9 @@ struct function
 
   /* Nonzero if code to initialize arg_pointer_save_area has been emited.  */
   unsigned int arg_pointer_save_area_init : 1;
+
+  /* APPLE LOCAL sibcall 3007352 */
+  int unrounded_args_size;
 };
 
 /* The function currently being compiled.  */

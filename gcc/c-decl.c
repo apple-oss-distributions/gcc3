@@ -46,6 +46,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "debug.h"
 #include "timevar.h"
 #include "c-common.h"
+#include "c-pragma.h"
 
 /* APPLE LOCAL indexing dpatel */
 #include "genindex.h"
@@ -152,6 +153,11 @@ int current_function_returns_value;
    a return statement with no argument is seen.  */
 
 int current_function_returns_null;
+
+/* Set to 0 at beginning of a function definition, set to 1 if
+   a call to a noreturn function is seen.  */
+
+int current_function_returns_abnormally;
 
 /* Set to nonzero by `grokdeclarator' for a function
    whose return type is defaulted, if warnings for this are desired.  */
@@ -476,22 +482,23 @@ int warn_four_char_constants = WARN_FOUR_CHAR_CONSTANTS;
 #endif
 int dollars_in_ident = DOLLARS_IN_IDENTIFIERS;
 
-/* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
+/* APPLE LOCAL begin unavailable */
 /* States indicating how grokdeclarator() should handle declspecs marked
    with __attribute__((deprecated)) or __attribute__((unavailable)).
    An object declared as __attribute__((unavailable)) suppresses
    any reports of being declared with unavailable or deprecated
    items.  An object declared as __attribute__((deprecated))
    suppresses warnings of uses of other deprecated items.  */
+/* APPLE LOCAL end unavailable */
    
 enum deprecated_states {
   DEPRECATED_NORMAL,
-  DEPRECATED_SUPPRESS,
-  DEPRECATED_UNAVAILABLE_SUPPRESS
+  DEPRECATED_SUPPRESS
+  /* APPLE LOCAL unavailable */
+  , DEPRECATED_UNAVAILABLE_SUPPRESS
 };
 
 static enum deprecated_states deprecated_state = DEPRECATED_NORMAL;
-/* APPLE LOCAL end deprecated ilr */
 
 /* Decode the string P as a language-specific option for C.
    Return the number of strings consumed.  Should not complain
@@ -505,7 +512,7 @@ c_decode_option (argc, argv)
   int strings_processed;
   char *p = argv[0];
 
-  strings_processed = cpp_handle_option (parse_in, argc, argv);
+  strings_processed = cpp_handle_option (parse_in, argc, argv, 0);
 
   if (!strcmp (p, "-ftraditional") || !strcmp (p, "-traditional"))
     {
@@ -651,6 +658,12 @@ c_decode_option (argc, argv)
   else if (!strcmp (p, "-fno-altivec"))
     flag_altivec = 0;
   /* APPLE LOCAL end AltiVec */
+  /* APPLE LOCAL begin constant cfstrings */
+  else if (!strcmp (p, "-fconstant-cfstrings"))
+    flag_constant_cfstrings = 1;
+  else if (!strcmp (p, "-fno-constant-cfstrings"))
+    flag_constant_cfstrings = 0;
+  /* APPLE LOCAL end constant cfstrings */
   else if (!strcmp (p, "-fbuiltin"))
     flag_no_builtin = 0;
   else if (!strcmp (p, "-fno-builtin"))
@@ -679,6 +692,12 @@ c_decode_option (argc, argv)
     }
   else if (!strcmp (p, "-Wno-implicit"))
     warn_implicit_int = 0, mesg_implicit_function_declaration = 0;
+  /* APPLE LOCAL begin long double */
+  else if (!strcmp (p, "-Wlong-double"))
+    warn_long_double = 1; 
+  else if (!strcmp (p, "-Wno-long-double"))
+    warn_long_double = 0;
+  /* APPLE LOCAL end long double */
   else if (!strcmp (p, "-Wlong-long"))
     warn_long_long = 1;
   else if (!strcmp (p, "-Wno-long-long"))
@@ -1611,6 +1630,22 @@ duplicate_decls (newdecl, olddecl, different_binding_level)
 	  if (! different_binding_level)
 	    TREE_TYPE (olddecl) = oldtype;
 	}
+      else if (TYPE_ARG_TYPES (oldtype) == NULL
+	       && TYPE_ARG_TYPES (newtype) != NULL)
+	{
+	  /* For bcmp, bzero, fputs the builtin type has arguments not
+	     specified.  Use the ones from the prototype so that type checking
+	     is done for them.  */
+	  tree trytype
+	    = build_function_type (TREE_TYPE (oldtype),
+				   TYPE_ARG_TYPES (newtype));
+	  trytype = build_type_attribute_variant (trytype,
+						  TYPE_ATTRIBUTES (oldtype));
+
+	  oldtype = trytype;
+	  if (! different_binding_level)
+	    TREE_TYPE (olddecl) = oldtype;
+	}
       if (!types_match)
 	{
 	  /* If types don't match for a built-in, throw away the built-in.  */
@@ -1737,6 +1772,7 @@ duplicate_decls (newdecl, olddecl, different_binding_level)
 			     && current_binding_level == global_binding_level)
 			    ? "`%s' previously defined here"
 			    : "`%s' previously declared here"));
+	  return 0;
 	}
       else if (TREE_CODE (newdecl) == TYPE_DECL
                && (DECL_IN_SYSTEM_HEADER (olddecl)
@@ -1992,8 +2028,9 @@ duplicate_decls (newdecl, olddecl, different_binding_level)
       /* APPLE LOCAL begin weak_import (Radar 2809704) ilr */
       if (DECL_WEAK_IMPORT (olddecl) != DECL_WEAK_IMPORT (newdecl))
 	{
-	  warning_with_decl (newdecl,
-	    "inconsistent weak_import attribute with previous declaration of `%s'");
+	  if (! DECL_EXTERNAL (olddecl) && ! DECL_EXTERNAL (newdecl))
+	    warning_with_decl (newdecl,
+	      "inconsistent weak_import attribute with previous declaration of `%s'");
 	  DECL_WEAK_IMPORT (newdecl) = 1;
 	}
       /* APPLE LOCAL end weak_import ilr */
@@ -2223,9 +2260,10 @@ pushdecl (x)
   struct binding_level *b = current_binding_level;
 
   /* Functions need the lang_decl data.  */
+  /* APPLE LOCAL PFE - expand to pfe_ggc_alloc_cleared or ggc_alloc_cleared  */
   if (TREE_CODE (x) == FUNCTION_DECL && ! DECL_LANG_SPECIFIC (x))
     DECL_LANG_SPECIFIC (x) = (struct lang_decl *)
-      ggc_alloc_cleared (sizeof (struct lang_decl));
+      GGC_ALLOC_CLEARED (sizeof (struct lang_decl), PFE_ALLOC_GGC_LANG_DECL);
 
   DECL_CONTEXT (x) = current_function_decl;
   /* A local extern declaration for a function doesn't constitute nesting.
@@ -2254,11 +2292,13 @@ pushdecl (x)
 	 not errors.  X11 for instance depends on this.  */
       if (! t && DECL_EXTERNAL (x) && TREE_PUBLIC (x) && ! flag_traditional)
 	{
-	  t = lookup_name (name);
+	  t = IDENTIFIER_GLOBAL_VALUE (name);
 	  /* Type decls at global scope don't conflict with externs declared
 	     inside lexical blocks.  */
-	  if (t && TREE_CODE (t) == TYPE_DECL)
-	    t = 0;
+	  if (! t || TREE_CODE (t) == TYPE_DECL)
+	    /* If there's no visible global declaration, try for an
+               invisible one.  */
+	    t = IDENTIFIER_LIMBO_VALUE (name);
 	  different_binding_level = 1;
 	}
       if (t != 0 && t == error_mark_node)
@@ -3145,7 +3185,13 @@ c_init_decl_processing ()
   boolean_false_node = integer_zero_node;
 
   /* With GCC, C99's _Bool is always of size 1.  */
-  c_bool_type_node = make_unsigned_type (CHAR_TYPE_SIZE);
+/* APPLE LOCAL begin size of bool  */
+#ifndef BOOL_TYPE_SIZE
+#define BOOL_TYPE_SIZE CHAR_TYPE_SIZE
+#endif
+/* `bool' has size and alignment `4', on Darwin.  */
+  c_bool_type_node = make_unsigned_type (BOOL_TYPE_SIZE);
+/* APPLE LOCAL end size of bool  */
   TREE_SET_CODE (c_bool_type_node, BOOLEAN_TYPE);
   TYPE_MAX_VALUE (c_bool_type_node) = build_int_2 (1, 0);
   TREE_TYPE (TYPE_MAX_VALUE (c_bool_type_node)) = c_bool_type_node;
@@ -3322,6 +3368,10 @@ builtin_function (name, type, function_code, class, library_name)
   pushdecl (decl);
   DECL_BUILT_IN_CLASS (decl) = class;
   DECL_FUNCTION_CODE (decl) = function_code;
+
+  /* The return builtins leave the current function.  */
+  if (function_code == BUILT_IN_RETURN || function_code == BUILT_IN_EH_RETURN)
+    TREE_THIS_VOLATILE (decl) = 1;
 
   /* Warn if a function in the namespace for users
      is used without an occasion to consider it declared.  */
@@ -3552,12 +3602,10 @@ start_decl (declarator, declspecs, initialized, attributes)
      int initialized;
      tree attributes;
 {
-  /* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
   tree decl;
-  /* APPLE LOCAL end deprecated ilr */
   tree tem;
-  
-  /* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
+
+  /* APPLE LOCAL begin unavailable */
   /* An object declared as __attribute__((unavailable)) suppresses
      any reports of being declared with unavailable or deprecated
      items.  An object declared as __attribute__((deprecated))
@@ -3586,13 +3634,13 @@ start_decl (declarator, declspecs, initialized, attributes)
 	  }
     }
 #endif
+  /* APPLE LOCAL end unavailable */
 
   decl = grokdeclarator (declarator, declspecs,
 			 NORMAL, initialized);
   
   deprecated_state = DEPRECATED_NORMAL;
-  /* APPLE LOCAL end deprecated ilr */
-  	
+
   /* APPLE LOCAL begin indexing dpatel */
   if (flag_gen_index)
     {
@@ -3612,12 +3660,12 @@ start_decl (declarator, declspecs, initialized, attributes)
               t = INDEX_TYPE_DECL;
               break;
             case PARM_DECL:
-            /* Not ready to use this.  */
+	      /* Not ready to use this.  */
             default:
               t = INDEX_ERROR;
               break;
          }
-       if (TREE_CODE (decl) != PARM_DECL)
+	 if (TREE_CODE (decl) != PARM_DECL)
          gen_indexing_info  (t, IDENTIFIER_POINTER (DECL_NAME (decl)),
                              DECL_SOURCE_LINE (decl));
     }
@@ -3728,6 +3776,10 @@ start_decl (declarator, declspecs, initialized, attributes)
   /* Set attributes here so if duplicate decl, will have proper attributes.  */
   decl_attributes (&decl, attributes, 0);
 
+  /* If #pragma weak was used, mark the decl weak now.  */
+  if (current_binding_level == global_binding_level)
+    maybe_apply_pragma_weak (decl);
+
   if (TREE_CODE (decl) == FUNCTION_DECL
       && DECL_DECLARED_INLINE_P (decl)
       && DECL_UNINLINABLE (decl)
@@ -3773,6 +3825,8 @@ finish_decl (decl, init, asmspec_tree)
   const char *asmspec = 0;
 
   /* If a name was specified, get the string.  */
+  if (current_binding_level == global_binding_level)
+    asmspec_tree = maybe_apply_renaming_pragma (decl, asmspec_tree);
   if (asmspec_tree)
     asmspec = TREE_STRING_POINTER (asmspec_tree);
 
@@ -4296,7 +4350,7 @@ grokdeclarator (declarator, declspecs, decl_context, initialized)
     {
       tree id = TREE_VALUE (spec);
 
-      /* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
+      /* APPLE LOCAL begin unavailable */
       /* If the entire declaration is itself tagged as unavailable then
          suppress reports of unavailable/deprecated items.  If the
          entire declaration is tagged as only deprecated we still
@@ -4327,7 +4381,7 @@ grokdeclarator (declarator, declspecs, decl_context, initialized)
  	      #endif
            }
         }
-      /* APPLE LOCAL end deprecated ilr */
+      /* APPLE LOCAL end unavailable */
 
       /* APPLE LOCAL begin AltiVec */
       /* grokdeclarator processes declspecs in reverse order; hence, vector
@@ -4386,9 +4440,14 @@ grokdeclarator (declarator, declspecs, decl_context, initialized)
       /* Actual typedefs come to us as TYPE_DECL nodes.  */
       else if (TREE_CODE (id) == TYPE_DECL)
 	{
-	  type = TREE_TYPE (id);
-	  decl_attr = DECL_ATTRIBUTES (id);
-	  typedef_decl = id;
+	  if (TREE_TYPE (id) == error_mark_node)
+	    ; /* Allow the type to default to int to avoid cascading errors.  */
+	  else
+	    {
+	      type = TREE_TYPE (id);
+	      decl_attr = DECL_ATTRIBUTES (id);
+	      typedef_decl = id;
+	    }
 	}
       /* Built-in types come as identifiers.  */
       else if (TREE_CODE (id) == IDENTIFIER_NODE)
@@ -4457,6 +4516,8 @@ grokdeclarator (declarator, declspecs, decl_context, initialized)
     {
       specbits &= ~(1 << (int) RID_LONG);
       type = long_double_type_node;
+      /* APPLE LOCAL long double dpatel */
+      warn_about_long_double ();
     }
 
   /* Check all other uses of type modifiers.  */
@@ -4818,9 +4879,9 @@ grokdeclarator (declarator, declspecs, decl_context, initialized)
 	  if (inner_decl == NULL_TREE
 	      || TREE_CODE (inner_decl) == IDENTIFIER_NODE)
 	    attr_flags |= (int) ATTR_FLAG_DECL_NEXT;
-	  if (TREE_CODE (inner_decl) == CALL_EXPR)
+	  else if (TREE_CODE (inner_decl) == CALL_EXPR)
 	    attr_flags |= (int) ATTR_FLAG_FUNCTION_NEXT;
-	  if (TREE_CODE (inner_decl) == ARRAY_REF)
+	  else if (TREE_CODE (inner_decl) == ARRAY_REF)
 	    attr_flags |= (int) ATTR_FLAG_ARRAY_NEXT;
 	  returned_attrs = decl_attributes (&type,
 					    chainon (returned_attrs, attrs),
@@ -5377,8 +5438,9 @@ grokdeclarator (declarator, declspecs, decl_context, initialized)
 	decl = build_decl (FUNCTION_DECL, declarator, type);
 	decl = build_decl_attribute_variant (decl, decl_attr);
 
+	/* APPLE LOCAL PFE - expand to pfe_ggc_alloc_cleared or ggc_alloc_cleared  */
 	DECL_LANG_SPECIFIC (decl) = (struct lang_decl *)
-	  ggc_alloc_cleared (sizeof (struct lang_decl));
+	  GGC_ALLOC_CLEARED (sizeof (struct lang_decl), PFE_ALLOC_GGC_LANG_DECL);
 
 	if (pedantic && type_quals && ! DECL_IN_SYSTEM_HEADER (decl))
 	  pedwarn ("ISO C forbids qualified function types");
@@ -5395,9 +5457,13 @@ grokdeclarator (declarator, declspecs, decl_context, initialized)
 	TREE_PUBLIC (decl)
 	  = !(specbits & ((1 << (int) RID_STATIC) | (1 << (int) RID_AUTO)));
 
-	/* APPLE LOCAL private extern */
+	if (defaulted_int)
+	  C_FUNCTION_IMPLICIT_INT (decl) = 1;
+
+	/* APPLE LOCAL begin private extern */
         DECL_PRIVATE_EXTERN (decl)
           = ((specbits & (1 << (int) RID_PRIVATE_EXTERN)) != 0);
+	/* APPLE LOCAL end private extern */
 
 	/* Record presence of `inline', if it is reasonable.  */
 	if (MAIN_NAME_P (declarator))
@@ -6020,11 +6086,10 @@ finish_struct (t, fieldlist, attributes)
 	 field widths.  */
       if (DECL_INITIAL (x))
 	{
-	  int max_width;
-	  if (TYPE_MAIN_VARIANT (TREE_TYPE (x)) == c_bool_type_node)
-	    max_width = CHAR_TYPE_SIZE;
-	  else
-	    max_width = TYPE_PRECISION (TREE_TYPE (x));
+	  int max_width
+	    = (TYPE_MAIN_VARIANT (TREE_TYPE (x)) == c_bool_type_node
+	       ? CHAR_TYPE_SIZE : TYPE_PRECISION (TREE_TYPE (x)));
+
 	  if (tree_int_cst_sgn (DECL_INITIAL (x)) < 0)
 	    error_with_decl (x, "negative width in bit-field `%s'");
 	  else if (0 < compare_tree_int (DECL_INITIAL (x), max_width))
@@ -6035,7 +6100,7 @@ finish_struct (t, fieldlist, attributes)
 	    {
 	      /* The test above has assured us that TREE_INT_CST_HIGH is 0.  */
 	      unsigned HOST_WIDE_INT width
-		= TREE_INT_CST_LOW (DECL_INITIAL (x));
+		= tree_low_cst (DECL_INITIAL (x), 1);
 
 	      if (TREE_CODE (TREE_TYPE (x)) == ENUMERAL_TYPE
 		  && (width < min_precision (TYPE_MIN_VALUE (TREE_TYPE (x)),
@@ -6050,7 +6115,8 @@ finish_struct (t, fieldlist, attributes)
 	      DECL_BIT_FIELD (x) = 1;
 	      SET_DECL_C_BIT_FIELD (x);
 
-	      if (width == 0)
+	      if (width == 0
+		  && ! (* targetm.ms_bitfield_layout_p) (t))
 		{
 		  /* field size 0 => force desired amount of alignment.  */
 #ifdef EMPTY_FIELD_BOUNDARY
@@ -6521,6 +6587,7 @@ start_function (declspecs, declarator, attributes)
 
   current_function_returns_value = 0;  /* Assume, until we see it does.  */
   current_function_returns_null = 0;
+  current_function_returns_abnormally = 0;
   warn_about_return_type = 0;
   current_extern_inline = 0;
   c_function_varargs = 0;
@@ -6543,6 +6610,10 @@ start_function (declspecs, declarator, attributes)
   /* APPLE LOCAL begin weak_import (Radar 2809704) ilr */
   decl_attributes (&decl1, attributes, (int)ATTR_FLAG_FUNCTION_DEF);
   /* APPLE LOCAL end weak_import ilr */
+
+  /* If #pragma weak was used, mark the decl weak now.  */
+  if (current_binding_level == global_binding_level)
+    maybe_apply_pragma_weak (decl1);
 
   if (DECL_DECLARED_INLINE_P (decl1)
       && DECL_UNINLINABLE (decl1)
@@ -7191,10 +7262,6 @@ store_parm_decls ()
   init_function_start (fndecl, input_filename, lineno);
 
   /* Begin the statement tree for this function.  */
-  /* APPLE LOCAL PFE - expand to pfe_ggc_alloc_cleared or ggc_alloc_cleared  */
-  DECL_LANG_SPECIFIC (current_function_decl)
-    = ((struct lang_decl *) 
-      GGC_ALLOC_CLEARED (sizeof (struct lang_decl), PFE_ALLOC_GGC_LANG_DECL));
   begin_stmt_tree (&DECL_SAVED_TREE (current_function_decl));
 
   /* If this is a nested function, save away the sizes of any
@@ -7231,17 +7298,21 @@ store_parm_decls ()
 
    This is called after parsing the body of the function definition.
 
-   NESTED is nonzero if the function being finished is nested in another.  */
+   NESTED is nonzero if the function being finished is nested in another.
+   CAN_DEFER_P is nonzero if the function may be deferred.  */
 
 void
-finish_function (nested)
+finish_function (nested, can_defer_p)
      int nested;
+     int can_defer_p;
 {
   tree fndecl = current_function_decl;
 
-/*  TREE_READONLY (fndecl) = 1;
-    This caused &foo to be of type ptr-to-const-function
-    which then got a warning when stored in a ptr-to-function variable.  */
+#if 0
+  /* This caused &foo to be of type ptr-to-const-function which then
+     got a warning when stored in a ptr-to-function variable.  */
+  TREE_READONLY (fndecl) = 1;
+#endif
 
   poplevel (1, 0, 1);
   BLOCK_SUPERCONTEXT (DECL_INITIAL (fndecl)) = fndecl;
@@ -7292,6 +7363,22 @@ finish_function (nested)
 
   /* Tie off the statement tree for this function.  */
   finish_stmt_tree (&DECL_SAVED_TREE (fndecl));
+
+  /* Complain if there's just no return statement.  */
+  if (warn_return_type
+      && TREE_CODE (TREE_TYPE (TREE_TYPE (fndecl))) != VOID_TYPE
+      && !current_function_returns_value && !current_function_returns_null
+      /* Don't complain if we abort.  */
+      && !current_function_returns_abnormally
+      /* Don't warn for main().  */
+      && !MAIN_NAME_P (DECL_NAME (fndecl))
+      /* Or if they didn't actually specify a return type.  */
+      && !C_FUNCTION_IMPLICIT_INT (fndecl)
+      /* Normally, with -Wreturn-type, flow will complain.  Unless we're an
+	 inline function, as we might never be compiled separately.  */
+      && DECL_INLINE (fndecl))
+    warning ("no return statement in function returning non-void");
+
   /* Clear out memory we no longer need.  */
   free_after_parsing (cfun);
   /* Since we never call rest_of_compilation, we never clear
@@ -7302,7 +7389,8 @@ finish_function (nested)
   if (! nested)
     {
       /* Generate RTL for the body of this function.  */
-      c_expand_body (fndecl, nested, 1);
+      c_expand_body (fndecl, nested, can_defer_p);
+
       /* Let the error reporting routines know that we're outside a
 	 function.  For a nested function, this value is used in
 	 pop_c_function_context and then reset via pop_function_context.  */
@@ -7380,6 +7468,7 @@ c_expand_body (fndecl, nested_p, can_defer_p)
 
   /* Initialize the RTL code for the function.  */
   current_function_decl = fndecl;
+  input_filename = DECL_SOURCE_FILE (fndecl);
   init_function_start (fndecl, input_filename, DECL_SOURCE_LINE (fndecl));
 
   /* This function is being processed in whole-function mode.  */
@@ -7581,6 +7670,7 @@ struct c_language_function
   tree shadowed_labels;
   int returns_value;
   int returns_null;
+  int returns_abnormally;
   int warn_about_return_type;
   int extern_inline;
   struct binding_level *binding_level;
@@ -7604,6 +7694,7 @@ push_c_function_context (f)
   p->shadowed_labels = shadowed_labels;
   p->returns_value = current_function_returns_value;
   p->returns_null = current_function_returns_null;
+  p->returns_abnormally = current_function_returns_abnormally;
   p->warn_about_return_type = warn_about_return_type;
   p->extern_inline = current_extern_inline;
   p->binding_level = current_binding_level;
@@ -7641,6 +7732,7 @@ pop_c_function_context (f)
   shadowed_labels = p->shadowed_labels;
   current_function_returns_value = p->returns_value;
   current_function_returns_null = p->returns_null;
+  current_function_returns_abnormally = p->returns_abnormally;
   warn_about_return_type = p->warn_about_return_type;
   current_extern_inline = p->extern_inline;
   current_binding_level = p->binding_level;
@@ -7850,7 +7942,7 @@ pfe_c_init_decl_processing ()
 
   /* Adds some ggc roots, and reserved words for c-parse.in.  */
   c_parse_init ();
-
+  
   /* Here global_binding_level is already initialized from pfe_compiler_state_ptr.  */
   global_binding_level->level_chain = current_binding_level;
   current_binding_level = global_binding_level;
@@ -7859,6 +7951,10 @@ pfe_c_init_decl_processing ()
   global_binding_level->keep_if_subblocks = keep_next_if_subblocks;
   keep_next_if_subblocks = 0;
       
+  /* We must initialize this before any builtin functions (which might have
+     attributes) are declared.  (c_common_init is too late.)  */
+  pfe_c_common_nodes_and_builtins ();
+
   lang_type_promotes_to = simple_type_promotes_to;
 
   pedantic_lvalues = pedantic;

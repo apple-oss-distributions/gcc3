@@ -267,7 +267,7 @@ cp_convert_to_pointer (type, expr, force)
     }
 
   if (type_unknown_p (expr))
-    return instantiate_type (type, expr, itf_complain);
+    return instantiate_type (type, expr, tf_error | tf_warning);
 
   error ("cannot convert `%E' from type `%T' to type `%T'",
 	    expr, intype, type);
@@ -304,6 +304,14 @@ convert_to_pointer_force (type, expr)
 	{
 	  enum tree_code code = PLUS_EXPR;
 	  tree binfo;
+
+	  /* APPLE LOCAL begin Objective-C++ */
+	  /* Casts to a (pointer to a) specific ObjC class should always be 
+	     retained, because this information aids in method lookup.  */
+	  if (compiling_objc 
+	      && is_class_name (TYPE_IDENTIFIER (TREE_TYPE (type))))
+	    return build1 (NOP_EXPR, type, expr);
+	  /* APPLE LOCAL end Objective-C++ */
 
 	  binfo = lookup_base (TREE_TYPE (intype), TREE_TYPE (type),
 			       ba_ignore, NULL);
@@ -478,7 +486,7 @@ convert_to_reference (reftype, expr, convtype, flags, decl)
     {
       expr = instantiate_type (type, expr, 
 			       (flags & LOOKUP_COMPLAIN)
-	                       ? itf_complain : itf_none);
+	                       ? tf_error | tf_warning : tf_none);
       if (expr == error_mark_node)
 	return error_mark_node;
 
@@ -852,6 +860,7 @@ convert_to_void (expr, implicit)
 	    tree t = build (COMPOUND_EXPR, TREE_TYPE (new_op1),
 			    TREE_OPERAND (expr, 0), new_op1);
 	    TREE_SIDE_EFFECTS (t) = TREE_SIDE_EFFECTS (expr);
+	    TREE_NO_UNUSED_WARNING (t) = TREE_NO_UNUSED_WARNING (expr);
 	    expr = t;
 	  }
 

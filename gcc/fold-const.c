@@ -1,6 +1,6 @@
 /* Fold a constant sub-tree into a single node for C-compiler
    Copyright (C) 1987, 1988, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001 Free Software Foundation, Inc.
+   1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -109,10 +109,6 @@ static int count_cond		PARAMS ((tree, int));
 static tree fold_binary_op_with_conditional_arg 
   PARAMS ((enum tree_code, tree, tree, tree, int));
 							 
-#ifndef BRANCH_COST
-#define BRANCH_COST 1
-#endif
-
 #if defined(HOST_EBCDIC)
 /* bit 8 is significant in EBCDIC */
 #define CHARMASK 0xff
@@ -2427,20 +2423,32 @@ operand_equal_p (arg0, arg1, only_const)
 		&& REAL_VALUES_IDENTICAL (TREE_REAL_CST (arg0),
 					  TREE_REAL_CST (arg1)));
 
+      case VECTOR_CST:
+	{
+	  tree v1, v2;
+
+	  if (TREE_CONSTANT_OVERFLOW (arg0)
+	      || TREE_CONSTANT_OVERFLOW (arg1))
+	    return 0;
+
+	  v1 = TREE_VECTOR_CST_ELTS (arg0);
+	  v2 = TREE_VECTOR_CST_ELTS (arg1);
+	  while (v1 && v2)
+	    {
+	      if (!operand_equal_p (v1, v2, only_const))
+		return 0;
+	      v1 = TREE_CHAIN (v1);
+	      v2 = TREE_CHAIN (v2);
+	    }
+
+	  return 1;
+	}
+
       case COMPLEX_CST:
 	return (operand_equal_p (TREE_REALPART (arg0), TREE_REALPART (arg1),
 				 only_const)
 		&& operand_equal_p (TREE_IMAGPART (arg0), TREE_IMAGPART (arg1),
 				    only_const));
-
-/* APPLE LOCAL: AltiVec - might not be written in target-independent manner */
-      case VECTOR_CST:
-	return (! TREE_CONSTANT_OVERFLOW (arg0)
-		&& ! TREE_CONSTANT_OVERFLOW (arg1)
-		&& operand_equal_p (TREE_VECTOR_CST_LOW (arg0),
-				    TREE_VECTOR_CST_LOW (arg1), only_const)
-		&& operand_equal_p (TREE_VECTOR_CST_HIGH (arg0),
-				    TREE_VECTOR_CST_HIGH (arg1), only_const));
 
       case STRING_CST:
 	return (TREE_STRING_LENGTH (arg0) == TREE_STRING_LENGTH (arg1)
@@ -5193,10 +5201,9 @@ fold (expr)
     {
     case INTEGER_CST:
     case REAL_CST:
+    case VECTOR_CST:
     case STRING_CST:
     case COMPLEX_CST:
-/* APPLE LOCAL: AltiVec */
-    case VECTOR_CST:
     case CONSTRUCTOR:
       return t;
 
@@ -6714,7 +6721,7 @@ fold (expr)
 		}
 
 	    else if (TREE_INT_CST_HIGH (arg1) == -1
-		     && (- TREE_INT_CST_LOW (arg1)
+		     && (TREE_INT_CST_LOW (arg1)
 			 == ((unsigned HOST_WIDE_INT) 1 << (width - 1)))
 		     && ! TREE_UNSIGNED (TREE_TYPE (arg1)))
 	      switch (TREE_CODE (t))
@@ -6740,12 +6747,11 @@ fold (expr)
 		}
 
 	    else if (TREE_INT_CST_HIGH (arg1) == 0
-		      && (TREE_INT_CST_LOW (arg1)
-			  == ((unsigned HOST_WIDE_INT) 1 << (width - 1)) - 1)
-		      && TREE_UNSIGNED (TREE_TYPE (arg1))
-			 /* signed_type does not work on pointer types.  */
-		      && INTEGRAL_TYPE_P (TREE_TYPE (arg1)))
-
+		     && (TREE_INT_CST_LOW (arg1)
+			 == ((unsigned HOST_WIDE_INT) 1 << (width - 1)) - 1)
+		     && TREE_UNSIGNED (TREE_TYPE (arg1))
+		     /* signed_type does not work on pointer types.  */
+		     && INTEGRAL_TYPE_P (TREE_TYPE (arg1)))
 	      switch (TREE_CODE (t))
 		{
 		case LE_EXPR:
@@ -6764,6 +6770,32 @@ fold (expr)
 		default:
 		  break;
 		}
+
+            else if (TREE_INT_CST_HIGH (arg1) == 0
+		     && (TREE_INT_CST_LOW (arg1)
+			 == ((unsigned HOST_WIDE_INT) 2 << (width - 1)) - 1)
+		     && TREE_UNSIGNED (TREE_TYPE (arg1)))
+              switch (TREE_CODE (t))
+                {
+                case GT_EXPR:
+                  return omit_one_operand (type,
+                                           convert (type, integer_zero_node),
+                                           arg0);
+                case GE_EXPR:
+                  TREE_SET_CODE (t, EQ_EXPR);
+                  break;
+
+                case LE_EXPR:
+                  return omit_one_operand (type,
+                                           convert (type, integer_one_node),
+                                           arg0);
+                case LT_EXPR:
+                  TREE_SET_CODE (t, NE_EXPR);
+                  break;
+
+                default:
+                  break;
+                }
 	  }
       }
 
@@ -7076,7 +7108,7 @@ fold (expr)
 
 	  STRIP_NOPS (arg2);
 
-	  /* If we have A op 0 ? A : -A, this is A, -A, abs (A), or abs (-A),
+	  /* If we have A op 0 ? A : -A, this is A, -A, abs (A), or -abs (A),
 	     depending on the comparison operation.  */
 	  if ((FLOAT_TYPE_P (TREE_TYPE (TREE_OPERAND (arg0, 1)))
 	       ? real_zerop (TREE_OPERAND (arg0, 1))
@@ -7571,6 +7603,23 @@ rtl_expr_nonnegative_p (r)
       if (GET_MODE (r) == VOIDmode)
 	return CONST_DOUBLE_HIGH (r) >= 0;
       return 0;
+
+    case CONST_VECTOR:
+      {
+	int units, i;
+	rtx elt;
+
+	units = CONST_VECTOR_NUNITS (r);
+
+	for (i = 0; i < units; ++i)
+	  {
+	    elt = CONST_VECTOR_ELT (r, i);
+	    if (!rtl_expr_nonnegative_p (elt))
+	      return 0;
+	  }
+
+	return 1;
+      }
 
     case SYMBOL_REF:
     case LABEL_REF:

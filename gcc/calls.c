@@ -184,7 +184,8 @@ static int calls_function_1	PARAMS ((tree, int));
 
 static void emit_call_1		PARAMS ((rtx, tree, tree, HOST_WIDE_INT,
 					 HOST_WIDE_INT, HOST_WIDE_INT, rtx,
-					 rtx, int, rtx, int));
+					 rtx, int, rtx, int,
+					 CUMULATIVE_ARGS *));
 static void precompute_register_parameters	PARAMS ((int,
 							 struct arg_data *,
 							 int *));
@@ -447,7 +448,7 @@ prepare_call_address (funexp, fndecl, call_fusage, reg_parm_seen, sibcallp)
 static void
 emit_call_1 (funexp, fndecl, funtype, stack_size, rounded_stack_size,
 	     struct_value_size, next_arg_reg, valreg, old_inhibit_defer_pop,
-	     call_fusage, ecf_flags)
+	     call_fusage, ecf_flags, args_so_far)
      rtx funexp;
      tree fndecl ATTRIBUTE_UNUSED;
      tree funtype ATTRIBUTE_UNUSED;
@@ -459,6 +460,7 @@ emit_call_1 (funexp, fndecl, funtype, stack_size, rounded_stack_size,
      int old_inhibit_defer_pop;
      rtx call_fusage;
      int ecf_flags;
+     CUMULATIVE_ARGS *args_so_far ATTRIBUTE_UNUSED;
 {
   rtx rounded_stack_size_rtx = GEN_INT (rounded_stack_size);
   rtx call_insn;
@@ -469,11 +471,22 @@ emit_call_1 (funexp, fndecl, funtype, stack_size, rounded_stack_size,
   struct_value_size_rtx = GEN_INT (struct_value_size);
 #endif
 
+#ifdef CALL_POPS_ARGS
+  n_popped += CALL_POPS_ARGS (* args_so_far);
+#endif
+  
   /* Ensure address is valid.  SYMBOL_REF is already valid, so no need,
      and we don't want to load it into a register as an optimization,
      because prepare_call_address already did it if it should be done.  */
   if (GET_CODE (funexp) != SYMBOL_REF)
+/* APPLE LOCAL use R12 as register for indirect calls.  This improves
+   codegen (computation of value will be into R12) and makes
+   indirect sibcalls possible by ensuring a volatile reg is used. */
+#ifdef MAGIC_INDIRECT_CALL_REG
+    funexp = gen_rtx_REG (SImode, MAGIC_INDIRECT_CALL_REG);
+#else
     funexp = memory_address (FUNCTION_MODE, funexp);
+#endif
 
 #if defined (HAVE_sibcall_pop) && defined (HAVE_sibcall_value_pop)
   if ((ecf_flags & ECF_SIBCALL)
@@ -1519,13 +1532,8 @@ precompute_arguments (flags, num_actuals, args)
 	if (TREE_ADDRESSABLE (TREE_TYPE (args[i].tree_value)))
 	  abort ();
 
-	push_temp_slots ();
-
 	args[i].value
 	  = expand_expr (args[i].tree_value, NULL_RTX, VOIDmode, 0);
-
-	preserve_temp_slots (args[i].value);
-	pop_temp_slots ();
 
 	/* ANSI doesn't require a sequence point here,
 	   but PCC has one, so this will avoid some problems.  */
@@ -1836,7 +1844,7 @@ try_to_integrate (fndecl, actparms, target, ignore, type, structure_value_addr)
   timevar_pop (TV_INTEGRATION);
 
   /* If inlining succeeded, return.  */
-  if (temp != (rtx) (HOST_WIDE_INT) - 1)
+  if (temp != (rtx) (size_t) - 1)
     {
       if (ACCUMULATE_OUTGOING_ARGS)
 	{
@@ -1916,7 +1924,7 @@ try_to_integrate (fndecl, actparms, target, ignore, type, structure_value_addr)
       warning ("called from here");
     }
   mark_addressable (fndecl);
-  return (rtx) (HOST_WIDE_INT) - 1;
+  return (rtx) (size_t) - 1;
 }
 
 /* We need to pop PENDING_STACK_ADJUST bytes.  But, if the arguments
@@ -2094,6 +2102,9 @@ expand_call (exp, target, ignore)
   tree actparms = TREE_OPERAND (exp, 1);
   /* RTX for the function to be called.  */
   rtx funexp;
+  /* APPLE LOCAL use r12 for indirect calls */
+  /* A single rtx to be shared among multiple chains for indirect sibcalls */
+  rtx funexp_keep = NULL_RTX;
   /* Sequence of insns to perform a tail recursive "call".  */
   rtx tail_recursion_insns = NULL_RTX;
   /* Sequence of insns to perform a normal "call".  */
@@ -2302,7 +2313,7 @@ expand_call (exp, target, ignore)
       rtx temp = try_to_integrate (fndecl, actparms, target,
 				   ignore, TREE_TYPE (exp),
 				   structure_value_addr);
-      if (temp != (rtx) (HOST_WIDE_INT) - 1)
+      if (temp != (rtx) (size_t) - 1)
 	return temp;
     }
 
@@ -2488,6 +2499,10 @@ expand_call (exp, target, ignore)
 	 It does not seem worth the effort since few optimizable
 	 sibling calls will return a structure.  */
       || structure_value_addr != NULL_RTX
+#ifndef MAGIC_INDIRECT_CALL_REG
+/* APPLE LOCAL indirect sibcalls */
+/* The register holding the address is now always R12, so
+   we can consider indirect calls as sibcall candidates on ppc. */
       /* If the register holding the address is a callee saved
 	 register, then we lose.  We have no way to prevent that,
 	 so we only allow calls to named functions.  */
@@ -2496,9 +2511,11 @@ expand_call (exp, target, ignore)
 	 reload insns generated to fix things up would appear
 	 before the sibcall_epilogue.  */
       || fndecl == NULL_TREE
+#endif
       || (flags & (ECF_RETURNS_TWICE | ECF_LONGJMP))
-      || TREE_THIS_VOLATILE (fndecl)
-      || !FUNCTION_OK_FOR_SIBCALL (fndecl)
+      || ( fndecl && TREE_THIS_VOLATILE (fndecl))
+      || ( fndecl && !FUNCTION_OK_FOR_SIBCALL (fndecl))
+/* APPLE LOCAL end */
       /* If this function requires more stack slots than the current
 	 function, we cannot change it into a sibling call.  */
       || args_size.constant > current_function_args_size
@@ -2646,6 +2663,14 @@ expand_call (exp, target, ignore)
 
   function_call_count++;
 
+  /* APPLE LOCAL indirect sibcalls */
+  /* Do this before creating the chains, to avoid a branch within them.
+     The paired chains both branch to the same label, but only one
+     chain has a definition of that label, because of the way the
+     infrastructure works. */
+  if ( !fndecl )
+    funexp_keep = rtx_for_function_call (fndecl, exp);
+
   /* We want to make two insn chains; one for a sibling call, the other
      for a normal call.  We will select one of the two chains after
      initial RTL generation is complete.  */
@@ -2715,10 +2740,6 @@ expand_call (exp, target, ignore)
 	 so that the pop is deleted or moved with the call.  */
       if (pass && (flags & ECF_LIBCALL_BLOCK))
 	NO_DEFER_POP;
-
-      /* Push the temporary stack slot level so that we can free any
-	 temporaries we make.  */
-      push_temp_slots ();
 
 #ifdef FINAL_REG_PARM_STACK_SPACE
       reg_parm_stack_space = FINAL_REG_PARM_STACK_SPACE (args_size.constant,
@@ -2964,7 +2985,11 @@ expand_call (exp, target, ignore)
 	 be deferred during the evaluation of the arguments.  */
       NO_DEFER_POP;
 
-      funexp = rtx_for_function_call (fndecl, exp);
+      /* APPLE LOCAL indirect sibcalls */
+      if ( !fndecl )
+	funexp = funexp_keep;
+      else
+        funexp = rtx_for_function_call (fndecl, exp);
 
       /* Figure out the register where the value, if any, will come back.  */
       valreg = 0;
@@ -3085,8 +3110,8 @@ expand_call (exp, target, ignore)
 	next_arg_reg = FUNCTION_ARG (args_so_far, VOIDmode,
 				     void_type_node, 1);
 
-      /* APPLE LOCAL */
-#ifdef TARGET_POWERPC
+      /* APPLE LOCAL indirect calls in R12 */
+#ifdef MAGIC_INDIRECT_CALL_REG
       /* For indirect calls, put the callee address in R12.  This is necessary
 	 for ObjC methods.  This could be handled by patterns in rs6000.md,
 	 as in 2.95, but it is better to put this copy in the RTL so the
@@ -3096,9 +3121,9 @@ expand_call (exp, target, ignore)
 	 putting it here.)  */
       if (!fndecl)
 	{
-	  rtx r12 = gen_rtx_REG (SImode, 12);
-	  emit_move_insn (r12, funexp);
-	  use_reg (&call_fusage, r12);
+	  rtx magic_reg = gen_rtx_REG (SImode, MAGIC_INDIRECT_CALL_REG);
+	  emit_move_insn (magic_reg, funexp);
+	  use_reg (&call_fusage, magic_reg);
 	}
 #endif
       /* end APPLE LOCAL */
@@ -3114,7 +3139,7 @@ expand_call (exp, target, ignore)
       emit_call_1 (funexp, fndecl, funtype, unadjusted_args_size,
 		   adjusted_args_size.constant, struct_value_size,
 		   next_arg_reg, valreg, old_inhibit_defer_pop, call_fusage,
-		   flags);
+		   flags, & args_so_far);
 
       /* APPLE LOCAL objc stret methods */
       /* Restore the function's original return type
@@ -3392,8 +3417,6 @@ expand_call (exp, target, ignore)
       if ((flags & ECF_MAY_BE_ALLOCA) && nonlocal_goto_handler_slots != 0)
 	emit_stack_save (SAVE_NONLOCAL, &nonlocal_goto_stack_level, NULL_RTX);
 
-      pop_temp_slots ();
-
       /* Free up storage we no longer need.  */
       for (i = 0; i < num_actuals; ++i)
 	if (args[i].aligned_regs)
@@ -3432,6 +3455,25 @@ expand_call (exp, target, ignore)
 	}
       else
 	normal_call_insns = insns;
+
+      /* APPLE LOCAL begin sibcall 3007352 */
+      /* GCC for PPC on Darwin has always rounded 'current_function_args_size' up to a multiple of 16.
+	 CodeWarrior doesn't.
+	 A father() that passes, say, 40 bytes of parameters to daughter() will have eight bytes of
+	 padding if compiled with GCC, and zero bytes of padding if compiled with CW.
+	 If a GCC-compiled daughter() in turn sibcalls to granddaughter() with, say, 44 bytes of parameters,
+	 GCC will generate a store of that extra parameter into padding of the father() parameter area.
+	 Alas, if father() was compild by CW, father() will not have the parameter area padding,
+	 and something in the father() stackframe will be stomped.
+	 Parameter areas are guaranteed to be a minimum of 32 bytes.  See Radar 3007352.  */
+      if ( ( ! sibcall_failure)
+	   && args_size.constant > 32
+	   && args_size.constant > cfun->unrounded_args_size)
+	{
+	  sibcall_failure = 1;
+	}
+      /* APPLE LOCAL end sibcall 3007352 */
+
 
       /* If something prevents making this a sibling call,
 	 zero out the sequence.  */
@@ -4117,7 +4159,7 @@ emit_library_call_value_1 (retval, orgfun, value, fn_type, outmode, nargs, p)
 	       struct_value_size,
 	       FUNCTION_ARG (args_so_far, VOIDmode, void_type_node, 1),
 	       valreg,
-	       old_inhibit_defer_pop + 1, call_fusage, flags);
+	       old_inhibit_defer_pop + 1, call_fusage, flags, & args_so_far);
 
   /* For calls to `setjmp', etc., inform flow.c it should complain
      if nonvolatile values are live.  For functions that cannot return,
@@ -4418,6 +4460,27 @@ store_one_arg (arg, argblock, flags, variable_size, reg_parm_stack_space)
 	 we actually expand the argument since the expansion itself may
 	 trigger library calls which might need to use the same stack slot.  */
       if (argblock && ! variable_size && arg->stack)
+      /* APPLE LOCAL begin pass-struct-by-value fix  */
+      /* 2.95 comments retained for amusement value.  This is FSF PR 6241;
+         no doubt a cleaner fix will come along  --dj */
+#if defined(TARGET_MACHO)             /* Sorry :-(  */
+      /* (Ahem, Cough) "Fix" for some really mondo weirdnesses we have on
+         PPC when passing a struct >32 bytes as a value parameter.
+         memcpy () ends up being called to copy the struct onto the stack,
+         but wants to save and restore the 32-byte REG_PARM_STACK_SPACE.
+         Bad news if the memcpy destination and this 32-byte
+         REG_PARM_STACK_SPACE overlap...
+ 
+         Try to avoid this unnecessary save/restore by not marking the 32
+         byte area as "dirty".  */
+ 
+      if (upper_bound - lower_bound > reg_parm_stack_space)
+        for (i = MAX (lower_bound, reg_parm_stack_space);
+             i < upper_bound; i++)
+          stack_usage_map[i] = 1;
+      else
+#endif
+      /* APPLE LOCAL end pass-struct-by-value fix  */
 	for (i = lower_bound; i < upper_bound; i++)
 	  stack_usage_map[i] = 1;
     }
@@ -4425,7 +4488,13 @@ store_one_arg (arg, argblock, flags, variable_size, reg_parm_stack_space)
   /* If this isn't going to be placed on both the stack and in registers,
      set up the register and number of words.  */
   if (! arg->pass_on_stack)
-    reg = arg->reg, partial = arg->partial;
+    {
+      if (flags & ECF_SIBCALL)
+	reg = arg->tail_call_reg;
+      else
+	reg = arg->reg;
+      partial = arg->partial;
+    }
 
   if (reg != 0 && partial == 0)
     /* Being passed entirely in a register.  We shouldn't be called in
@@ -4523,6 +4592,11 @@ store_one_arg (arg, argblock, flags, variable_size, reg_parm_stack_space)
 		      partial, reg, used - size, argblock,
 		      ARGS_SIZE_RTX (arg->offset), reg_parm_stack_space,
 		      ARGS_SIZE_RTX (arg->alignment_pad));
+
+      /* Unless this is a partially-in-register argument, the argument is now
+	 in the stack.  */
+      if (partial == 0)
+	arg->value = arg->stack;
     }
   else
     {
@@ -4622,16 +4696,18 @@ store_one_arg (arg, argblock, flags, variable_size, reg_parm_stack_space)
 		      argblock, ARGS_SIZE_RTX (arg->offset),
 		      reg_parm_stack_space,
 		      ARGS_SIZE_RTX (arg->alignment_pad));
+
+      /* Unless this is a partially-in-register argument, the argument is now
+	 in the stack.
+
+	 ??? Unlike the case above, in which we want the actual
+	 address of the data, so that we can load it directly into a
+	 register, here we want the address of the stack slot, so that
+	 it's properly aligned for word-by-word copying or something
+	 like that.  It's not clear that this is always correct.  */
+      if (partial == 0)
+	arg->value = arg->stack_slot;
     }
-
-  /* Unless this is a partially-in-register argument, the argument is now
-     in the stack.
-
-     ??? Note that this can change arg->value from arg->stack to
-     arg->stack_slot and it matters when they are not the same.
-     It isn't totally clear that this is correct in all cases.  */
-  if (partial == 0)
-    arg->value = arg->stack_slot;
 
   /* Once we have pushed something, pops can't safely
      be deferred during the rest of the arguments.  */

@@ -63,7 +63,6 @@ extern int pfe_display_precomp_headers;
 void (*pfe_lang_freeze_thaw_compiler_state) PARAMS ((struct pfe_lang_compiler_state **));
 
 static void pfe_freeze_thaw_include_header  PARAMS ((struct ht_identifier **));
-static void pfe_check_lang		    PARAMS ((void));
 static void pfe_check_format		    PARAMS ((pfe_compiler_state *));
 static void pfe_check_compiler_version      PARAMS ((void));
 static void pfe_freeze_thaw_compiler_state  PARAMS ((pfe_compiler_state *));
@@ -72,30 +71,27 @@ static void pfe_freeze_thaw_ht_identifier   PARAMS ((struct ht_identifier **));
 static void pfe_freeze_thaw_obstack_chunk   PARAMS ((struct _obstack_chunk **));
 static void pfe_freeze_thaw_obstack 	    PARAMS ((struct obstack *));
 static void pfe_check_compiler_settings	    PARAMS ((void));
-static void pfe_check_cmd_ln_macros	    PARAMS ((void));
-
-/* Two magic macros used to get value of APPLE_CC in string.  */
-#define STRINGIFY_THIS(x) # x
-#define REALLY_STRINGIFY(x) STRINGIFY_THIS(x)
+void pfe_check_cmd_ln_macros	            PARAMS ((void));
+static char * pfe_absolute_path_name        PARAMS ((char *));
 
 /*-------------------------------------------------------------------*/
 
 /* Set the language. It is used to verify during the load.  */
 void
 pfe_set_lang (lang)
-     enum c_lang lang;
+     enum pfe_lang lang;
 {
-  if (pfe_compiler_state_ptr)
-    pfe_compiler_state_ptr->lang = lang;
+  pfe_compiler_state_ptr->lang = lang;
 }
 
 /* Check the language of a pre-compiled header file to see if it is
    compatible with the current version of the compiler.  */
-static void
-pfe_check_lang ()
+void
+pfe_check_lang (lang)
+     enum pfe_lang lang;
 {
-   if (CPP_OPTION (parse_in, lang) != pfe_compiler_state_ptr->lang)
-     fatal_error ("Invalid C Language kind. Precompiled header %s can not be used.\n", pfe_name);
+  if (pfe_compiler_state_ptr->lang != lang)
+    fatal_error ("Pre-compiled header for wrong language: \"%s\".", pfe_name);
 }
 
 /* Freeze/thaw struct pfe_include_header.  
@@ -124,39 +120,48 @@ pfe_check_header (fname, timestamp, inode)
      ino_t inode;
 {
   pfe_include_header *header;
+  char *full_name;
 
   if (!fname)
     return 0;
 
+  full_name = pfe_absolute_path_name (fname);
   /* Determine if it is already loaded as a part of pre-compiled 
      header.  */
   header = (pfe_include_header *) ht_lookup (pfe_compiler_state_ptr->include_hash, 
-		       (const unsigned char *) fname, 
-                       strlen (fname), HT_NO_INSERT);
+		       (const unsigned char *) full_name, 
+                       strlen (full_name), HT_NO_INSERT);
   if (!header)
     {
       if (pfe_display_precomp_headers)
-	fprintf (stderr, "PFE: fname = %s is not available in precompiled header.\n", fname);
+	fprintf (stderr, "PFE: full_name = %s is not available in precompiled header.\n", full_name);
+      pfe_free (full_name);
       return 0;
     }
 
   /* If found name but its not for the expecterd inode then we assume
       it is not a match.  */
   if (header->inode != inode)
-    return 0;
+    {
+      error ("Precompiled header is invalid; header file %s is now different.", full_name);
+      pfe_free (full_name);
+      return 0;
+    }
   
   /* Both name and inode match so we assume this header is in the PFE
      file.  But it still could be a newer version than what we have in the
      PFE file.  */
   if (timestamp > header->timestamp)
     {
-      error ("Precompiled header is out of date; header file %s is newer.", fname);
+      error ("Precompiled header is out of date; header file %s is newer.", full_name);
+      pfe_free (full_name);
       return 0;
     }
     
   if (pfe_display_precomp_headers)
-    fprintf (stderr, "PFE: fname = %s is loaded from precompiled header.\n", fname);
+    fprintf (stderr, "PFE: full_name = %s is loaded from precompiled header.\n", full_name);
   
+  pfe_free (full_name);
   return 1;
 }
 
@@ -169,26 +174,51 @@ pfe_add_header_name (fname, timestamp, inode)
      ino_t inode;
 {  
   pfe_include_header *header;
+  char *full_name;
 
   if (!fname)
     return;
 
+  full_name = pfe_absolute_path_name (fname);
   /* Include header list is updated only during PFE_DUMP.  */
   if (pfe_operation != PFE_DUMP)
-    {
-      fprintf (stderr, "pfe_add_header_name can be used only with PFE_DUMP\n");
-      exit (0);
-    }
+    fatal_error ("pfe_add_header_name can be used only with PFE_DUMP\n");
 
   header = (pfe_include_header *) ht_lookup (pfe_compiler_state_ptr->include_hash, 
-					     (const unsigned char *) fname,
-					     strlen (fname), HT_ALLOC);
+					     (const unsigned char *) full_name,
+					     strlen (full_name), HT_ALLOC);
   header->inode     = inode;
   header->timestamp = timestamp;
 
   if (pfe_display_precomp_headers)
-    fprintf (stderr, "PFE: fname = %s is added in precompiled header.\n", fname);
+    fprintf (stderr, "PFE: full_name = %s is added in precompiled header.\n", full_name);
+
+  pfe_free(full_name);
 }  
+
+/* Allocates memory. 
+   Return absolute path name for the given input filename.  */
+static char *
+pfe_absolute_path_name (input_name)
+     char *input_name;
+{   
+  char *name;
+  if (input_name[0] != '/') 
+    {
+      /* Append current pwd. We need absolute path.  */
+      int alen = MAXPATHLEN + strlen (input_name) + 2;
+      name = (char *) pfe_malloc (sizeof (char) * alen);
+      name = getcwd(name, alen);
+      strcat (name, "/");
+      strcat (name, input_name);
+    }
+  else
+    {
+      name = (char *) pfe_malloc (strlen (input_name) + 1);
+      strcpy (name, input_name);
+    }
+  return name;
+}   
 
 /* Check the format of a pre-compiled header file to see if it is
    compatible with the current version of the compiler.  */
@@ -198,15 +228,9 @@ pfe_check_format (hdr)
      pfe_compiler_state *hdr;
 {
   if (hdr->magic_number != PFE_MAGIC_NUMBER)
-    {
-      fprintf (stderr, "The load file does not have a recognizable format.\n");
-      exit (0);
-    }
+    fatal_error ("Unrecognizable format in pre-compiled header: \"%s\".", pfe_name);
   if (hdr->format_version != PFE_FORMAT_VERSION)
-    {
-      fprintf (stderr, "The load file format is incompatible with this compiler.\n");
-      exit (0);
-    }
+    fatal_error ("Incompatible format version pre-compiled header: \"%s\".", pfe_name);
 }
 
 /* Check compiler version */
@@ -216,7 +240,7 @@ pfe_check_compiler_version ()
   int valid_compiler;
   char current_version [16];
 
-  strncpy (current_version, REALLY_STRINGIFY (APPLE_CC), 15);
+  strncpy (current_version, apple_version_str, 15);
 
   valid_compiler = (strcmp (pfe_compiler_state_ptr->compiler_version,
 		 	   current_version) == 0);
@@ -230,19 +254,25 @@ pfe_check_compiler_version ()
     }
 
   if (!valid_compiler)
-    fatal_error ("Can not use precompiled header %s. Compiler version mismatch.", 
-	   	  pfe_name);
+    fatal_error ("Incompatible compiler version in pre-compiled header: \"%s\".",
+    		 pfe_name);
 }
 
 /* Check compiler settings */
 static void
 pfe_check_compiler_settings ()
 {
-  /* INCOMPLETE : FIXME */
+  /* Check language specific compiler settings.  Note that we pass the
+     pointer to the lang_specific data since it's the settings in there
+     we want to check.  */
+  (*lang_hooks.pfe_check_settings) (pfe_compiler_state_ptr->lang_specific);
+#ifdef PFE_CHECK_TARGET_SETTINGS
+  PFE_CHECK_TARGET_SETTINGS ();
+#endif
 }
 
 /* Check command line macros */
-static void
+void
 pfe_check_cmd_ln_macros ()
 {
   /* INCOMPLETE : FIXME */
@@ -262,13 +292,9 @@ pfe_check_compiler ()
 
   /* Check that the pre-compiled header was built using the same 
      language dialect as the compiler being run.  */
-  pfe_check_lang ();
+  //pfe_check_lang ();  now done by <lang>_pfe_lang_init
 
-  /* If the dialect was C++, make sure that the appropriate compiler
-     settings are the same, e.g., exceptions and rtti.  
-     -- WRITE THIS CODE.  */
-  /* Check for consistency of any other significant compiler settings.
-     -- WRITE THIS CODE.  */
+  /* Make sure that appropriate compiler settings are consistent.  */
   pfe_check_compiler_settings ();
 
   /* Check command line macros which were defined (and undefined) 
@@ -296,8 +322,8 @@ pfe_freeze_compiler_state (hdr)
   ((pfe_compiler_state *)hdr)->magic_number   = PFE_MAGIC_NUMBER;
   ((pfe_compiler_state *)hdr)->format_version = PFE_FORMAT_VERSION;
   strncpy (((pfe_compiler_state *)hdr)->compiler_version,
-	   REALLY_STRINGIFY (APPLE_CC), 15);
-    
+	   apple_version_str, 15);
+   
   pfe_freeze_thaw_compiler_state ((pfe_compiler_state *)hdr);
 }
 
@@ -319,6 +345,10 @@ pfe_thaw_compiler_state (hdr)
      pfe_compiler_state *hdr;
 {
   pfe_check_format (hdr);
+  
+  /* Init language specific compiler state (and check language).  */
+  (*lang_hooks.pfe_lang_init) (0);
+  
   pfe_freeze_thaw_compiler_state (hdr);
 }
 
@@ -391,7 +421,7 @@ pfe_freeze_thaw_compiler_state (hdr)
   for (n = 0; n <= 2; ++n)
     PFE_FREEZE_THAW_GLOBAL_RTX_ARRAY (const_tiny_rtx[n], MAX_MACHINE_MODE);
 
-  /* globals from varasm.c.  */
+  /* Globals from varasm.c.  */
   PFE_GLOBAL_TO_HDR_IF_FREEZING (const_labelno);
   PFE_HDR_TO_GLOBAL_IF_THAWING (const_labelno);
   PFE_GLOBAL_TO_HDR_IF_FREEZING (var_labelno);
@@ -484,6 +514,16 @@ pfe_freeze_thaw_cpp_hashnode (hnp)
   if (PFE_IS_FROZEN (hn->ident.str))
     return;
 #endif
+  if (pfe_operation == PFE_DUMP && hn->type == NT_MACRO)
+    {
+      if (! ustrncmp (pfe_real_ptr (hn->ident.str), DSC ("__STDC_")))
+        {
+          if (hn->flags & NODE_WARN)
+            hn->flags ^= NODE_WARN;
+          else
+            hn->flags &= NODE_WARN;
+        }
+    }
   
   pfe_using_temp_ptr ((void **)&temp_ident);
   temp_ident = (struct ht_identifier *) hn_orig;
@@ -840,6 +880,10 @@ DEFINE_CHECK_STRUCT_FUNCTION (varray_head_tag)
 /* cpplib.h */
 DEFINE_CHECK_STRUCT_FUNCTION(cpp_token)
 DEFINE_CHECK_STRUCT_FUNCTION(cpp_hashnode)
+
+/* c-common.h */
+DEFINE_CHECK_STRUCT_FUNCTION (language_function)
+DEFINE_CHECK_STRUCT_FUNCTION (stmt_tree_s)
 
 #endif /* PFE */
 

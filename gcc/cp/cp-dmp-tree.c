@@ -1,4 +1,4 @@
-/* APPLE LOCAL new tree dump */
+/* APPLE LOCAL file new tree dump */
 /* Common condensed c++ tree display routines. Based on dmp-tree.c
    Copyright (C) 2001  Free Software Foundation, Inc.
    Contributed by Devang Patel (dpatel@apple.com)
@@ -77,19 +77,40 @@ cxx_dump_identifier (FILE *file,
       if (IDENTIFIER_CTOR_OR_DTOR_P (node))
         fputs (" ctor/dtor", file);
       if (IDENTIFIER_NAMESPACE_BINDINGS (node))
-	fprintf (file, " ns-bindings="HOST_PTR_PRINTF, IDENTIFIER_NAMESPACE_BINDINGS (node));
+	{
+	  fprintf (file, " ns-bindings=");
+	  fprintf (file, HOST_PTR_PRINTF, IDENTIFIER_NAMESPACE_BINDINGS (node));
+	}
       if (IDENTIFIER_CLASS_VALUE (node))
-	fprintf (file, " binding="HOST_PTR_PRINTF, IDENTIFIER_CLASS_VALUE (node));
+	{
+	  fprintf (file, " binding=");
+	  fprintf (file, HOST_PTR_PRINTF, IDENTIFIER_CLASS_VALUE (node));
+	}
       if (IDENTIFIER_BINDING (node))
-	fprintf (file, " lcl-bindings="HOST_PTR_PRINTF, IDENTIFIER_BINDING (node));
+	{
+	  fprintf (file, " lcl-bindings=");
+	  fprintf (file, HOST_PTR_PRINTF, IDENTIFIER_BINDING (node));
+	}
       if (IDENTIFIER_LABEL_VALUE (node))
-	fprintf (file, " gbl="HOST_PTR_PRINTF, IDENTIFIER_LABEL_VALUE (node));
+	{
+	  fprintf (file, " gbl=");
+	  fprintf (file, HOST_PTR_PRINTF, IDENTIFIER_LABEL_VALUE (node));
+	}
       if (IDENTIFIER_TEMPLATE (node))
-	fprintf (file, " tmpl="HOST_PTR_PRINTF, IDENTIFIER_TEMPLATE (node));
+	{
+	  fprintf (file, " tmpl=");
+	  fprintf (file, HOST_PTR_PRINTF, IDENTIFIER_TEMPLATE (node));
+	}
       if (IDENTIFIER_IMPLICIT_DECL (node))
-	fprintf (file, " impl="HOST_PTR_PRINTF, IDENTIFIER_IMPLICIT_DECL (node));
+	{
+	  fprintf (file, " impl=");
+	  fprintf (file, HOST_PTR_PRINTF, IDENTIFIER_IMPLICIT_DECL (node));
+	}
       if (IDENTIFIER_ERROR_LOCUS (node))
-	fprintf (file, " err-locus="HOST_PTR_PRINTF, IDENTIFIER_ERROR_LOCUS (node));
+	{
+	  fprintf (file, " err-locus=");
+	  fprintf (file, HOST_PTR_PRINTF, IDENTIFIER_ERROR_LOCUS (node));
+	}
     }
   else
     {
@@ -144,11 +165,17 @@ cxx_dump_decl (FILE *file, tree node, int indent ATTRIBUTE_UNUSED, int after_id)
 	  if (DECL_LANG_SPECIFIC (node))
 	    {
 	      if (DECL_PENDING_INLINE_INFO (node))
-	        fprintf (file, " pending-inline-info="HOST_PTR_PRINTF,
+		{
+	          fprintf (file, " pending-inline-info=");
+		  fprintf (file, HOST_PTR_PRINTF,
 	        	   HOST_PTR_PRINTF_VALUE (DECL_PENDING_INLINE_INFO (node)));
+		}
 	      if (DECL_TEMPLATE_INFO (node))
-	        fprintf (file, " tmpl-info="HOST_PTR_PRINTF,
+		{
+	          fprintf (file, " tmpl-info=");
+		  fprintf (file, HOST_PTR_PRINTF,
 	        	   HOST_PTR_PRINTF_VALUE (DECL_TEMPLATE_INFO (node)));
+		}
 	    }
         }
       break;
@@ -167,11 +194,17 @@ cxx_dump_decl (FILE *file, tree node, int indent ATTRIBUTE_UNUSED, int after_id)
 	  if (DECL_LANG_SPECIFIC (node))
 	    {
 	      if (DECL_TEMPLATE_INFO (node))
-	        fprintf (file, " tmpl-info="HOST_PTR_PRINTF,
+		{
+	          fprintf (file, " tmpl-info=");
+		  fprintf (file, HOST_PTR_PRINTF,
 	        	   HOST_PTR_PRINTF_VALUE (DECL_TEMPLATE_INFO (node)));
+		}
 	      if (DECL_SORTED_FIELDS (node))
-	        fprintf (file, " sorted-fields="HOST_PTR_PRINTF,
+		{
+	          fprintf (file, " sorted-fields=");
+		  fprintf (file, HOST_PTR_PRINTF,
 	        	   HOST_PTR_PRINTF_VALUE (DECL_SORTED_FIELDS (node)));
+		}
 	    }
         }
        break;
@@ -182,8 +215,11 @@ cxx_dump_decl (FILE *file, tree node, int indent ATTRIBUTE_UNUSED, int after_id)
 	  if (DECL_LANG_SPECIFIC (node))
 	    {
 	      if (DECL_TEMPLATE_INFO (node))
-	        fprintf (file, " tmpl-info="HOST_PTR_PRINTF,
+		{
+	          fprintf (file, " tmpl-info=");
+		  fprintf (file, HOST_PTR_PRINTF,
 	        	   HOST_PTR_PRINTF_VALUE (DECL_TEMPLATE_INFO (node)));
+		}
 	    }
 	  if (DECL_SHADOWED_FOR_VAR (node))
 	    fputs (" shadowed", file);
@@ -258,8 +294,11 @@ cxx_dump_type (FILE *file, tree node, int indent, int after_id)
       if (!after_id)
         {
           if (TYPE_RAISES_EXCEPTIONS (node))
-            fprintf (file, " throws="HOST_PTR_PRINTF,
+	    {
+              fprintf (file, " throws=");
+	      fprintf (file, HOST_PTR_PRINTF,
             	HOST_PTR_PRINTF_VALUE (TYPE_RAISES_EXCEPTIONS (node)));
+	    }
         }
       else
         {
@@ -314,15 +353,29 @@ int
 cxx_dump_lineno_p (FILE *file, tree node)
 {
   if (statement_code_p (TREE_CODE (node)) && STMT_LINENO (node))
-  {
-    if (STMT_LINENO_FOR_FN_P (node))
-      fprintf (file, " end-line=%d", STMT_LINENO (node));
-    else
-      fprintf (file, " line=%d", STMT_LINENO (node));
-    return 1;
-  }
+    {
+      if (STMT_LINENO_FOR_FN_P (node))
+	fprintf (file, " end-line=%d", STMT_LINENO (node));
+      else
+	fprintf (file, " line=%d", STMT_LINENO (node));
+      return 1;
+    }
   
   return 0;
+}
+
+/* Called only by tree-dump.c when doing a full compilation tree dump
+   under one of the -fdmp-xxxx options.  This makes tree_dump.c, which
+   is common to all languages, independent of dmp_tree, which currently
+   only supports the c languages.  */
+int 
+cxx_dmp_tree3 (file, node, flags)
+     FILE *file;
+     tree node;
+     int flags;
+{
+  dmp_tree3 (file, node, flags);
+  return 1;
 }
 
 /*-------------------------------------------------------------------*/
@@ -343,9 +396,10 @@ print_PTRMEM_CST (FILE *file,
 		  tree node,
 		  int indent ATTRIBUTE_UNUSED)
 {
-  fprintf (file, " rec-type::mbr-decl="HOST_PTR_PRINTF"::"HOST_PTR_PRINTF,
-  		HOST_PTR_PRINTF_VALUE (PTRMEM_CST_CLASS (node)),
-  		HOST_PTR_PRINTF_VALUE (PTRMEM_CST_MEMBER (node)));
+  fprintf (file, " rec-type::mbr-decl=");
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (PTRMEM_CST_CLASS (node)));
+  fprintf (file, "::");
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (PTRMEM_CST_MEMBER (node)));
   /* not sure I want to follow these nodes here */
 }
 
@@ -423,7 +477,8 @@ print_TYPE_EXPR (FILE *file,
 		 tree node,
 		 int indent)
 {
-  fprintf (file, " type="HOST_PTR_PRINTF,
+  fprintf (file, " type=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (TREE_TYPE (node)));
   
   print_operands (file, node, indent, TRUE, NULL);
@@ -457,8 +512,11 @@ print_EMPTY_CLASS_EXPR (FILE *file,
 			int indent ATTRIBUTE_UNUSED)
 {
   if (TREE_TYPE (node))
-    fprintf (file, "class="HOST_PTR_PRINTF,
+    {
+      fprintf (file, "class=");
+      fprintf (file, HOST_PTR_PRINTF,
     		HOST_PTR_PRINTF_VALUE (TREE_TYPE (node)));
+    }
 }
 
 static void
@@ -469,23 +527,39 @@ print_TEMPLATE_DECL (FILE *file,
 {
   dump_tree_state.line_cnt = 0;
   
-  fprintf (file, " args="HOST_PTR_PRINTF,
+  fprintf (file, " args=");
+  fprintf (file, HOST_PTR_PRINTF,
 		HOST_PTR_PRINTF_VALUE (DECL_ARGUMENTS (node)));
   if (DECL_LANG_SPECIFIC (node) && DECL_TEMPLATE_INFO (node))
-    fprintf (file, " tmpl-info="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " tmpl-info=");
+      fprintf (file, HOST_PTR_PRINTF,
 		HOST_PTR_PRINTF_VALUE (DECL_TEMPLATE_INFO (node)));
+    }
   if (DECL_VINDEX (node))
-    fprintf (file, " inst="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " inst=");
+      fprintf (file, HOST_PTR_PRINTF,
 		HOST_PTR_PRINTF_VALUE (DECL_VINDEX (node)));
+    }
   if (TREE_TYPE (node))
-    fprintf (file, " obj-type="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " obj-type=");
+      fprintf (file, HOST_PTR_PRINTF,
 		HOST_PTR_PRINTF_VALUE (TREE_TYPE (node)));
+    }
   if (DECL_TEMPLATE_RESULT (node))
-    fprintf (file, " obj-decl="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " obj-decl=");
+      fprintf (file, HOST_PTR_PRINTF,
 		HOST_PTR_PRINTF_VALUE (DECL_TEMPLATE_RESULT (node)));
+    }
   if (DECL_INITIAL (node))
-    fprintf (file, " assoc-tmpls="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " assoc-tmpls=");
+      fprintf (file, HOST_PTR_PRINTF,
 		HOST_PTR_PRINTF_VALUE (DECL_INITIAL (node)));
+    }		
   print_decl (file, annotation, node, indent);
   (void)node_seen (node, TRUE);
   
@@ -534,10 +608,11 @@ print_TEMPLATE_PARM_INDEX (FILE *file,
 {
   fprintf (file, " idx/lvl=("HOST_WIDE_INT_PRINT_DEC","HOST_WIDE_INT_PRINT_DEC")"
   		 " orig-lvl="HOST_WIDE_INT_PRINT_DEC
-		 " dcndnts="HOST_PTR_PRINTF,
+		 " dcndnts=",
 		 TEMPLATE_PARM_IDX (node), TEMPLATE_PARM_LEVEL(node),
-		 TEMPLATE_PARM_ORIG_LEVEL (node),
-		 HOST_PTR_PRINTF_VALUE (TEMPLATE_PARM_DESCENDANTS (node)));
+		 TEMPLATE_PARM_ORIG_LEVEL (node));
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (TEMPLATE_PARM_DESCENDANTS (node)));
+		 
 
   print_decl (file, annotation, TEMPLATE_PARM_DECL(node), indent + INDENT);
   dump_tree (file, "(dcndnt)", TEMPLATE_PARM_DESCENDANTS (node), indent + INDENT);
@@ -549,10 +624,10 @@ print_TEMPLATE_TYPE_PARM (FILE *file,
 			  tree node,
 			  int indent)
 {
-  fprintf (file, " parms="HOST_PTR_PRINTF
-  		 " idx/lvl=("HOST_WIDE_INT_PRINT_DEC","HOST_WIDE_INT_PRINT_DEC")"
+  fprintf (file, " parms=");
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (TEMPLATE_TYPE_IDX (node)));
+  fprintf (file, " idx/lvl=("HOST_WIDE_INT_PRINT_DEC","HOST_WIDE_INT_PRINT_DEC")"
   		 " orig-lvl="HOST_WIDE_INT_PRINT_DEC,
-        	 HOST_PTR_PRINTF_VALUE (TEMPLATE_TYPE_IDX (node)),
         	 TEMPLATE_TYPE_IDX (node), TEMPLATE_TYPE_LEVEL (node),
         	 TEMPLATE_TYPE_ORIG_LEVEL (node));
   print_type (file, annotation, node, indent);
@@ -566,7 +641,8 @@ print_TEMPLATE_TEMPLATE_PARM (FILE *file,
 			      tree node,
 			      int indent)
 {
-  fprintf (file, " tmpl-decl="HOST_PTR_PRINTF,
+  fprintf (file, " tmpl-decl=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (TYPE_NAME (node)));
   
   print_TEMPLATE_TYPE_PARM (file, annotation, node, indent);
@@ -580,11 +656,14 @@ print_BOUND_TEMPLATE_TEMPLATE_PARM (FILE *file,
 				    tree node,
 				    int indent)
 {
-  fprintf (file, " name="HOST_PTR_PRINTF
-  		 " type-decl="HOST_PTR_PRINTF
-  		 " tmpl-decl="HOST_PTR_PRINTF,
-  		HOST_PTR_PRINTF_VALUE (TEMPLATE_TEMPLATE_PARM_TEMPLATE_INFO (node)),
-  		HOST_PTR_PRINTF_VALUE (TYPE_NAME (node)),
+  fprintf (file, " name=");
+  fprintf (file, HOST_PTR_PRINTF,
+  		HOST_PTR_PRINTF_VALUE (TEMPLATE_TEMPLATE_PARM_TEMPLATE_INFO (node)));
+  fprintf (file, " type-decl=");
+  fprintf (file, HOST_PTR_PRINTF,
+  		HOST_PTR_PRINTF_VALUE (TYPE_NAME (node)));
+  fprintf (file, " tmpl-decl=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (TYPE_TI_TEMPLATE (node)));
   		  
   print_TEMPLATE_TYPE_PARM (file, annotation, node, indent);
@@ -600,15 +679,25 @@ print_TYPENAME_TYPE (FILE *file,
 		     tree node,
 		     int indent)
 {
-  fprintf (file, " cntxt::id="HOST_PTR_PRINTF"::"HOST_PTR_PRINTF,
-  		HOST_PTR_PRINTF_VALUE (TYPE_CONTEXT (node)),
+  fprintf (file, " cntxt::id=");
+  fprintf (file, HOST_PTR_PRINTF,
+  		HOST_PTR_PRINTF_VALUE (TYPE_CONTEXT (node)));
+  fprintf (file, "::");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (TYPE_NAME (node)));
+		
   if (TYPENAME_TYPE_FULLNAME (node))
-    fprintf (file, " fullname="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " fullname=");
+      fprintf (file, HOST_PTR_PRINTF,
     		HOST_PTR_PRINTF_VALUE (TYPENAME_TYPE_FULLNAME (node)));
+    }
   if (TREE_TYPE (node))
-    fprintf (file, " impl-type="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " impl-type=");
+      fprintf (file, HOST_PTR_PRINTF,
     		HOST_PTR_PRINTF_VALUE (TREE_TYPE (node)));
+    }
   print_type (file, annotation, node, indent);
   
   dump_tree (file, "(cntxt)", TYPE_CONTEXT (node), indent + INDENT);
@@ -623,8 +712,11 @@ print_UNBOUND_CLASS_TEMPLATE (FILE *file,
 			      tree node,
 			      int indent)
 {
-  fprintf (file, " cntxt::id="HOST_PTR_PRINTF"::"HOST_PTR_PRINTF,
-	   HOST_PTR_PRINTF_VALUE (TYPE_CONTEXT (node)),
+  fprintf (file, " cntxt::id=");
+  fprintf (file, HOST_PTR_PRINTF,
+	   HOST_PTR_PRINTF_VALUE (TYPE_CONTEXT (node)));
+  fprintf (file, "::");
+  fprintf (file, HOST_PTR_PRINTF,
 	   HOST_PTR_PRINTF_VALUE (TYPE_NAME (node)));
   print_type (file, annotation, node, indent); 
   
@@ -638,7 +730,8 @@ print_TYPEOF_TYPE (FILE *file,
 		   tree node,
 		   int indent)
 {
-  fprintf (file, " "HOST_PTR_PRINTF,
+  fprintf (file, " ");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (TYPE_FIELDS (node)));
   print_type (file, annotation, node, indent); 
   
@@ -651,7 +744,8 @@ print_USING_DECL (FILE *file,
 		  tree node,
 		  int indent)
 {
-  fprintf (file, " scope="HOST_PTR_PRINTF,
+  fprintf (file, " scope=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (DECL_INITIAL (node)));
   print_decl (file, annotation, node, indent);
 
@@ -673,13 +767,15 @@ print_DEFAULT_ARG (FILE *file,
 		   tree node, 
 		   int indent ATTRIBUTE_UNUSED)
 {
-  fprintf (file, " def-arg="HOST_PTR_PRINTF
-  		 " (struct unparsed_text * in cp/spew.c)",
+  fprintf (file, " def-arg=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (DEFARG_POINTER (node)));
+  fprintf (file, " (struct unparsed_text * in cp/spew.c)");
 
   if (TREE_PURPOSE (node))
     {
-      fprintf (file, " purpose="HOST_PTR_PRINTF,
+      fprintf (file, " purpose=");
+      fprintf (file, HOST_PTR_PRINTF,
       	        HOST_PTR_PRINTF_VALUE (TREE_PURPOSE (node)));
       dump_tree (file, "(purpose)", TREE_PURPOSE (node), indent + INDENT);
     }
@@ -710,19 +806,30 @@ print_CPLUS_BINDING (FILE *file,
   if (INHERITED_VALUE_BINDING_P (node))
     fputs (" inherited", file);
   
-  fprintf (file, " value="HOST_PTR_PRINTF,
+  fprintf (file, " value=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (BINDING_VALUE (node)));
     
   if (BINDING_HAS_LEVEL_P (node))
-      fprintf (file, " level="HOST_PTR_PRINTF" (struct binding_level * in cp/decl.c)",
+    {
+      fprintf (file, " level=");
+      fprintf (file, HOST_PTR_PRINTF,
       			HOST_PTR_PRINTF_VALUE ( (node)));
+      fprintf (file, " (struct binding_level * in cp/decl.c)");
+    }
   else
-      fprintf (file, " scope="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " scope=");
+      fprintf (file, HOST_PTR_PRINTF,
       			HOST_PTR_PRINTF_VALUE (BINDING_LEVEL (node)));
+    }
   
   if (TREE_CHAIN (node))
-    fprintf (file, " chain="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " chain=");
+      fprintf (file, HOST_PTR_PRINTF,
 		HOST_PTR_PRINTF_VALUE (TREE_CHAIN (node)));
+    }
   
   dump_tree (file, "(value)", BINDING_VALUE (node), indent + INDENT);
   if (!BINDING_HAS_LEVEL_P (node))
@@ -741,11 +848,17 @@ print_OVERLOAD (FILE *file,
   tree n;
   
   if (OVL_FUNCTION (node))
-    fprintf (file, " ovld="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " ovld=");
+      fprintf (file, HOST_PTR_PRINTF,
     	HOST_PTR_PRINTF_VALUE (OVL_FUNCTION (node)));
+    }
   if (OVL_CHAIN (node))
-    fprintf (file, " next-ovld="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " next-ovld=");
+      fprintf (file, HOST_PTR_PRINTF,
     	HOST_PTR_PRINTF_VALUE (OVL_CHAIN (node)));
+    }
   
   if ((TREE_CODE (OVL_FUNCTION (node)) == FUNCTION_DECL
        || TREE_CODE (OVL_FUNCTION (node)) == TEMPLATE_DECL)
@@ -768,10 +881,11 @@ print_WRAPPER (FILE *file,
 	       tree node, 
 	       int indent ATTRIBUTE_UNUSED)
 {
-  fprintf (file, " ptr="HOST_PTR_PRINTF
-  		 " or int=%d ("HOST_PTR_PRINTF")",
-  		 HOST_PTR_PRINTF_VALUE (WRAPPER_PTR (node)),
-  		 WRAPPER_INT (node), WRAPPER_INT (node));
+  fprintf (file, " ptr=");
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (WRAPPER_PTR (node)));
+  fprintf (file, " or int=%d (", WRAPPER_INT (node));
+  fprintf (file, HOST_PTR_PRINTF, WRAPPER_INT (node));
+  fprintf (file, ")");
 }
 
 static void
@@ -891,15 +1005,6 @@ print_CTOR_STMT (FILE *file,
 }
 
 static void
-print_CLEANUP_STMT (FILE *file,
-		    const char *annotation ATTRIBUTE_UNUSED,
-		    tree node,
-		    int indent)
-{
-  print_operands (file, node, indent, TRUE, "(decl)", "(expr)", NULL);
-}
-
-static void
 print_CTOR_INITIALIZER (FILE *file,
 			const char *annotation ATTRIBUTE_UNUSED,
 			tree node,
@@ -946,7 +1051,8 @@ print_HANDLER (FILE *file,
 	       tree node,
 	       int indent)
 {
-  fprintf (file, " hdnlr-type="HOST_PTR_PRINTF,
+  fprintf (file, " hdnlr-type=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (HANDLER_TYPE (node)));
   		
   print_operands (file, node, indent, TRUE, "(parms)", "(body)", NULL);
@@ -1047,9 +1153,11 @@ print_USER_CONV (FILE *file,
 		 tree node,
 		 int indent)
 {
-  fprintf (file, " from="HOST_PTR_PRINTF
-  		 " cand="HOST_PTR_PRINTF,
-  	HOST_PTR_PRINTF_VALUE (TREE_OPERAND (node, 0)),
+  fprintf (file, " from=");
+  fprintf (file, HOST_PTR_PRINTF,
+  	HOST_PTR_PRINTF_VALUE (TREE_OPERAND (node, 0)));
+  fprintf (file, " cand=");
+  fprintf (file, HOST_PTR_PRINTF,
   	HOST_PTR_PRINTF_VALUE (TREE_OPERAND (node, 1)));
   
   print_operands (file, node, indent, TRUE, "(from)", "(cand)", NULL);
@@ -1096,9 +1204,11 @@ print_RECORD_TYPE (FILE *file,
 {
   tree n;
   
-  fprintf (file, " fields="HOST_PTR_PRINTF,
+  fprintf (file, " fields=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (TYPE_FIELDS (node)));
-  fprintf (file, " mbrs="HOST_PTR_PRINTF,
+  fprintf (file, " mbrs=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (CLASSTYPE_METHOD_VEC (node)));
   if (TYPE_NO_FORCE_BLK (node))
     fputs (" no-force-blk", file);
@@ -1106,8 +1216,11 @@ print_RECORD_TYPE (FILE *file,
   if (CLASSTYPE_USE_TEMPLATE (node))
     fprintf (file, " use-tmpl=%d", CLASSTYPE_USE_TEMPLATE (node));
   if (TYPE_PTRMEMFUNC_P (node))
-    fprintf (file, " ptrmemfunc-fn-type="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " ptrmemfunc-fn-type=");
+      fprintf (file, HOST_PTR_PRINTF,
 	HOST_PTR_PRINTF_VALUE (TYPE_PTRMEMFUNC_FN_TYPE (node)));
+    }
   print_type (file, annotation, node, indent);
   (void)node_seen (node, TRUE);
   
@@ -1138,29 +1251,42 @@ print_NAMESPACE_DECL (FILE *file,
 		      tree node,
 		      int indent)
 {
-  tree n;
-  
   if (NAMESPACE_LEVEL (node))
-    fprintf (file, " binding_lvl="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " binding_lvl=");
+      fprintf (file, HOST_PTR_PRINTF,
     		HOST_PTR_PRINTF_VALUE (NAMESPACE_LEVEL (node)));
+    }
   if (DECL_NAMESPACE_ALIAS (node))
-    fprintf (file, " alias="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " alias=");
+      fprintf (file, HOST_PTR_PRINTF,
     		HOST_PTR_PRINTF_VALUE (DECL_NAMESPACE_ALIAS (node)));
+    }
   if (DECL_NAMESPACE_USING (node))
-    fprintf (file, " using="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " using=");
+      fprintf (file, HOST_PTR_PRINTF,
     		HOST_PTR_PRINTF_VALUE (DECL_NAMESPACE_USING (node)));
+    }
   if (DECL_NAMESPACE_USERS (node))
-    fprintf (file, " usrs="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " usrs=");
+      fprintf (file, HOST_PTR_PRINTF,
     		HOST_PTR_PRINTF_VALUE (DECL_NAMESPACE_USERS (node)));
+    }
 
   print_decl (file, annotation, node, indent);
-  
-  //for (n = cp_namespace_decls (node); n; n = TREE_CHAIN (n))
-  //  dump_tree (file, NULL, n, indent + INDENT);
-  
+    
   dump_tree (file, "(alias)", DECL_NAMESPACE_ALIAS (node), indent + INDENT);
   dump_tree (file, "(using)", DECL_NAMESPACE_USING (node), indent + INDENT);
   dump_tree (file, "(usrs)",  DECL_NAMESPACE_USERS (node), indent + INDENT);
+  
+  if (dump_tree_state.visit_only_once == DMP_TREE_VISIT_ONCE2)
+    {
+      for (node = cp_namespace_decls (node); node; node = TREE_CHAIN (node))
+	dump_tree (file, NULL, node, indent + INDENT);
+    }
 }
 
 static void

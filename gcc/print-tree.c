@@ -1,6 +1,6 @@
 /* Prints out tree in human readable form - GNU C-compiler
    Copyright (C) 1990, 1991, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
-   2001 Free Software Foundation, Inc.
+   2001, 2002 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -294,10 +294,8 @@ print_node (file, prefix, node, indent)
     fputs (" protected", file);
   if (TREE_STATIC (node))
     fputs (" static", file);
-  /* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
   if (TREE_DEPRECATED (node))
     fputs (" deprecated", file);
-  /* APPLE LOCAL end deprecated ilr */
   /* APPLE LOCAL begin unavailable (Radar 2809697) ilr */
   if (TREE_UNAVAILABLE (node))
     fputs (" unavailable", file);
@@ -334,6 +332,8 @@ print_node (file, prefix, node, indent)
 	fputs (" common", file);
       if (DECL_EXTERNAL (node))
 	fputs (" external", file);
+      if (DECL_WEAK (node))
+	fputs (" weak", file);
       if (DECL_REGISTER (node) && TREE_CODE (node) != FIELD_DECL
 	  && TREE_CODE (node) != FUNCTION_DECL
 	  && TREE_CODE (node) != LABEL_DECL)
@@ -344,6 +344,9 @@ print_node (file, prefix, node, indent)
       /* APPLE LOCAL private extern */
       if (DECL_PRIVATE_EXTERN (node))
 	fputs (" private_extern", file);
+      /* APPLE LOCAL coalesced */
+      if (DECL_COALESCED (node))
+	fputs (" coalesced", file);
 
       if (TREE_CODE (node) == TYPE_DECL && TYPE_DECL_SUPPRESS_DEBUG (node))
 	fputs (" suppress-debug", file);
@@ -397,7 +400,7 @@ print_node (file, prefix, node, indent)
       if (DECL_LANG_FLAG_7 (node))
 	fputs (" decl_7", file);
 
-      fprintf (file, " %s", GET_MODE_NAME(mode));
+      fprintf (file, " %s", GET_MODE_NAME (mode));
       fprintf (file, " file %s line %d",
 	       DECL_SOURCE_FILE (node), DECL_SOURCE_LINE (node));
 
@@ -541,7 +544,7 @@ print_node (file, prefix, node, indent)
 	fputs (" type_6", file);
 
       mode = TYPE_MODE (node);
-      fprintf (file, " %s", GET_MODE_NAME(mode));
+      fprintf (file, " %s", GET_MODE_NAME (mode));
 
       print_node (file, "size", TYPE_SIZE (node), indent + 4);
       print_node (file, "unit size", TYPE_SIZE_UNIT (node), indent + 4);
@@ -717,17 +720,25 @@ print_node (file, prefix, node, indent)
 	  }
 	  break;
 
+	case VECTOR_CST:
+	  {
+	    tree vals = TREE_VECTOR_CST_ELTS (node);
+	    char buf[10];
+	    tree link;
+	    int i;
+
+	    i = 0;
+	    for (link = vals; link; link = TREE_CHAIN (link), ++i)
+	      {
+		sprintf (buf, "elt%d: ", i);
+		print_node (file, buf, TREE_VALUE (link), indent + 4);
+	      }
+	  }
+	  break;
+
 	case COMPLEX_CST:
 	  print_node (file, "real", TREE_REALPART (node), indent + 4);
 	  print_node (file, "imag", TREE_IMAGPART (node), indent + 4);
-	  break;
-
-/* APPLE LOCAL: AltiVec - might not be written in target-independent manner!!! */
-	case VECTOR_CST:
-	  print_node (file, "0", TREE_VECTOR_CST_0 (node), indent + 4);
-	  print_node (file, "1", TREE_VECTOR_CST_1 (node), indent + 4);
-	  print_node (file, "2", TREE_VECTOR_CST_2 (node), indent + 4);
-	  print_node (file, "3", TREE_VECTOR_CST_3 (node), indent + 4);
 	  break;
 
 	case STRING_CST:

@@ -313,6 +313,16 @@ darwin_pragma_call_on_unload (pfile)
 }
 /* APPLE LOCAL end CALL_ON_LOAD/CALL_ON_UNLOAD pragmas  20020202 turly  */
 
+/* APPLE LOCAL begin CALL_ON_MODULE_BIND deprecated 2002-4-10 ff */
+void
+darwin_pragma_call_on_module_bind (pfile)
+     cpp_reader *pfile ATTRIBUTE_UNUSED;
+{
+  warning ("#pragma CALL_ON_MODULE_BIND is no longer supported, ignoring.  "
+  	   "Use CALL_ON_LOAD instead.");
+}
+/* APPLE LOCAL end CALL_ON_MODULE_BIND deprecated 2002-4-10 ff */
+
 /* APPLE LOCAL begin temporary pragmas 2001-07-05 sts */
 /* These need to live only long enough to get their uses flushed out
    of the system.  */

@@ -126,11 +126,9 @@ struct tree_common
 {
   tree chain;
   tree type;
-/* APPLE LOCAL PFE - aux not needed for PFE (actually by anyone!).  */
-#ifndef PFE
-  void *aux;
-#endif
+
   ENUM_BITFIELD(tree_code) code : 8;
+
   unsigned side_effects_flag : 1;
   unsigned constant_flag : 1;
   unsigned addressable_flag : 1;
@@ -138,6 +136,8 @@ struct tree_common
   unsigned readonly_flag : 1;
   unsigned unsigned_flag : 1;
   unsigned asm_written_flag: 1;
+  /* APPLE LOCAL unavailable (Radar 2809697) ilr */
+  unsigned unavailable_flag : 1;
 
   unsigned used_flag : 1;
   unsigned nothrow_flag : 1;
@@ -146,11 +146,8 @@ struct tree_common
   unsigned private_flag : 1;
   unsigned protected_flag : 1;
   unsigned bounded_flag : 1;
-  /* APPLE LOCAL deprecated (Radar 2637521) ilr */
   unsigned deprecated_flag : 1;
-  /* APPLE LOCAL unavailable (Radar 2809697) ilr */
-  unsigned unavailable_flag : 1;
-  
+
   unsigned lang_flag_0 : 1;
   unsigned lang_flag_1 : 1;
   unsigned lang_flag_2 : 1;
@@ -158,10 +155,7 @@ struct tree_common
   unsigned lang_flag_4 : 1;
   unsigned lang_flag_5 : 1;
   unsigned lang_flag_6 : 1;
-  /* This flag is presently unused.  However, language front-ends
-     should not make use of this flag; it is reserved for future
-     expansion.  */
-  unsigned dummy : 1;
+  unsigned unused_1 : 1;
 };
 
 /* The following table lists the uses of each of the above flags and
@@ -185,15 +179,16 @@ struct tree_common
        TREE_VIA_VIRTUAL in
            TREE_LIST or TREE_VEC
        TREE_CONSTANT_OVERFLOW in
-   APPLE LOCAL: AltiVec
            INTEGER_CST, REAL_CST, COMPLEX_CST, VECTOR_CST
        TREE_SYMBOL_REFERENCED in
            IDENTIFIER_NODE
+       CLEANUP_EH_ONLY in
+           TARGET_EXPR, WITH_CLEANUP_EXPR, CLEANUP_STMT,
+	   TREE_LIST elements of a block's cleanup list.
 
    public_flag:
 
        TREE_OVERFLOW in
-   APPLE LOCAL: AltiVec
            INTEGER_CST, REAL_CST, COMPLEX_CST, VECTOR_CST
        TREE_PUBLIC in
            VAR_DECL or FUNCTION_DECL or IDENTIFIER_NODE
@@ -207,7 +202,7 @@ struct tree_common
        TREE_VIA_PRIVATE in
            TREE_LIST or TREE_VEC
        TREE_PRIVATE in
-           ??? unspecified nodes
+           ..._DECL
 
    protected_flag:
 
@@ -216,7 +211,7 @@ struct tree_common
 	   TREE_VEC
        TREE_PROTECTED in
            BLOCK
-	   ??? unspecified nodes
+	   ..._DECL
 
    side_effects_flag:
 
@@ -277,14 +272,12 @@ struct tree_common
 	   IDENTIFIER_NODE
        TYPE_BOUNDED in
 	   ..._TYPE
-   
-   APPLE LOCAL begin deprecated (Radar 2637521) ilr
+
    deprecated_flag:
 
 	TREE_DEPRECATED in
 	   ..._DECL
-   APPLE LOCAL end deprecated ilr
-   
+
    APPLE LOCAL begin unavailable (Radar 2809697) ilr
    unavailable_flag:
 
@@ -528,6 +521,11 @@ extern void tree_class_check_failed PARAMS ((const tree, int,
    In a CONSTRUCTOR, nonzero means allocate static storage.  */
 #define TREE_STATIC(NODE) ((NODE)->common.static_flag)
 
+/* In a TARGET_EXPR, WITH_CLEANUP_EXPR, CLEANUP_STMT, or element of a
+   block's cleanup list, means that the pertinent cleanup should only be
+   executed if an exception is thrown, not on normal exit of its scope.  */
+#define CLEANUP_EH_ONLY(NODE) ((NODE)->common.static_flag)
+
 /* In a CONVERT_EXPR, NOP_EXPR or COMPOUND_EXPR, this means the node was
    made implicitly and should not lead to an "unused value" warning.  */
 #define TREE_NO_UNUSED_WARNING(NODE) ((NODE)->common.static_flag)
@@ -536,11 +534,10 @@ extern void tree_class_check_failed PARAMS ((const tree, int,
    chain is via a `virtual' declaration.  */
 #define TREE_VIA_VIRTUAL(NODE) ((NODE)->common.static_flag)
 
-/* APPLE LOCAL: AltiVec */
 /* In an INTEGER_CST, REAL_CST, COMPLEX_CST, or VECTOR_CST this means
-   there was an overflow in folding.  This is distinct from TREE_OVERFLOW
-   because ANSI C requires a diagnostic when overflows occur in constant
-   expressions.  */
+   there was an overflow in folding.  This is distinct from
+   TREE_OVERFLOW because ANSI C requires a diagnostic when overflows
+   occur in constant expressions.  */
 #define TREE_CONSTANT_OVERFLOW(NODE) ((NODE)->common.static_flag)
 
 /* In an IDENTIFIER_NODE, this means that assemble_name was called with
@@ -548,11 +545,10 @@ extern void tree_class_check_failed PARAMS ((const tree, int,
 #define TREE_SYMBOL_REFERENCED(NODE) \
   (IDENTIFIER_NODE_CHECK (NODE)->common.static_flag)
 
-/* APPLE LOCAL: AltiVec */
 /* In an INTEGER_CST, REAL_CST, COMPLEX_CST, or VECTOR_CST, this means
-   there was an overflow in folding, and no warning has been issued for
-   this subexpression.  TREE_OVERFLOW implies TREE_CONSTANT_OVERFLOW, but
-   not vice versa.  */
+   there was an overflow in folding, and no warning has been issued
+   for this subexpression.  TREE_OVERFLOW implies
+   TREE_CONSTANT_OVERFLOW, but not vice versa.  */
 #define TREE_OVERFLOW(NODE) ((NODE)->common.public_flag)
 
 /* In a VAR_DECL or FUNCTION_DECL,
@@ -686,11 +682,9 @@ extern void tree_class_check_failed PARAMS ((const tree, int,
 
 #define TREE_BOUNDED(NODE) ((NODE)->common.bounded_flag)
 
-/* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
 /* Nonzero in a IDENTIFIER_NODE if the use of the name is defined as a
    deprecated feature by __attribute__((deprecated)).  */
 #define TREE_DEPRECATED(NODE) ((NODE)->common.deprecated_flag)
-/* APPLE LOCAL end deprecated ilr */
 
 /* APPLE LOCAL begin unavailable (Radar 2809697) ilr */
 /* Nonzero in a IDENTIFIER_NODE if the use of the name is defined as a
@@ -709,8 +703,8 @@ extern void tree_class_check_failed PARAMS ((const tree, int,
 
 /* APPLE LOCAL PFE */
 #ifdef PFE
-/* Use the unused 'dummy' bit to mark visited nodes during freeze/thaw.  */
-#define TREE_LANG_FLAG_7(NODE) ((NODE)->common.dummy)
+/* Use the unused_1 bit to mark visited nodes during freeze/thaw.  */
+#define TREE_LANG_FLAG_7(NODE) ((NODE)->common.unused_1)
 #endif
 
 
@@ -750,10 +744,9 @@ struct tree_int_cst
   } int_cst;
 };
 
-/* APPLE LOCAL: AltiVec */
-/* In REAL_CST, STRING_CST, COMPLEX_CST, VECTOR_CST nodes, and CONSTRUCTOR
-   nodes, and generally in all kinds of constants that could
-   be given labels (rather than being immediate).  */
+/* In REAL_CST, STRING_CST, COMPLEX_CST, VECTOR_CST nodes, and
+   CONSTRUCTOR nodes, and generally in all kinds of constants that
+   could be given labels (rather than being immediate).  */
 
 #define TREE_CST_RTL(NODE) (CST_OR_CONSTRUCTOR_CHECK (NODE)->real_cst.rtl)
 
@@ -797,26 +790,15 @@ struct tree_complex
   tree imag;
 };
 
-/* APPLE LOCAL begin AltiVec */
-/* might not be written in target-independent manner!!! */
 /* In a VECTOR_CST node.  */
-#define TREE_VECTOR_CST_LOW(NODE) ((NODE)->vector.low)
-#define TREE_VECTOR_CST_HIGH(NODE) ((NODE)->vector.high)
-
-#define TREE_VECTOR_CST_0(NODE) ((NODE)->vector.low->complex.real)
-#define TREE_VECTOR_CST_1(NODE) ((NODE)->vector.low->complex.imag)
-#define TREE_VECTOR_CST_2(NODE) ((NODE)->vector.high->complex.real)
-#define TREE_VECTOR_CST_3(NODE) ((NODE)->vector.high->complex.imag)
+#define TREE_VECTOR_CST_ELTS(NODE) (VECTOR_CST_CHECK (NODE)->vector.elements)
 
 struct tree_vector
 {
-  char common[sizeof (struct tree_common)];
-  struct rtx_def *rtl;	/* acts as link to register transfer language
-				   (rtl) info */
-  union tree_node *low;
-  union tree_node *high;
+  struct tree_common common;
+  rtx rtl;
+  tree elements;
 };
-/* APPLE LOCAL end AltiVec */
 
 #include "hashtable.h"
 
@@ -1744,11 +1726,9 @@ struct tree_type
 #define DECL_PRIVATE_EXTERN(NODE) (DECL_CHECK (NODE)->decl.private_extern_flag)
 
 /* APPLE LOCAL coalesced  */
-#ifdef HAVE_COALESCED_SYMBOLS
 /* "coalesced" symbols are similar to, but have more restrictions than,
    ELF-style "weak" symbols.  */
 #define DECL_COALESCED(NODE) (DECL_CHECK (NODE)->decl.coalesced_flag)
-#endif
 
 /* Used in TREE_PUBLIC decls to indicate that copies of this DECL in
    multiple translation units should be merged.  */
@@ -1843,17 +1823,6 @@ struct tree_decl
   unsigned artificial_flag : 1;
   unsigned weak_flag : 1;
 
-  /* APPLE LOCAL weak_import (Radar 2809704) ilr */
-  unsigned weak_import_flag : 1;
-
-  /* APPLE LOCAL private extern */
-  unsigned private_extern_flag : 1;
-
-  /* APPLE LOCAL coalesced  */
-#ifdef HAVE_COALESCED_SYMBOLS
-  unsigned coalesced_flag : 1;
-#endif
-
   unsigned non_addr_const_p : 1;
   unsigned no_instrument_function_entry_exit : 1;
   unsigned comdat_flag : 1;
@@ -1866,7 +1835,13 @@ struct tree_decl
   unsigned non_addressable : 1;
   unsigned user_align : 1;
   unsigned uninlinable : 1;
-  /* Three unused bits.  */
+  /* APPLE LOCAL weak_import (Radar 2809704) ilr */
+  unsigned weak_import_flag : 1;
+  /* APPLE LOCAL private extern */
+  unsigned private_extern_flag : 1;
+  /* APPLE LOCAL coalesced  */
+  unsigned coalesced_flag : 1;
+  /* Zero unused bits.  */
 
   unsigned lang_flag_0 : 1;
   unsigned lang_flag_1 : 1;
@@ -1936,10 +1911,9 @@ union tree_node
   struct tree_common common;
   struct tree_int_cst int_cst;
   struct tree_real_cst real_cst;
+  struct tree_vector vector;
   struct tree_string string;
   struct tree_complex complex;
-  /* APPLE LOCAL AltiVec */
-  struct tree_vector vector;
   struct tree_identifier identifier;
   struct tree_decl decl;
   struct tree_type type;
@@ -2005,6 +1979,7 @@ enum tree_index
   TI_UV16QI_TYPE,
 
   TI_V4SF_TYPE,
+  TI_V16SF_TYPE,
   TI_V4SI_TYPE,
   TI_V8HI_TYPE,
   TI_V8QI_TYPE,
@@ -2012,9 +1987,12 @@ enum tree_index
   TI_V2SI_TYPE,
   TI_V2SF_TYPE,
   TI_V16QI_TYPE,
-   /* APPLE LOCAL */
+  /* APPLE LOCAL begin AltiVec */
   TI_VPIXEL_TYPE,
-
+  TI_BV16QI_TYPE,
+  TI_BV8HI_TYPE,
+  TI_BV4SI_TYPE,
+  /* APPLE LOCAL end AltiVec */
   TI_MAIN_IDENTIFIER,
 
   TI_MAX
@@ -2080,7 +2058,6 @@ extern tree global_trees[TI_MAX];
 #define unsigned_V8HI_type_node		global_trees[TI_UV8HI_TYPE]
 #define unsigned_V4HI_type_node		global_trees[TI_UV4HI_TYPE]
 #define unsigned_V2SI_type_node		global_trees[TI_UV2SI_TYPE]
-#define unsigned_VPIXEL_type_node	global_trees[TI_VPIXEL_TYPE]
 
 #define V16QI_type_node			global_trees[TI_V16QI_TYPE]
 #define V4SF_type_node			global_trees[TI_V4SF_TYPE]
@@ -2090,17 +2067,27 @@ extern tree global_trees[TI_MAX];
 #define V4HI_type_node			global_trees[TI_V4HI_TYPE]
 #define V2SI_type_node			global_trees[TI_V2SI_TYPE]
 #define V2SF_type_node			global_trees[TI_V2SF_TYPE]
+#define V16SF_type_node			global_trees[TI_V16SF_TYPE]
 
 /* APPLE LOCAL begin AltiVec */
+/* The 'vector unsigned...' and 'vector bool...' types may be
+   synonymous to the back-end, but they must be kept separate in
+   the front-end.  */
+
+#define unsigned_VPIXEL_type_node	global_trees[TI_VPIXEL_TYPE]
+#define bool_V16QI_type_node		global_trees[TI_BV16QI_TYPE]
+#define bool_V8HI_type_node		global_trees[TI_BV8HI_TYPE]
+#define bool_V4SI_type_node		global_trees[TI_BV4SI_TYPE]
+   
 #define vector_unsigned_char_type_node	unsigned_V16QI_type_node
 #define vector_signed_char_type_node	V16QI_type_node
-#define vector_boolean_char_type_node	unsigned_V16QI_type_node
+#define vector_boolean_char_type_node	bool_V16QI_type_node
 #define vector_unsigned_short_type_node	unsigned_V8HI_type_node
 #define vector_signed_short_type_node	V8HI_type_node
-#define vector_boolean_short_type_node	unsigned_V8HI_type_node
+#define vector_boolean_short_type_node	bool_V8HI_type_node
 #define vector_unsigned_long_type_node	unsigned_V4SI_type_node
 #define vector_signed_long_type_node	V4SI_type_node
-#define vector_boolean_long_type_node	unsigned_V4SI_type_node
+#define vector_boolean_long_type_node	bool_V4SI_type_node
 #define vector_float_type_node		V4SF_type_node
 #define vector_pixel_type_node		unsigned_VPIXEL_type_node
 /* APPLE LOCAL end AltiVec */
@@ -2203,11 +2190,10 @@ extern tree build			PARAMS ((enum tree_code, tree, ...));
 extern tree build_nt			PARAMS ((enum tree_code, ...));
 
 extern tree build_int_2_wide		PARAMS ((unsigned HOST_WIDE_INT, HOST_WIDE_INT));
+extern tree build_vector                PARAMS ((tree, tree));
 extern tree build_real			PARAMS ((tree, REAL_VALUE_TYPE));
 extern tree build_real_from_int_cst 	PARAMS ((tree, tree));
 extern tree build_complex		PARAMS ((tree, tree, tree));
-/* APPLE LOCAL: AltiVec */
-extern tree build_vector		PARAMS ((tree, tree, tree, tree, tree));
 extern tree build_string		PARAMS ((int, const char *));
 extern tree build1			PARAMS ((enum tree_code, tree, tree));
 extern tree build_tree_list		PARAMS ((tree, tree));
@@ -2352,6 +2338,7 @@ extern int default_comp_type_attributes PARAMS ((tree, tree));
 extern void default_set_default_type_attributes PARAMS ((tree));
 extern void default_insert_attributes PARAMS ((tree, tree *));
 extern bool default_function_attribute_inlinable_p PARAMS ((tree));
+extern bool default_ms_bitfield_layout_p PARAMS ((tree));
 
 /* Split a list of declspecs and attributes into two.  */
 
@@ -2441,6 +2428,8 @@ typedef struct record_layout_info_s
   /* The alignment of the record so far, allowing for the record to be
      padded only at the end, in bits.  */
   unsigned int unpadded_align;
+  /* The previous field layed out.  */
+  tree prev_field;
   /* The static variables (i.e., class variables, as opposed to
      instance variables) encountered in T.  */
   tree pending_statics;
@@ -2846,7 +2835,7 @@ extern int type_num_arguments                   PARAMS ((tree));
 
 extern int in_control_zone_p			PARAMS ((void));
 extern void expand_fixups			PARAMS ((rtx));
-extern tree expand_start_stmt_expr		PARAMS ((void));
+extern tree expand_start_stmt_expr		PARAMS ((int));
 extern tree expand_end_stmt_expr		PARAMS ((tree));
 extern void expand_expr_stmt			PARAMS ((tree));
 extern void expand_expr_stmt_value		PARAMS ((tree, int, int));
@@ -2869,7 +2858,9 @@ extern void expand_end_null_loop		PARAMS ((void));
 extern int expand_continue_loop			PARAMS ((struct nesting *));
 extern int expand_exit_loop			PARAMS ((struct nesting *));
 extern int expand_exit_loop_if_false		PARAMS ((struct nesting *,
-						       tree));
+						         tree));
+extern int expand_exit_loop_top_cond		PARAMS ((struct nesting *,
+							 tree));
 extern int expand_exit_something		PARAMS ((void));
 
 extern void expand_return			PARAMS ((tree));
@@ -2888,7 +2879,8 @@ extern struct nesting * current_nesting_level	PARAMS ((void));
 extern tree last_cleanup_this_contour		PARAMS ((void));
 extern void expand_start_case			PARAMS ((int, tree, tree,
 						       const char *));
-extern void expand_end_case			PARAMS ((tree));
+extern void expand_end_case_type		PARAMS ((tree, tree));
+#define expand_end_case(cond) expand_end_case_type (cond, NULL)
 extern int add_case_node                        PARAMS ((tree, tree,
 							 tree, tree *));
 extern int pushcase				PARAMS ((tree,
@@ -3006,7 +2998,8 @@ extern void preserve_data		PARAMS ((void));
 extern int object_permanent_p		PARAMS ((tree));
 extern int type_precision		PARAMS ((tree));
 extern int simple_cst_equal		PARAMS ((tree, tree));
-extern int compare_tree_int		PARAMS ((tree, unsigned int));
+extern int compare_tree_int		PARAMS ((tree,
+						 unsigned HOST_WIDE_INT));
 extern int type_list_equal		PARAMS ((tree, tree));
 extern int chain_member			PARAMS ((tree, tree));
 extern int chain_member_purpose		PARAMS ((tree, tree));
@@ -3178,6 +3171,7 @@ extern void expand_elseif		PARAMS ((tree));
 extern void save_stack_pointer		PARAMS ((void));
 extern void expand_decl			PARAMS ((tree));
 extern int expand_decl_cleanup		PARAMS ((tree, tree));
+extern int expand_decl_cleanup_eh	PARAMS ((tree, tree, int));
 extern void expand_anon_union_decl	PARAMS ((tree, tree, tree));
 extern void move_cleanups_up		PARAMS ((void));
 extern void expand_start_case_dummy	PARAMS ((void));
@@ -3246,6 +3240,8 @@ enum tree_dump_index
    values, extend the DUMP_OPTIONS array in tree-dump.c */
 #define TDF_ADDRESS	(1 << 0)	/* dump node addresses */
 #define TDF_SLIM	(1 << 1)	/* don't go wild following links */
+/* APPLE LOCAL new tree dump  ilr */
+#define TDF_DMP_TREE	(1 << 2)	/* use dmp_tree() to display nodes */
 
 typedef struct dump_info *dump_info_p;
 

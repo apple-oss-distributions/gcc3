@@ -43,17 +43,18 @@ Boston, MA 02111-1307, USA.  */
 /* APPLE LOCAL PFE */
 #ifdef PFE
 #include "pfe/pfe.h"
-#define MACHOPIC_FUNCTION_BASE_NAME() \
-  ((char *)PFE_SAVESTRING (machopic_function_base_name ())) 
-
+#include "pfe/pfe-header.h"
 struct darwin_pfe_additions_t {
   tree machopic_non_lazy_pointers;
   tree machopic_stubs;
+  char *function_base;
+  int flag_pic;
+  int dynamic_no_pic;
 };
-
-#else
-#define MACHOPIC_FUNCTION_BASE_NAME() (machopic_function_base_name())
 #endif /* PFE */
+
+/* APPLE LOCAL C++ EH */
+rtx personality_libfunc_used = 0;
 
 extern void machopic_output_stub PARAMS ((FILE *, const char *, const char *));
 
@@ -64,6 +65,52 @@ static void update_stubs PARAMS ((const char *));
 /* APPLE LOCAL prototypes  */
 static tree machopic_non_lazy_ptr_list_entry PARAMS ((const char*, int));
 static tree machopic_stub_list_entry PARAMS ((const char *));
+
+/* APPLE LOCAL begin coalescing  */
+void
+make_decl_coalesced (decl, private_extern_p)
+     tree decl;
+     int private_extern_p;      /* 0 for global, 1 for private extern */
+{
+  int no_toc_p = 1;             /* Don't add to table of contents */
+#if 0
+  const char *decl_name = IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (decl));
+#endif
+  static const char *const names[4] = {
+	"__TEXT,__textcoal,coalesced",
+	"__TEXT,__textcoal_nt,coalesced,no_toc",
+	"__DATA,__datacoal,coalesced",
+	"__DATA,__datacoal_nt,coalesced,no_toc",
+  };
+  const char *sec;
+  int idx;
+
+  /* Do nothing if coalescing is disabled.  */
+  if (!COALESCING_ENABLED_P())
+    return;
+
+  /* We *do* need to mark these *INTERNAL* functions coalesced: though
+     these pseudo-functions themselves will never appear, their cloned
+     descendants need to be marked coalesced too.  */
+#if 0
+  /* Don't touch anything with " *INTERNAL" in its name.  */
+  if (strstr (decl_name, " *INTERNAL") != NULL)
+    return;
+#endif
+
+  DECL_COALESCED (decl) = 1;
+  if (private_extern_p)
+    DECL_PRIVATE_EXTERN (decl) = 1;
+  TREE_PUBLIC (decl) = 1;
+
+  idx = 0;
+  if (TREE_CODE (decl) != FUNCTION_DECL)
+    idx = 2;
+  sec = names[idx + (no_toc_p ? 1 : 0)];
+
+  DECL_SECTION_NAME (decl) = build_string (strlen (sec), sec);
+}
+/* APPLE LOCAL end coalescing  */
 
 int
 name_needs_quotes (name)
@@ -241,7 +288,18 @@ machopic_define_name (name)
 /* This is a static to make inline functions work.  The rtx
    representing the PIC base symbol always points to here. */
 
+/* APPLE LOCAL begin PFE */
+#ifdef PFE
+/* The function_base is specially treated by PFE_SAVESTRING (actually
+   by it calling darwin_pfe_maybe_savestring()) so that we always use
+   the same buffer.  There are rtl references to this buffer that 
+   expect that when the buffer changes all those references will
+   point to the new value in the buffer.  */
+static char *function_base = NULL;
+#else
 static char function_base[32];
+#endif
+/* APPLE LOCAL end PFE */
 
 static int current_pic_label_num;
 
@@ -250,6 +308,13 @@ machopic_function_base_name ()
 {
   static const char *name = NULL;
   static const char *current_name;
+
+  /* APPLE LOCAL begin PFE */
+#ifdef PFE
+  if (function_base == NULL)
+    function_base = (char *)PFE_MALLOC (32, PFE_ALLOC_FUNCTION_BASE);
+#endif
+  /* APPLE LOCAL end PFE */
 
   /* APPLE LOCAL  dynamic-no-pic  */
   if (MACHO_DYNAMIC_NO_PIC_P ()) abort ();
@@ -979,7 +1044,10 @@ machopic_finish (asm_out_file)
       sym = alloca (strlen (sym_name) + 2);
       if (sym_name[0] == '*' || sym_name[0] == '&')
 	strcpy (sym, sym_name + 1);
-      else if (sym_name[0] == '-' || sym_name[0] == '+')
+      else if (sym_name[0] == '-'
+	       || sym_name[0] == '+'
+	       || sym_name[0] == '"'
+	       || name_needs_quotes (sym_name))
 	strcpy (sym, sym_name);	  
       else
 	sym[0] = '_', strcpy (sym + 1, sym_name);
@@ -1043,6 +1111,19 @@ machopic_finish (asm_out_file)
 			    GET_MODE_ALIGNMENT (Pmode), 1);
 	}
     }
+
+  /* APPLE LOCAL begin C++ EH  */
+  /* Output a ".reference __gxx_personality_v0" to keep linking semantics
+     the same (we used to make a direct reference to this symbol, but now
+     it's encoded so that the __eh_frame section can live in __TEXT.)  */
+  /*** temporarily disabled ("0 &&") for compatibility with -all_load ***/
+  if ( 0 && personality_libfunc_used)
+    {
+      const char *str = XSTR (personality_libfunc_used, 0);
+      STRIP_NAME_ENCODING (str, str);
+      fprintf (asm_out_file, ".reference _%s\n", str);
+    }
+  /* APPLE LOCAL end C++ EH  */
 }
 
 int 
@@ -1271,13 +1352,14 @@ machopic_asm_out_destructor (symbol, priority)
 static int dwarf_label_counter;
 
 void
-darwin_asm_output_dwarf_delta (file, size, lab1, lab2)
+darwin_asm_output_dwarf_delta (file, size, lab1, lab2, force_reloc)
      FILE *file;
      int size ATTRIBUTE_UNUSED;
      const char *lab1, *lab2;
+     int force_reloc;
 {
   const char *p = lab1 + (lab1[0] == '*');
-  int islocaldiff = (p[0] == 'L');
+  int islocaldiff = p[0] == 'L' && !force_reloc;
 
   if (islocaldiff)
     fprintf (file, "\t.set L$set$%d,", dwarf_label_counter);
@@ -1286,9 +1368,8 @@ darwin_asm_output_dwarf_delta (file, size, lab1, lab2)
   assemble_name (file, lab1);
   fprintf (file, "-");
   assemble_name (file, lab2);
-  fprintf (file, "\n");
   if (islocaldiff)
-    fprintf (file, "\t%s L$set$%d", ".long"/*unaligned_integer_asm_op (size)*/,
+    fprintf (file, "\n\t%s L$set$%d", ".long"/*unaligned_integer_asm_op (size)*/,
 	     dwarf_label_counter++);
 }
 
@@ -1328,7 +1409,8 @@ darwin_section_type_flags (decl, name, reloc)
   unsigned int flags = default_section_type_flags (decl, name, reloc);
  
   /* Weak or coalesced variables live in a writable section.  */
-  if (decl != 0 && TREE_CODE (decl) != FUNCTION_DECL && DECL_WEAK (decl))
+  if (decl != 0 && TREE_CODE (decl) != FUNCTION_DECL
+      && DECL_IS_COALESCED_OR_WEAK (decl))
     flags |= SECTION_WRITE;
   
   return flags;
@@ -1348,7 +1430,8 @@ darwin_section_type_flags (decl, name, reloc)
    by the argument as well as *pp itself (*pp is never NULL in this case).  Of
    course during thawing *pp will be the pointer set when the function was
    originally called with a NULL argument.  */
-void darwin_pfe_freeze_thaw_target_additions (pp)
+void 
+darwin_pfe_freeze_thaw_target_additions (pp)
      void *pp;
 {
   struct darwin_pfe_additions_t *hdr;
@@ -1385,22 +1468,66 @@ void darwin_pfe_freeze_thaw_target_additions (pp)
   PFE_GLOBAL_TO_HDR_IF_FREEZING (machopic_stubs);
   PFE_FREEZE_THAW_WALK(hdr->machopic_stubs);
   PFE_HDR_TO_GLOBAL_IF_THAWING (machopic_stubs);
+
+  PFE_GLOBAL_TO_HDR_IF_FREEZING (function_base);
+  pfe_freeze_thaw_ptr_fp (&hdr->function_base);
+  PFE_HDR_TO_GLOBAL_IF_THAWING (function_base);
+
+  /* The following must be be consistent when loading a pfe file and
+     thus only saved when dumping the file.  */
+  if (PFE_FREEZING)
+    {
+      hdr->flag_pic = flag_pic;
+      hdr->dynamic_no_pic = MACHO_DYNAMIC_NO_PIC_P ();
+    }
 }
 
+/* This is called only by pfe_savestring() for dumping when the macro
+   PFE_TARGET_MAYBE_SAVESTRING is defined (which it is for darwin).
+   This imposes an addtional condition on whether we allocate strings
+   in PFE memory with pfe_savestring().  For the function_base we must
+   only allocate a single stirng buffer and never make copies.  That
+   buffer is allocated (in PFE memory) by machopic_function_base_name().
+   It needs to be a fixed buffer because there are rtl references to
+   it which assume that when the buffer's contents change all the rtl
+   references will reflect that change.  */
+int
+darwin_pfe_maybe_savestring (s)
+     char *s;
+{
+  return (s != function_base);
+}
+
+/* Called to check for consistent target-specific switches in pfe files.  */
+void
+darwin_pfe_check_target_settings ()
+{
+  struct darwin_pfe_additions_t *hdr 
+         = (struct darwin_pfe_additions_t *)pfe_compiler_state_ptr->pfe_target_additions;
+  
+  if (hdr->dynamic_no_pic != MACHO_DYNAMIC_NO_PIC_P ())
+    fatal_error ("Inconsistent setting of -mdynamic-no-pic on pre-compiled header dump and load.");
+         
+  if (hdr->flag_pic != flag_pic)
+    fatal_error ("Inconsistent setting of -fPIC on pre-compiled header dump and load.");
+}
 #endif /* PFE */
 
-/* APPLE LOCAL begin double destructor  turly 20020214  */
+/* APPLE LOCAL begin double destructor turly 20020214  */
 #include "c-common.h"
 
 extern int warning (const char *, ...);
 
-/* Handle __attribute__ ((only_deleting_destructor)).
+/* Handle __attribute__ ((apple_kext_compatibility)).
    This only applies to darwin kexts for 295 compatibility -- it shrinks the
    vtable for classes with this attribute (and their descendants) by not
    outputting the new 3.0 nondeleting destructor.  This means that such
    objects CANNOT be allocated on the stack or as globals UNLESS they have
    a completely empty `operator delete'.
-   Luckily, this fits in with the Darwin kext model.  */
+   Luckily, this fits in with the Darwin kext model.
+   
+   This attribute also disables gcc3's potential overlaying of derived
+   class data members on the padding at the end of the base class.  */
 
 tree
 darwin_handle_odd_attribute (node, name, args, flags, no_add_attrs)
@@ -1427,7 +1554,7 @@ darwin_handle_odd_attribute (node, name, args, flags, no_add_attrs)
 
   return NULL_TREE;
 }
-/* APPLE LOCAL end  double destructor  turly 20020214  */
+/* APPLE LOCAL end  double destructor turly 20020214  */
 
 /* APPLE LOCAL begin darwin_set_section_for_var_p  turly 20020226  */
 
@@ -1493,3 +1620,19 @@ darwin_set_section_for_var_p (exp, reloc, align)
 }
 /* APPLE LOCAL end darwin_set_section_for_var_p  turly 20020226  */
 
+/* Generate a PC-relative reference to a Mach-O non-lazy-symbol.  */ 
+void
+darwin_non_lazy_pcrel (FILE *file, rtx addr)
+{
+  const char *str;
+  const char *nlp_name;
+
+  if (GET_CODE (addr) != SYMBOL_REF)
+    abort ();
+
+  STRIP_NAME_ENCODING (str, XSTR (addr, 0));
+  nlp_name = machopic_non_lazy_ptr_name (str);
+  fputs("\t.long\t", file);
+  ASM_OUTPUT_LABELREF(file, nlp_name);
+  fputs ("-.", file);
+}

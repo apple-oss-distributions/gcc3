@@ -1,6 +1,6 @@
 /* Language-independent node constructors for parse phase of GNU compiler.
    Copyright (C) 1987, 1988, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001 Free Software Foundation, Inc.
+   1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -578,6 +578,35 @@ build_int_2_wide (low, hi)
   return t;
 }
 
+/* Return a new VECTOR_CST node whose type is TYPE and whose values
+   are in a list pointed by VALS.  */
+
+tree
+build_vector (type, vals)
+     tree type, vals;
+{
+  tree v = make_node (VECTOR_CST);
+  int over1 = 0, over2 = 0;
+  tree link;
+
+  TREE_VECTOR_CST_ELTS (v) = vals;
+  TREE_TYPE (v) = type;
+
+  /* Iterate through elements and check for overflow.  */
+  for (link = vals; link; link = TREE_CHAIN (link))
+    {
+      tree value = TREE_VALUE (link);
+
+      over1 |= TREE_OVERFLOW (value);
+      over2 |= TREE_CONSTANT_OVERFLOW (value);
+    }
+  
+  TREE_OVERFLOW (v) = over1;
+  TREE_CONSTANT_OVERFLOW (v) = over2;
+
+  return v;
+}
+
 /* Return a new REAL_CST node whose type is TYPE and value is D.  */
 
 tree
@@ -760,30 +789,6 @@ build_complex (type, real, imag)
   TREE_OVERFLOW (t) = TREE_OVERFLOW (real) | TREE_OVERFLOW (imag);
   TREE_CONSTANT_OVERFLOW (t)
     = TREE_CONSTANT_OVERFLOW (real) | TREE_CONSTANT_OVERFLOW (imag);
-  return t;
-}
-
-/* APPLE LOCAL: AltiVec */
-/* Return a newly constructed VECTOR_CST node whose value is specified
-   by LOW and HIGH.  Both LOW and HIGH should be constant nodes.
-   TYPE, if specified, will be the type of the VECTOR_CST; otherwise a
-   new type will be made.  */
-
-tree
-build_vector (type, p0, p1, p2, p3)
-     tree type;
-     tree p0, p1, p2, p3;
-{
-  register tree t = make_node (VECTOR_CST);
-
-  TREE_VECTOR_CST_LOW (t) = build_complex (NULL_TREE, p0, p1);
-  TREE_VECTOR_CST_HIGH (t) = build_complex (NULL_TREE, p2, p3);
-  TREE_TYPE (t) = type ? type : vector_unsigned_long_type_node;
-  TREE_OVERFLOW (t) = (TREE_OVERFLOW (p0) | TREE_OVERFLOW (p1)
-		       | TREE_OVERFLOW (p2) | TREE_OVERFLOW (p3));
-  TREE_CONSTANT_OVERFLOW (t)
-    = (TREE_CONSTANT_OVERFLOW (p0) | TREE_CONSTANT_OVERFLOW (p1)
-       | TREE_CONSTANT_OVERFLOW (p2) | TREE_CONSTANT_OVERFLOW (p3));
   return t;
 }
 
@@ -2554,6 +2559,12 @@ build1 (code, type, node)
       TREE_READONLY (t) = 0;
       break;
 
+    case INDIRECT_REF:
+      /* Whether a dereference is readonly has nothing to do with whether
+	 its operand is readonly.  */
+      TREE_READONLY (t) = 0;
+      break;
+
     default:
       if (TREE_CODE_CLASS (code) == '1' && node && TREE_CONSTANT (node))
 	TREE_CONSTANT (t) = 1;
@@ -2577,10 +2588,6 @@ build_nt VPARAMS ((enum tree_code code, ...))
 
   VA_OPEN (p, code);
   VA_FIXEDARG (p, enum tree_code, code);
-
-#ifndef ANSI_PROTOTYPES
-  code = va_arg (p, enum tree_code);
-#endif
 
   t = make_node (code);
   length = TREE_CODE_LENGTH (code);
@@ -2781,6 +2788,16 @@ default_function_attribute_inlinable_p (fndecl)
   return false;
 }
 
+/* Default value of targetm.ms_bitfield_layout_p that always returns
+   false.  */
+bool
+default_ms_bitfield_layout_p (record)
+     tree record ATTRIBUTE_UNUSED;
+{
+  /* By default, GCC does not use the MS VC++ bitfield layout rules.  */
+  return false;
+}
+
 /* Return non-zero if IDENT is a valid name for attribute ATTR,
    or zero if not.
 
@@ -2962,7 +2979,7 @@ merge_dllimport_decl_attributes (old, new)
 
   if (delete_dllimport_p)
     {
-      tree prev,t;
+      tree prev, t;
 
       /* Scan the list for dllimport and delete it.  */
       for (prev = NULL_TREE, t = a; t; prev = t, t = TREE_CHAIN (t))
@@ -3321,7 +3338,7 @@ attribute_list_contained (l1, l2)
 
   /* Maybe the lists are equal.  */
   if (t1 == 0 && t2 == 0)
-     return 1;
+    return 1;
 
   for (; t2 != 0; t2 = TREE_CHAIN (t2))
     {
@@ -3442,8 +3459,10 @@ tree_int_cst_compare (t1, t2)
     return 0;
 }
 
-/* Return 1 if T is an INTEGER_CST that can be represented in a single
-   HOST_WIDE_INT value.  If POS is nonzero, the result must be positive.  */
+/* Return 1 if T is an INTEGER_CST that can be manipulated efficiently on
+   the host.  If POS is zero, the value can be represented in a single
+   HOST_WIDE_INT.  If POS is nonzero, the value must be positive and can
+   be represented in a single unsigned HOST_WIDE_INT.  */
 
 int
 host_integerp (t, pos)
@@ -3455,9 +3474,9 @@ host_integerp (t, pos)
 	  && ((TREE_INT_CST_HIGH (t) == 0
 	       && (HOST_WIDE_INT) TREE_INT_CST_LOW (t) >= 0)
 	      || (! pos && TREE_INT_CST_HIGH (t) == -1
-		  && (HOST_WIDE_INT) TREE_INT_CST_LOW (t) < 0)
-	      || (! pos && TREE_INT_CST_HIGH (t) == 0
-		  && TREE_UNSIGNED (TREE_TYPE (t)))));
+		  && (HOST_WIDE_INT) TREE_INT_CST_LOW (t) < 0
+		  && ! TREE_UNSIGNED (TREE_TYPE (t)))
+	      || (pos && TREE_INT_CST_HIGH (t) == 0)));
 }
 
 /* Return the HOST_WIDE_INT least significant bits of T if it is an
@@ -3678,7 +3697,7 @@ simple_cst_equal (t1, t2)
 int
 compare_tree_int (t, u)
      tree t;
-     unsigned int u;
+     unsigned HOST_WIDE_INT u;
 {
   if (tree_int_cst_sgn (t) < 0)
     return -1;
@@ -3759,7 +3778,7 @@ build_reference_type (to_type)
 
 tree
 build_type_no_quals (t)
-  tree t;
+     tree t;
 {
   switch (TREE_CODE (t))
     {
@@ -3840,7 +3859,7 @@ build_range_type (type, lowval, highval)
    of just highval (maxval).  */
 
 tree
-build_index_2_type (lowval,highval)
+build_index_2_type (lowval, highval)
      tree lowval, highval;
 {
   return build_range_type (sizetype, lowval, highval);
@@ -3920,7 +3939,7 @@ build_array_type (elt_type, index_type)
 
 tree
 get_inner_array_type (array)
-    tree array;
+     tree array;
 {
   tree type = TREE_TYPE (array);
 
@@ -4296,7 +4315,8 @@ int_fits_type_p (c, type)
      tree c, type;
 {
   /* If the bounds of the type are integers, we can check ourselves.
-     Otherwise,. use force_fit_type, which checks against the precision.  */
+     If not, but this type is a subtype, try checking against that.
+     Otherwise, use force_fit_type, which checks against the precision.  */
   if (TYPE_MAX_VALUE (type) != NULL_TREE
       && TYPE_MIN_VALUE (type) != NULL_TREE
       && TREE_CODE (TYPE_MAX_VALUE (type)) == INTEGER_CST
@@ -4315,6 +4335,8 @@ int_fits_type_p (c, type)
 		&& ! (TREE_INT_CST_HIGH (c) < 0
 		      && TREE_UNSIGNED (TREE_TYPE (c))));
     }
+  else if (TREE_CODE (type) == INTEGER_TYPE && TREE_TYPE (type) != 0)
+    return int_fits_type_p (c, TREE_TYPE (type));
   else
     {
       c = copy_node (c);
@@ -4523,16 +4545,23 @@ append_random_chars (template)
 	 compiles since this can cause bootstrap comparison errors.  */
 
       if (stat (main_input_filename, &st) < 0)
-	abort ();
-
-      /* In VMS, ino is an array, so we have to use both values.  We
-	 conditionalize that.  */
+	{
+	  /* This can happen when preprocessed text is shipped between
+	     machines, e.g. with bug reports.  Assume that uniqueness
+	     isn't actually an issue.  */
+	  value = 1;
+	}
+      else
+	{
+	  /* In VMS, ino is an array, so we have to use both values.  We
+	     conditionalize that.  */
 #ifdef VMS
 #define INO_TO_INT(INO) ((int) (INO)[1] << 16 ^ (int) (INO)[2])
 #else
 #define INO_TO_INT(INO) INO
 #endif
-      value = st.st_dev ^ INO_TO_INT (st.st_ino) ^ st.st_mtime;
+	  value = st.st_dev ^ INO_TO_INT (st.st_ino) ^ st.st_mtime;
+	}
     }
 
   template += strlen (template);
@@ -4938,10 +4967,22 @@ build_common_tree_nodes_2 (short_double)
     = make_vector (V8HImode, unsigned_intHI_type_node, 1);
   unsigned_V16QI_type_node
     = make_vector (V16QImode, unsigned_intQI_type_node, 1);
-  /* APPLE LOCAL */
+
+  /* APPLE LOCAL begin AltiVec */
   unsigned_VPIXEL_type_node 
     = make_vector (V4HImode, unsigned_intHI_type_node, 1);
+  /* The 'vector bool...' and 'vector unsigned...' types are the
+     same as far as the back-end is concerned, but are distinct
+     for purposes of C/C++ type resolution.  */  
+  bool_V16QI_type_node
+    = make_vector (V16QImode, unsigned_intQI_type_node, 1);
+  bool_V8HI_type_node
+    = make_vector (V8HImode, unsigned_intHI_type_node, 1);
+  bool_V4SI_type_node
+    = make_vector (V4SImode, unsigned_intSI_type_node, 1);
+  /* APPLE LOCAL end AltiVec */
 
+  V16SF_type_node = make_vector (V16SFmode, float_type_node, 0);
   V4SF_type_node = make_vector (V4SFmode, float_type_node, 0);
   V4SI_type_node = make_vector (V4SImode, intSI_type_node, 0);
   V2SI_type_node = make_vector (V2SImode, intSI_type_node, 0);
@@ -4955,9 +4996,12 @@ build_common_tree_nodes_2 (short_double)
 /* Returns a vector tree node given a vector mode, the inner type, and
    the signness.  */
 
+/* APPLE LOCAL Altivec */
+/* Mark mode as ATTRIBUTE_UNUSED. With Altivec, mode is always
+   set to V4SImode, irrespective of input param mode.  */
 static tree
 make_vector (mode, innertype, unsignedp)
-     enum machine_mode mode;
+     enum machine_mode mode ATTRIBUTE_UNUSED;
      tree innertype;
      int unsignedp;
 {
@@ -4966,7 +5010,7 @@ make_vector (mode, innertype, unsignedp)
   t = make_node (VECTOR_TYPE);
   TREE_TYPE (t) = innertype;
   /* APPLE LOCAL AltiVec */
-  TYPE_MODE (t) = V16QImode;
+  TYPE_MODE (t) = V4SImode;
   TREE_UNSIGNED (TREE_TYPE (t)) = unsignedp;
   finish_vector_type (t);
 

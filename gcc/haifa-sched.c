@@ -1,6 +1,6 @@
 /* Instruction scheduling pass.
    Copyright (C) 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001 Free Software Foundation, Inc.
+   1999, 2000, 2001, 2002 Free Software Foundation, Inc.
    Contributed by Michael Tiemann (tiemann@cygnus.com) Enhanced by,
    and currently maintained by, Jim Wilson (wilson@cygnus.com)
 
@@ -1213,7 +1213,7 @@ rm_line_notes (head, tail)
 }
 
 /* Save line number notes for each insn in block B.  HEAD and TAIL are
-   the boundaries of the block in which notes should be processed.*/
+   the boundaries of the block in which notes should be processed.  */
 
 void
 save_line_notes (b, head, tail)
@@ -1241,7 +1241,7 @@ save_line_notes (b, head, tail)
 
 /* After a block was scheduled, insert line notes into the insns list.
    HEAD and TAIL are the boundaries of the block in which notes should
-   be processed.*/
+   be processed.  */
 
 void
 restore_line_notes (head, tail)
@@ -1633,6 +1633,18 @@ move_insn (insn, last)
   return retval;
 }
 
+/* Called from backends from targetm.sched.reorder to emit stuff into
+   the instruction stream.  */
+
+rtx
+sched_emit_insn (pat)
+     rtx pat;
+{
+  rtx insn = emit_insn_after (pat, last_scheduled_insn);
+  last_scheduled_insn = insn;
+  return insn;
+}
+
 /* Use forward list scheduling to rearrange insns of block B in region RGN,
    possibly bringing insns from subsequent blocks in the same region.  */
 
@@ -1641,7 +1653,6 @@ schedule_block (b, rgn_n_insns)
      int b;
      int rgn_n_insns;
 {
-  rtx last;
   struct ready_list ready;
   int can_issue_more;
 
@@ -1689,8 +1700,8 @@ schedule_block (b, rgn_n_insns)
   if (targetm.sched.md_init)
     (*targetm.sched.md_init) (sched_dump, sched_verbose, ready.veclen);
 
-  /* No insns scheduled in this block yet.  */
-  last_scheduled_insn = 0;
+  /* We start inserting insns after PREV_HEAD.  */
+  last_scheduled_insn = prev_head;
 
   /* Initialize INSN_QUEUE.  Q_SIZE is the total number of insns in the
      queue.  */
@@ -1702,9 +1713,6 @@ schedule_block (b, rgn_n_insns)
   /* Start just before the beginning of time.  */
   clock_var = -1;
 
-  /* We start inserting insns after PREV_HEAD.  */
-  last = prev_head;
-
   /* Loop until all the insns in BB are scheduled.  */
   while ((*current_sched_info->schedule_more_p) ())
     {
@@ -1715,9 +1723,6 @@ schedule_block (b, rgn_n_insns)
          is ready and add all pending insns at that point to the ready
          list.  */
       queue_to_ready (&ready);
-
-      if (sched_verbose && targetm.sched.cycle_display)
-	last = (*targetm.sched.cycle_display) (clock_var, last);
 
       if (ready.n_ready == 0)
 	abort ();
@@ -1740,6 +1745,10 @@ schedule_block (b, rgn_n_insns)
 				    &ready.n_ready, clock_var);
       else
 	can_issue_more = issue_rate;
+
+      if (sched_verbose && targetm.sched.cycle_display)
+	last_scheduled_insn
+	  = (*targetm.sched.cycle_display) (clock_var, last_scheduled_insn);
 
       if (sched_verbose)
 	{
@@ -1765,8 +1774,7 @@ schedule_block (b, rgn_n_insns)
 	  if (! (*current_sched_info->can_schedule_ready_p) (insn))
 	    goto next;
 
-	  last_scheduled_insn = insn;
-	  last = move_insn (insn, last);
+	  last_scheduled_insn = move_insn (insn, last_scheduled_insn);
 
 	  if (targetm.sched.variable_issue)
 	    can_issue_more =
@@ -1815,7 +1823,7 @@ schedule_block (b, rgn_n_insns)
 
   /* Update head/tail boundaries.  */
   head = NEXT_INSN (prev_head);
-  tail = last;
+  tail = last_scheduled_insn;
 
   /* Restore-other-notes: NOTE_LIST is the end of a chain of notes
      previously found among the insns.  Insert them at the beginning

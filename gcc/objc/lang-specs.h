@@ -1,5 +1,5 @@
 /* Definitions for specs for Objective-C.
-   Copyright (C) 1998, 1999 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2002 Free Software Foundation, Inc.
 
 This file is part of GNU CC.
 
@@ -29,22 +29,31 @@ Boston, MA 02111-1307, USA.  */
    /* Add support to invoke cpp-precomp with -precomp or -cpp-precomp or -E.
       Do not invoke cpp-precomp when -no-cpp-precomp is specified */
      "%{M|MM:%(trad_capable_cpp) -lang-objc -D__OBJC__ %{ansi:-std=c89} %(cpp_options)}\
+      %{E|S:%{@:%e-E and -S are not allowed with multiple -arch flags}}\
       %{E:\
 	  %{traditional-cpp|no-cpp-precomp:\
 	    %(trad_capable_cpp) -lang-objc -D__OBJC__ %{ansi:-std=c89} %(cpp_options)}\
 	  %{!traditional-cpp:%{!no-cpp-precomp:\
 	    %(cpp_precomp) -lang-objc -D__OBJC__ %{ansi:-std=c89} %(cpp_precomp_options) %y0}}}\
       %{!E:%{!M:%{!MM:\
-	  %{save-temps:%(trad_capable_cpp) -lang-objc -D__OBJC__ %{ansi:-std=c89}\
-		%(cpp_options) %b.mi \n\
-		    cc1obj -fpreprocessed %b.mi %(cc1_options) %{gen-decls}}\
-	  %{!save-temps:\
+	  %{save-temps|no-integrated-cpp:
+             %{no-cpp-precomp|traditional-cpp|fload=*|fdump=*: 
+                %(trad_capable_cpp) -lang-objc -D__OBJC__ %{ansi:-std=c89} %(cpp_options) %{save-temps:%b.mi} %{!save-temps:%g.mi} \n\
+		 cc1obj -fpreprocessed %{save-temps:%b.mi} %{!save-temps:%g.mi} %(cc1_options) %{gen-decls}}\
+             %{cpp-precomp|!no-cpp-precomp:%{!traditional-cpp:%{!fdump=*:%{!fload=*:%{!precomp:
+                %(cpp_precomp) -lang-objc -D__OBJC__ %{ansi:-std=c89} %(cpp_precomp_options) %y0 %{save-temps:%b.mi} %{!save-temps:%g.mi} \n\
+		 cc1obj -cpp-precomp %{save-temps:%b.mi} %{!save-temps:%g.mi} %(cc1_options) %{gen-decls}}}}}}}\
+	    %{precomp:\
+		%(cpp_precomp) -lang-objc -D__OBJC__ %{ansi:-std=c89}\
+		  %(cpp_precomp_options) %y0\
+                  %{precomp:%{@:-o %f%u.p}%{!@:%W{o}%W{!o*:-o %b-gcc3.p}}} }\
+	  %{!save-temps:%{!no-integrated-cpp:\
 	    %{traditional|ftraditional|traditional-cpp:%{!cpp-precomp:\
 		tradcpp0 -lang-objc -D__OBJC__ %{ansi:-std=c89} %(cpp_options) %{!pipe:%g.mi} |\n\
 		    cc1obj -fpreprocessed %{!pipe:%g.mi} %(cc1_options) %{gen-decls}}}\
 	    %{!fdump=*:%{!fload=*:%{!no-cpp-precomp|cpp-precomp:%{!precomp:%{!traditional-cpp:\
 		%(cpp_precomp) -lang-objc -D__OBJC__ %{ansi:-std=c89}\
-		  %(cpp_precomp_options) %y0  %{!pipe:%g.mi} |\n\
+		  %(cpp_precomp_options) %y0 %{!pipe:%g.mi} |\n\
 		    cc1obj -cpp-precomp %{!pipe:%g.mi} %(cc1_options) %{gen-decls}}}}}}\
 	    %{precomp:\
 		%(cpp_precomp) -lang-objc -D__OBJC__ %{ansi:-std=c89}\
@@ -52,7 +61,7 @@ Boston, MA 02111-1307, USA.  */
                   %{precomp:%{@:-o %f%u.p}%{!@:%W{o}%W{!o*:-o %b-gcc3.p}}} }\
 	    %{!traditional:%{!ftraditional:%{!traditional-cpp:\
 		%{fload=*|fdump=*|no-cpp-precomp:%{!precomp:\
-		    cc1obj -lang-objc -D__OBJC__ %{ansi:-std=c89} %(cpp_options) %(cc1_options) %{gen-decls}}}}}}}\
+		    cc1obj -lang-objc -D__OBJC__ %{ansi:-std=c89} %(cpp_unique_options) %(cc1_options) %{gen-decls}}}}}}}}\
         %{!fsyntax-only:%{!precomp:%(invoke_as)}}}}}", 0},
    /* APPLE LOCAL end cpp-precomp dpatel */
   {".mi", "@objc-cpp-output", 0},

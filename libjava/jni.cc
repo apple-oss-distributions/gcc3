@@ -1,6 +1,6 @@
 // jni.cc - JNI implementation, including the jump table.
 
-/* Copyright (C) 1998, 1999, 2000, 2001  Free Software Foundation
+/* Copyright (C) 1998, 1999, 2000, 2001, 2002  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -26,7 +26,7 @@ details.  */
 #include <java/lang/Throwable.h>
 #include <java/lang/ArrayIndexOutOfBoundsException.h>
 #include <java/lang/StringIndexOutOfBoundsException.h>
-#include <java/lang/AbstractMethodError.h>
+#include <java/lang/UnsatisfiedLinkError.h>
 #include <java/lang/InstantiationException.h>
 #include <java/lang/NoSuchFieldError.h>
 #include <java/lang/NoSuchMethodError.h>
@@ -325,7 +325,7 @@ _Jv_JNI_NewLocalRef (JNIEnv *env, jobject obj)
 
       // If we found a slot, or if the frame we just searched is the
       // mark frame, then we are done.
-      if (done || frame->marker != MARK_NONE)
+      if (done || frame == NULL || frame->marker != MARK_NONE)
 	break;
     }
 
@@ -2014,7 +2014,7 @@ _Jv_LookupJNIMethod (jclass klass, _Jv_Utf8Const *name,
       if (function == NULL)
 	{
 	  jstring str = JvNewStringUTF (name->data);
-	  throw new java::lang::AbstractMethodError (str);
+	  throw new java::lang::UnsatisfiedLinkError (str);
 	}
     }
 
@@ -2131,6 +2131,14 @@ _Jv_JNI_AttachCurrentThread (JavaVM *, jstring name, void **penv, void *args)
       _Jv_Free (env);
       return JNI_ERR;
     }
+
+  env->locals->marker = MARK_SYSTEM;
+  env->locals->size = FRAME_SIZE;
+  env->locals->next = NULL;
+
+  for (int i = 0; i < env->locals->size; ++i)
+    env->locals->vec[i] = NULL;
+
   *penv = reinterpret_cast<void *> (env);
 
   // This thread might already be a Java thread -- this function might

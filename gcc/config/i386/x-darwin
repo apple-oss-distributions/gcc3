@@ -9,3 +9,7 @@ CC = cc -no-cpp-precomp
 # Do not modify $(srcdir).
 parsedir = .
 # APPLE LOCAL end parsedir
+# APPLE LOCAL begin tradcifdir
+# Do not modify $(srcdir).
+tradcifdir = .
+# APPLE LOCAL end tradcifdir

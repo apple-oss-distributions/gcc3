@@ -585,6 +585,14 @@ DEF_RTL_EXPR(CONST_INT, "const_int", "w", 'o')
    there may be from 1 to 4; see rtl.c.  */
 DEF_RTL_EXPR(CONST_DOUBLE, "const_double", CONST_DOUBLE_FORMAT, 'o')
 
+/* APPLE LOCAL Altivec */
+/* Existing vector format modified by addition of CONST_VECTOR_CHAIN. */
+/* numeric vector constant.
+   Operand 0 is the vector of values.
+   Operand 1 is a chain of all CONST_VECTORs in use in the current function. */
+DEF_RTL_EXPR(CONST_VECTOR, "const_vector", "E0", 'o')
+/* APPLE LOCAL end Altivec */
+
 /* String constant.  Used only for attributes right now.  */
 DEF_RTL_EXPR(CONST_STRING, "const_string", "s", 'o')
 
@@ -971,20 +979,6 @@ DEF_RTL_EXPR(VEC_SELECT, "vec_select", "ee", 'x')
    vectors, the result is a vector that is as long as operands 0 and 1
    combined and is the concatenation of the two source vectors.  */
 DEF_RTL_EXPR(VEC_CONCAT, "vec_concat", "ee", 'x')
-
-/* Describes a vector constant.  Each part of the PARALLEL that is operand 0
-   describes a constant for one of the subparts.  */
-DEF_RTL_EXPR(VEC_CONST, "vec_const", "e", 'x')
-
-/* APPLE LOCAL: AltiVec - note AltiVec constants are different from VEC_CONST above!!! */
-/* numeric vector constant.
-   Operand 0 is the MEM that stores this constant in memory,
-   or various other things (see comments at immed_vector_const in varasm.c).
-   Operand 1 is a chain of all CONST_VECTORs in use in the current function.
-   Remaining operands hold the actual value.
-   The number of operands may be more than 2 if cross-compiling;
-   see init_rtl.  */
-DEF_RTL_EXPR(CONST_VECTOR, "const_vector", "e0wwww", 'o')
 
 /* Describes an operation that converts a small vector into a larger one by
    duplicating the input values.  The output vector mode must have the same

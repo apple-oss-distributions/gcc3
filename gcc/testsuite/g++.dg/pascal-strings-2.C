@@ -1,4 +1,4 @@
-/* APPLE LOCAL pascal-strings-2.C Negative C++ test cases 2001-07-05 zll */
+/* APPLE LOCAL file Negative C++ test cases 2001-07-05 zll */
 /* Origin: Ziemowit Laski <zlaski@apple.com> */
 /* { dg-do compile } */
 /* { dg-options "-fpascal-strings" } */

@@ -1,5 +1,5 @@
 /* Write out a Java(TM) class file.
-   Copyright (C) 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
 This file is part of GNU CC.
 
@@ -25,6 +25,7 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include "system.h"
 #include "jcf.h"
 #include "tree.h"
+#include "real.h"
 #include "java-tree.h"
 #include "obstack.h"
 #undef AND
@@ -685,6 +686,8 @@ get_access_flags (decl)
       if (ANONYMOUS_CLASS_P (TREE_TYPE (decl))
 	  || LOCAL_CLASS_P (TREE_TYPE (decl)))
 	flags |= ACC_PRIVATE;
+      if (CLASS_STRICTFP (decl))
+	flags |= ACC_STRICT;
     }
   else
     abort ();
@@ -699,6 +702,8 @@ get_access_flags (decl)
 	flags |= ACC_SYNCHRONIZED;
       if (METHOD_ABSTRACT (decl))
 	flags |= ACC_ABSTRACT;
+      if (METHOD_STRICTFP (decl))
+	flags |= ACC_STRICT;
     }
   if (isfield)
     {
@@ -1532,7 +1537,7 @@ generate_bytecode_insns (exp, target, state)
       {
 	int prec = TYPE_PRECISION (type) >> 5;
 	RESERVE(1);
-	if (real_zerop (exp))
+	if (real_zerop (exp) && ! REAL_VALUE_MINUS_ZERO (TREE_REAL_CST (exp)))
 	  OP1 (prec == 1 ? OPCODE_fconst_0 : OPCODE_dconst_0);
 	else if (real_onep (exp))
 	  OP1 (prec == 1 ? OPCODE_fconst_1 : OPCODE_dconst_1);
@@ -3366,14 +3371,14 @@ write_classfile (clas)
     {
       FILE *stream = fopen (class_file_name, "wb");
       if (stream == NULL)
-	fatal_io_error ("can't to open %s", class_file_name);
+	fatal_io_error ("can't open %s for writing", class_file_name);
 
       jcf_dependency_add_target (class_file_name);
       init_jcf_state (state, work);
       chunks = generate_classfile (clas, state);
       write_chunks (stream, chunks);
       if (fclose (stream))
-	fatal_io_error ("can't close %s", class_file_name);
+	fatal_io_error ("error closing %s", class_file_name);
       free (class_file_name);
     }
   release_jcf_state (state);

@@ -46,6 +46,7 @@ struct pfe_lang_compiler_state {
   /* globals from cp/decl2.c.  */
   tree static_ctors;
   tree static_dtors; 
+  int flag_apple_kext;
 
   /* globals from cp/class.c.  */
   varray_type local_classes;  /* Needed ? */
@@ -55,7 +56,7 @@ struct pfe_lang_compiler_state {
   int only_namespace_names;
   int pfe_anon_cnt;
 
-  /* globals from decl.c.  
+  /* globals from cp/decl.c.  
      integer_zero_node and integer_one_node are part of global_trees array.  */
   tree integer_two_node;
   tree integer_three_node;
@@ -73,7 +74,7 @@ struct pfe_lang_compiler_state {
 
   /* globals from cp/pt.c.  */
   int processing_template_parmlist;
-
+  
   /* globals from cp/lex.c.  */
   operator_name_info_t operator_name_info[(int) LAST_CPLUS_TREE_CODE];
   operator_name_info_t assignment_operator_name_info[(int) LAST_CPLUS_TREE_CODE];
@@ -99,12 +100,13 @@ extern void pfe_freeze_thaw_saved_scope  PARAMS ((struct saved_scope **pp));
 extern void pfe_freeze_thaw_operator_name_info PARAMS ((struct operator_name_info_t *p));
 
 /* Language hooks (in cp-freeze-thaw.c).  */
-extern void cxx_pfe_lang_init	           PARAMS ((void));
+extern void cxx_pfe_lang_init	           PARAMS ((int));
 extern void cxx_freeze_thaw_compiler_state PARAMS ((struct pfe_lang_compiler_state **));
 extern int cxx_pfe_freeze_thaw_decl        PARAMS ((union tree_node *));
 extern int cxx_pfe_freeze_thaw_type        PARAMS ((union tree_node *));
 extern int cxx_pfe_freeze_thaw_special     PARAMS ((union tree_node *));
 extern void cxx_pfe_check_all_struct_sizes PARAMS ((void));
+extern void cxx_pfe_check_settings         PARAMS ((struct pfe_lang_compiler_state *));
 
 #endif /* PFE */ 
 #endif /* ! GCC_PFE_CP_HEADER_H */

@@ -169,17 +169,16 @@ extern int warn_padded;
 
 extern int warn_disabled_optimization;
 
-/* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
 /* Nonzero means warn about uses of __attribute__((deprecated)) 
    declarations.  */
 
 extern int warn_deprecated_decl;
-/* APPLE LOCAL end deprecated ilr */
 
-/* APPLE LOCAL -Wno-#warnings  Radar 2796309 ilr */
+/* APPLE LOCAL begin -Wno-#warnings  Radar 2796309 ilr */
 /* Nonzero means suppress all #warning messages.  */
 
 extern int no_pound_warnings;
+/* APPLE LOCAL end -Wno-#warnings  Radar 2796309 ilr */
 
 /* Nonzero if generating code to do profiling.  */
 
@@ -226,9 +225,8 @@ extern int flag_print_asm_name;
 
 extern int flag_signed_char;
 
-/* APPLE LOCAL -fcoalesce  turly  */
-/* Unused at present.  */
-extern int flag_coalesce;
+/* APPLE LOCAL coalescing  */
+extern int flag_export_coalesced;
 
 /* APPLE LOCAL begin Pascal Strings 2001-07-05 zll */
 /* Nonzero means initial "\p" in string becomes a length byte and
@@ -241,6 +239,25 @@ extern int flag_pascal_strings;
 
 extern int flag_short_enums;
 
+/* APPLE LOCAL Altivec */
+/* Nonzero means enable the AltiVec Programming Model.  */
+
+extern int flag_altivec;
+
+/* Nonzero means warn about deprecated use of 'long' vector types.  */
+
+extern int warn_altivec_long_deprecated;  /* radar 2841709 */
+/* APPLE LOCAL end AltiVec */
+
+/* APPLE LOCAL begin constant cfstrings */
+/* Nonzero means that: (1) the __CONSTANT_CFSTRINGS__ manifest constant
+   is defined, possibly allowing for conditional use of the
+   __builtin__CFStringMakeConstantString function (the latter is always
+   available, regardless of the setting of this flag), and (2) use
+   the CFString layout to create @"..." strings in ObjC/ObjC++.  */
+extern int flag_constant_cfstrings;
+/* APPLE LOCAL end constant cfstrings */
+   
 /* Nonzero for -fcaller-saves: allocate values in regs that need to
    be saved across function calls, if that produces overall better code.
    Optional now, so people can test it.  */
@@ -384,6 +401,11 @@ extern int flag_rerun_loop_opt;
 
 extern int flag_inline_functions;
 
+/* Nonzero for -fobey-inline: 'inline' keyword must be obeyed, regardless
+   of codesize.  */
+
+extern int flag_obey_inline;
+
 /* Nonzero for -fkeep-inline-functions: even if we make a function
    go inline everywhere, keep its definition around for debugging
    purposes.  */
@@ -397,6 +419,11 @@ extern int flag_keep_inline_functions;
    does the right thing with #pragma interface.  */
 
 extern int flag_no_inline;
+
+/* Nonzero means that we don't want inlining by virtue of -fno-inline,
+   not just because the tree inliner turned us off.  */
+
+extern int flag_really_no_inline;
 
 /* APPLE LOCAL cpp-precomp dpatel */
 extern int flag_cpp_precomp;

@@ -1,5 +1,5 @@
 /* Definitions of target machine for GNU compiler, for Intel 80960
-   Copyright (C) 1992, 1993, 1995, 1996, 1998, 1999, 2000
+   Copyright (C) 1992, 1993, 1995, 1996, 1998, 1999, 2000, 2001, 2002
    Free Software Foundation, Inc.
    Contributed by Steven McGeady, Intel Corp.
    Additional Work by Glenn Colon-Bonet, Jonathan Shapiro, Andy Wilson
@@ -30,8 +30,9 @@ Boston, MA 02111-1307, USA.  */
 /* Names to predefine in the preprocessor for this target machine.  */
 #define CPP_PREDEFINES "-Di960 -Di80960 -DI960 -DI80960 -Acpu=i960 -Amachine=i960"
 
-/* Name to predefine in the preprocessor for processor variations.  */
-#define	CPP_SPEC "%{mic*:-D__i960\
+/* Name to predefine in the preprocessor for processor variations.
+   -mic* options make characters signed by default.  */
+#define	CPP_SPEC "%{mic*:-D__i960 -fsigned-char\
 			%{mka:-D__i960KA}%{mkb:-D__i960KB}\
 			%{mja:-D__i960JA}%{mjd:-D__i960JD}%{mjf:-D__i960JF}\
 			%{mrp:-D__i960RP}\
@@ -52,20 +53,13 @@ Boston, MA 02111-1307, USA.  */
 		%{!mcc:%{!mcf:-D__i960_KB -D__i960KB__ %{mic*:-D__i960KB}}}}}}}}}\
 	%{mlong-double-64:-D__LONG_DOUBLE_64__}"
 
-/* -mic* options make characters signed by default.  */
-/* Use #if rather than ?: because MIPS C compiler rejects ?: in
-   initializers.  */
-#if DEFAULT_SIGNED_CHAR
-#define SIGNED_CHAR_SPEC "%{funsigned-char:-D__CHAR_UNSIGNED__}"
-#else
-#define SIGNED_CHAR_SPEC "%{!fsigned-char:%{!mic*:-D__CHAR_UNSIGNED__}}"
-#endif
-
 /* Specs for the compiler, to handle processor variations. 
    If the user gives an explicit -gstabs or -gcoff option, then do not
-   try to add an implicit one, as this will fail.  */
+   try to add an implicit one, as this will fail. 
+   -mic* options make characters signed by default.  */
 #define CC1_SPEC \
-	"%{!mka:%{!mkb:%{!msa:%{!msb:%{!mmc:%{!mca:%{!mcc:%{!mcf:%{!mja:%{!mjd:%{!mjf:%{!mrp:-mka}}}}}}}}}}}}\
+	"%{mic*:-fsigned-char}\
+%{!mka:%{!mkb:%{!msa:%{!msb:%{!mmc:%{!mca:%{!mcc:%{!mcf:%{!mja:%{!mjd:%{!mjf:%{!mrp:-mka}}}}}}}}}}}}\
 	 %{!gs*:%{!gc*:%{mbout:%{g*:-gstabs}}\
 		       %{mcoff:%{g*:-gcoff}}\
 		       %{!mbout:%{!mcoff:%{g*:-gstabs}}}}}"
@@ -1169,12 +1163,6 @@ struct cum_args { int ca_nregparms; int ca_nstackparms; };
    table.
    Do not define this if the table should contain absolute addresses.  */
 /* #define CASE_VECTOR_PC_RELATIVE 1 */
-
-/* Specify the tree operation to be used to convert reals to integers.  */
-#define IMPLICIT_FIX_EXPR FIX_ROUND_EXPR
-
-/* This is the kind of divide that is easiest to do in the general case.  */
-#define EASY_DIV_EXPR TRUNC_DIV_EXPR
 
 /* Define this as 1 if `char' should by default be signed; else as 0.  */
 #define DEFAULT_SIGNED_CHAR 0

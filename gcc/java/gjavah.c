@@ -1,7 +1,7 @@
 /* Program to write C++-suitable header files from a Java(TM) .class
    file.  This is similar to SUN's javah.
 
-Copyright (C) 1996, 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
+Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -1503,12 +1503,13 @@ DEFUN(print_stub_or_jni, (stream, jcf, name_index, signature_index, is_init,
 	  if (flag_jni)
 	    fputs ("\n{\n  (*env)->FatalError (\"", stream);
 	  else
-	    fputs ("\n{\n  JvFail (\"", stream);
+	    fputs ("\n{\n  throw new ::java::lang::UnsupportedOperationException (JvNewStringLatin1 (\"", stream);
 	  print_name_for_stub_or_jni (stream, jcf, name_index,
 				      signature_index, is_init,
 				      name_override,
 				      flags);
-	  fputs (" not implemented\");\n}\n\n", stream);
+	  fprintf (stream, " not implemented\")%s;\n}\n\n",
+		   flag_jni ? "" : ")");
 	}
     }
 }
@@ -1969,12 +1970,24 @@ DEFUN(process_file, (jcf, out),
 	{
 	  /* Strip off the ".class" portion of the name when printing
 	     the include file name.  */
-	  int len = strlen (jcf->classname);
+	  char *name;
+	  int i, len = strlen (jcf->classname);
 	  if (len > 6 && ! strcmp (&jcf->classname[len - 6], ".class"))
 	    len -= 6;
-	  print_include (out, jcf->classname, len);
+	  /* Turn the class name into a file name.  */
+	  name = xmalloc (len + 1);
+	  for (i = 0; i < len; ++i)
+	    name[i] = jcf->classname[i] == '.' ? '/' : jcf->classname[i];
+	  name[i] = '\0';
+	  print_include (out, name, len);
+	  free (name);
+
 	  if (! flag_jni)
-	    print_include (out, "gcj/cni", -1);
+	    {
+	      print_include (out, "gcj/cni", -1);
+	      print_include (out, "java/lang/UnsupportedOperationException",
+			     -1);
+	    }
 	}
     }
 
@@ -2088,41 +2101,45 @@ DEFUN(process_file, (jcf, out),
 /* This is used to mark options with no short value.  */
 #define LONG_OPT(Num)  ((Num) + 128)
 
-#define OPT_classpath LONG_OPT (0)
-#define OPT_CLASSPATH LONG_OPT (1)
-#define OPT_HELP      LONG_OPT (2)
-#define OPT_TEMP      LONG_OPT (3)
-#define OPT_VERSION   LONG_OPT (4)
-#define OPT_PREPEND   LONG_OPT (5)
-#define OPT_FRIEND    LONG_OPT (6)
-#define OPT_ADD       LONG_OPT (7)
-#define OPT_APPEND    LONG_OPT (8)
-#define OPT_M         LONG_OPT (9)
-#define OPT_MM        LONG_OPT (10)
-#define OPT_MG        LONG_OPT (11)
-#define OPT_MD        LONG_OPT (12)
-#define OPT_MMD       LONG_OPT (13)
+#define OPT_classpath     LONG_OPT (0)
+#define OPT_CLASSPATH     OPT_classpath
+#define OPT_bootclasspath LONG_OPT (1)
+#define OPT_extdirs       LONG_OPT (2)
+#define OPT_HELP          LONG_OPT (3)
+#define OPT_TEMP          LONG_OPT (4)
+#define OPT_VERSION       LONG_OPT (5)
+#define OPT_PREPEND       LONG_OPT (6)
+#define OPT_FRIEND        LONG_OPT (7)
+#define OPT_ADD           LONG_OPT (8)
+#define OPT_APPEND        LONG_OPT (9)
+#define OPT_M             LONG_OPT (10)
+#define OPT_MM            LONG_OPT (11)
+#define OPT_MG            LONG_OPT (12)
+#define OPT_MD            LONG_OPT (13)
+#define OPT_MMD           LONG_OPT (14)
 
 static const struct option options[] =
 {
-  { "classpath", required_argument, NULL, OPT_classpath },
-  { "CLASSPATH", required_argument, NULL, OPT_CLASSPATH },
-  { "help",      no_argument,       NULL, OPT_HELP },
-  { "stubs",     no_argument,       &stubs, 1 },
-  { "td",        required_argument, NULL, OPT_TEMP },
-  { "verbose",   no_argument,       NULL, 'v' },
-  { "version",   no_argument,       NULL, OPT_VERSION },
-  { "prepend",   required_argument, NULL, OPT_PREPEND },
-  { "friend",    required_argument, NULL, OPT_FRIEND },
-  { "add",       required_argument, NULL, OPT_ADD },
-  { "append",    required_argument, NULL, OPT_APPEND },
-  { "M",         no_argument,       NULL, OPT_M   },
-  { "MM",        no_argument,       NULL, OPT_MM  },
-  { "MG",        no_argument,       NULL, OPT_MG  },
-  { "MD",        no_argument,       NULL, OPT_MD  },
-  { "MMD",       no_argument,       NULL, OPT_MMD },
-  { "jni",       no_argument,       &flag_jni, 1 },
-  { NULL,        no_argument,       NULL, 0 }
+  { "classpath",     required_argument, NULL, OPT_classpath },
+  { "bootclasspath", required_argument, NULL, OPT_bootclasspath },
+  { "extdirs",       required_argument, NULL, OPT_extdirs },
+  { "CLASSPATH",     required_argument, NULL, OPT_CLASSPATH },
+  { "help",          no_argument,       NULL, OPT_HELP },
+  { "stubs",         no_argument,       &stubs, 1 },
+  { "td",            required_argument, NULL, OPT_TEMP },
+  { "verbose",       no_argument,       NULL, 'v' },
+  { "version",       no_argument,       NULL, OPT_VERSION },
+  { "prepend",       required_argument, NULL, OPT_PREPEND },
+  { "friend",        required_argument, NULL, OPT_FRIEND },
+  { "add",           required_argument, NULL, OPT_ADD },
+  { "append",        required_argument, NULL, OPT_APPEND },
+  { "M",             no_argument,       NULL, OPT_M   },
+  { "MM",            no_argument,       NULL, OPT_MM  },
+  { "MG",            no_argument,       NULL, OPT_MG  },
+  { "MD",            no_argument,       NULL, OPT_MD  },
+  { "MMD",           no_argument,       NULL, OPT_MMD },
+  { "jni",           no_argument,       &flag_jni, 1 },
+  { NULL,            no_argument,       NULL, 0 }
 };
 
 static void
@@ -2146,8 +2163,9 @@ help ()
   printf ("  -prepend TEXT           Insert TEXT before start of class\n");
   printf ("\n");
   printf ("  --classpath PATH        Set path to find .class files\n");
-  printf ("  --CLASSPATH PATH        Set path to find .class files\n");
   printf ("  -IDIR                   Append directory to class path\n");
+  printf ("  --bootclasspath PATH    Override built-in class path\n");
+  printf ("  --extdirs PATH          Set extensions directory path\n");
   printf ("  -d DIRECTORY            Set output directory name\n");
   printf ("  -o FILE                 Set output file name\n");
   printf ("  -td DIRECTORY           Set temporary directory name\n");
@@ -2172,8 +2190,8 @@ help ()
 static void
 version ()
 {
-  printf ("gcjh (%s)\n\n", version_string);
-  printf ("Copyright (C) 2001 Free Software Foundation, Inc.\n");
+  printf ("gcjh (GCC) %s\n\n", version_string);
+  printf ("Copyright (C) 2002 Free Software Foundation, Inc.\n");
   printf ("This is free software; see the source for copying conditions.  There is NO\n");
   printf ("warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n");
   exit (0);
@@ -2227,8 +2245,12 @@ DEFUN(main, (argc, argv),
 	  jcf_path_classpath_arg (optarg);
 	  break;
 
-	case OPT_CLASSPATH:
-	  jcf_path_CLASSPATH_arg (optarg);
+	case OPT_bootclasspath:
+	  jcf_path_bootclasspath_arg (optarg);
+	  break;
+
+	case OPT_extdirs:
+	  jcf_path_extdirs_arg (optarg);
 	  break;
 
 	case OPT_HELP:

@@ -28,6 +28,10 @@ Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 #include "version.h"
 #include "mkdeps.h"
 #include "cppdefault.h"
+#include "except.h"	/* for USING_SJLJ_EXCEPTIONS */
+
+/* APPLE LOCAL begin -header-mapfile */
+#include <ctype.h>
 
 /* APPLE LOCAL PFE */
 #ifdef PFE
@@ -37,6 +41,18 @@ Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* APPLE LOCAL cpp-precomp */
 extern int flag_cpp_precomp;
+
+/* APPLE LOCAL begin framework headers */
+#ifdef FRAMEWORK_HEADERS
+struct { char *path; int u1; }
+framework_paths_defaults_array [] = {
+  {"/System/Library/Frameworks", 0},
+  {"/Library/Frameworks", 0},
+  {"/Local/Library/Frameworks", 0},
+  {NULL, 0}
+};
+#endif /* FRAMEWORK_HEADERS */
+/* APPLE LOCAL end framework headers */
 
 /* Predefined symbols, built-in macros, and the default include path.  */
 
@@ -85,6 +101,7 @@ struct cpp_pending
   struct search_path *after_head, *after_tail;
   /* APPLE LOCAL begin framework headers */
 #ifdef FRAMEWORK_HEADERS
+  struct search_path *framework_system_head, *framework_system_tail;
   struct search_path *framework_head, *framework_tail;
 #endif
   /* APPLE LOCAL end framework headers */
@@ -149,7 +166,7 @@ static void ilog_close			PARAMS ((cpp_reader *));
    Note it's never asked to append to the quote chain.  */
 /* APPLE LOCAL framework headers */
 /* APPLE LOCAL -header-mapfile */
-enum { BRACKET = 0, SYSTEM, AFTER, FRAMEWORK, HMAPFILE };
+enum { BRACKET = 0, SYSTEM, AFTER, FRAMEWORK, FRAMEWORK_SYSTEM, HMAPFILE };
 
 /* If we have designated initializers (GCC >2.7) these tables can be
    initialized, constant data.  Otherwise, they have to be filled in at
@@ -287,7 +304,15 @@ append_include_chain (pfile, dir, path, cxx_aware)
   /* Both systm and after include file lists should be treated as system
      include files since these two lists are really just a concatenation
      of one "system" list.  */
+/* APPLE LOCAL begin framework headers */
+/* APPLE LOCAL begin handle -Wno-system-headers (2910306)  ilr */
+#ifdef FRAMEWORK_HEADERS
+  if (path == SYSTEM || path == AFTER || path == FRAMEWORK_SYSTEM)
+#else
   if (path == SYSTEM || path == AFTER)
+#endif
+/* APPLE LOCAL end handle -Wno-system-headers (2910306)  ilr */
+/* APPLE LOCAL end framework headers */
 #ifdef NO_IMPLICIT_EXTERN_C
     new->sysp = 1;
 #else
@@ -305,6 +330,7 @@ append_include_chain (pfile, dir, path, cxx_aware)
     case AFTER:		APPEND (pend, after, new); break;
     /* APPLE LOCAL begin framework headers */
 #ifdef FRAMEWORK_HEADERS
+    case FRAMEWORK_SYSTEM:	APPEND (pend, framework_system, new); break;
     case FRAMEWORK:	APPEND (pend, framework, new); break;
 #endif
     /* APPLE LOCAL end framework headers */
@@ -425,7 +451,8 @@ merge_include_chains (pfile)
       qtail->next = brack;
 
       /* If brack == qtail, remove brack as it's simpler.  */
-      if (INO_T_EQ (qtail->ino, brack->ino) && qtail->dev == brack->dev)
+      if (brack && INO_T_EQ (qtail->ino, brack->ino)
+	  && qtail->dev == brack->dev)
 	brack = remove_dup_dir (pfile, qtail);
     }
   else
@@ -436,6 +463,10 @@ merge_include_chains (pfile)
 
   /* APPLE LOCAL begin framework headers */
 #ifdef FRAMEWORK_HEADERS
+  if (pend->framework_head)
+    pend->framework_tail->next = pend->framework_system_head;
+  else
+    pend->framework_head = pend->framework_system_head;
   CPP_OPTION (pfile, framework_include) = pend->framework_head;
 #endif
   /* APPLE LOCAL end framework headers */
@@ -458,7 +489,6 @@ struct lang_flags
 /* ??? Enable $ in identifiers in assembly? */
 /* APPLE LOCAL begin */
 /* Enable $ in identifiers in assembly.  */
-/* APPLE LOCAL end */
 /* APPLE LOCAL disable trigraphs */
 /* APPLE LOCAL compiling_objc */
 /* ObjC and ObjC++ no longer have their own rows; instead, compiling_objc is
@@ -473,7 +503,12 @@ static const struct lang_flags lang_defaults[] =
   /* STDC99 */  { 1,  0,  1,   0,   0,     1,      1     },
   /* GNUCXX */  { 0,  1,  1,   0,   1,     1,      1     },
   /* CXX98  */  { 0,  1,  1,   0,   0,     1,      1     },
+#ifdef CONFIG_DARWIN_H
   /* ASM    */  { 0,  0,  1,   0,   1,     1,      0     }
+#else
+  /* ASM    */  { 0,  0,  1,   0,   0,     1,      0     }
+#endif
+/* APPLE LOCAL end */
 };
 
 /* Sets internal flags correctly for a given language.  */
@@ -487,13 +522,6 @@ set_lang (pfile, lang)
   CPP_OPTION (pfile, lang) = lang;
   /* APPLE LOCAL compiling_objc */
   CPP_OPTION (pfile, objc) = compiling_objc;
-/* APPLE LOCAL PFE */
-#ifdef PFE
-  /* Record the language in precompiled header.
-     Used to verify during the load.  */
-  if (pfe_operation == PFE_DUMP)
-    pfe_set_lang (lang);
-#endif
   CPP_OPTION (pfile, c99)		 = l->c99;
   /* APPLE LOCAL compiling_objc */
   CPP_OPTION (pfile, cplusplus)		 = l->cplusplus;
@@ -575,6 +603,11 @@ cpp_create_reader (lang)
   CPP_OPTION (pfile, show_column) = 1;
   CPP_OPTION (pfile, tabstop) = 8;
   CPP_OPTION (pfile, operator_names) = 1;
+#if DEFAULT_SIGNED_CHAR
+  CPP_OPTION (pfile, signed_char) = 1;
+#else
+  CPP_OPTION (pfile, signed_char) = 0;
+#endif
 
   CPP_OPTION (pfile, pending) =
     (struct cpp_pending *) xcalloc (1, sizeof (struct cpp_pending));
@@ -728,6 +761,10 @@ static const struct builtin builtin_array[] =
   X("__USER_LABEL_PREFIX__",	ULP),
   C("__REGISTER_PREFIX__",	REGISTER_PREFIX),
   C("__HAVE_BUILTIN_SETJMP__",	"1"),
+#if USING_SJLJ_EXCEPTIONS
+  /* libgcc needs to know this.  */
+  C("__USING_SJLJ_EXCEPTIONS__","1"),
+#endif
 #ifndef NO_BUILTIN_SIZE_TYPE
   C("__SIZE_TYPE__",		SIZE_TYPE),
 #endif
@@ -847,6 +884,9 @@ init_builtins (pfile)
   else if (CPP_OPTION (pfile, c99))
     _cpp_define_builtin (pfile, "__STDC_VERSION__ 199901L");
 
+  if (CPP_OPTION (pfile, signed_char) == 0)
+    _cpp_define_builtin (pfile, "__CHAR_UNSIGNED__ 1");
+
   if (CPP_OPTION (pfile, lang) == CLK_STDC89
       || CPP_OPTION (pfile, lang) == CLK_STDC94
       || CPP_OPTION (pfile, lang) == CLK_STDC99)
@@ -949,6 +989,35 @@ init_standard_includes (pfile)
 	  append_include_chain (pfile, str, SYSTEM, p->cxx_aware);
 	}
     }
+
+/* APPLE LOCAL begin framework headers */
+#ifdef FRAMEWORK_HEADERS
+  {
+    /* Setup default search path for frameworks.  */
+    int i = 0;
+    char *path;
+    char *next_root = getenv ("NEXT_ROOT");
+    if (next_root && *next_root && next_root[strlen (next_root) - 1] == '/')
+      next_root[strlen (next_root) - 1] = '\0';
+    while ((path = framework_paths_defaults_array[i++].path))
+      {
+        char *new_fname = NULL;
+        if (next_root && *next_root)
+          new_fname = (char *) xmalloc (strlen (next_root) + strlen (path) + 1);
+        if (new_fname)
+          sprintf (new_fname, "%s%s", next_root, path);
+        else
+	  {
+            new_fname = (char *) xmalloc (strlen (path) + 1);
+	    strcpy (new_fname, path);
+	  }
+	/* System Framework headers are cxx aware.  */
+        append_include_chain (pfile, new_fname, FRAMEWORK_SYSTEM, 1); 
+      }  
+  }       
+#endif    
+/* APPLE LOCAL end framework headers */
+
 }
 
 /* Pushes a command line -imacro and -include file indicated by P onto
@@ -1099,6 +1168,7 @@ cpp_finish_options (pfile)
       struct pending_option *p;
 
       _cpp_do_file_change (pfile, LC_RENAME, _("<built-in>"), 1, 0);
+      
       /* APPLE LOCAL PFE */
 #ifdef PFE
       /* Do not init the builtins, if already loaded from the
@@ -1107,14 +1177,22 @@ cpp_finish_options (pfile)
 #endif
       init_builtins (pfile);
       _cpp_do_file_change (pfile, LC_RENAME, _("<command line>"), 1, 0);
-      for (p = CPP_OPTION (pfile, pending)->directive_head; p; p = p->next)
-/* APPLE LOCAL PFE */
+      /* APPLE LOCAL begin PFE dpatel */
 #ifdef PFE
-	/* Do not handle directives, if already loaded from the
-           precompiled header.  */
-	if (pfe_operation != PFE_LOAD)
+      /* Set the flag to indicate that we are processing command line macros.  */
+      pfe_set_cmd_ln_processing ();
 #endif
+      /* APPLE LOCAL end PFE dpatel */
+
+      for (p = CPP_OPTION (pfile, pending)->directive_head; p; p = p->next)
 	(*p->handler) (pfile, p->arg);
+        
+      /* APPLE LOCAL begin PFE dpatel */
+#ifdef PFE
+      pfe_reset_cmd_ln_processing ();
+#endif
+      /* APPLE LOCAL end PFE dpatel */
+
 
       /* Scan -imacros files after command line defines, but before
 	 files given with -include.  */
@@ -1173,8 +1251,8 @@ _cpp_push_next_buffer (pfile)
 	     pfile->line_maps.maps[1].to_file */
 	  if (flag_cpp_precomp)
 	    _cpp_do_file_change (pfile, LC_RENAME,
-	                         pfile->line_maps.maps[1].to_file, 1, 0);
-	    else
+				 pfile->line_maps.maps[1].to_file, 1, 0);
+          else
 	  /* APPLE LOCAL end cpp-precomp */
 	  if (! CPP_OPTION (pfile, preprocessed))
 	    _cpp_do_file_change (pfile, LC_RENAME,
@@ -1195,7 +1273,7 @@ output_deps (pfile)
   const char *const deps_mode =
     CPP_OPTION (pfile, print_deps_append) ? "a" : "w";
 
-  if (CPP_OPTION (pfile, deps_file) == 0)
+  if (CPP_OPTION (pfile, deps_file)[0] == '\0')
     deps_stream = stdout;
   else
     {
@@ -1213,7 +1291,7 @@ output_deps (pfile)
     deps_phony_targets (pfile->deps, deps_stream);
 
   /* Don't close stdout.  */
-  if (CPP_OPTION (pfile, deps_file))
+  if (deps_stream != stdout)
     {
       if (ferror (deps_stream) || fclose (deps_stream) != 0)
 	cpp_fatal (pfile, "I/O error on output");
@@ -1314,7 +1392,9 @@ new_pending_directive (pend, text, handler)
   DEF_OPT("fno-show-column",          0,      OPT_fno_show_column)            \
   DEF_OPT("fpreprocessed",            0,      OPT_fpreprocessed)              \
   DEF_OPT("fshow-column",             0,      OPT_fshow_column)               \
+  DEF_OPT("fsigned-char",             0,      OPT_fsigned_char)               \
   DEF_OPT("ftabstop=",                no_num, OPT_ftabstop)                   \
+  DEF_OPT("funsigned-char",           0,      OPT_funsigned_char)             \
   DEF_OPT("h",                        0,      OPT_h)                          \
   /* APPLE LOCAL -header-mapfile */  \
   DEF_OPT("header-mapfile",           no_fil, OPT_header_mapfile)             \
@@ -1453,12 +1533,14 @@ parse_option (input)
 
 /* Handle one command-line option in (argc, argv).
    Can be called multiple times, to handle multiple sets of options.
+   If ignore is non-zero, this will ignore unrecognized -W* options.
    Returns number of strings consumed.  */
 int
-cpp_handle_option (pfile, argc, argv)
+cpp_handle_option (pfile, argc, argv, ignore)
      cpp_reader *pfile;
      int argc;
      char **argv;
+     int ignore;
 {
   int i = 0;
   struct cpp_pending *pend = CPP_OPTION (pfile, pending);
@@ -1528,6 +1610,12 @@ cpp_handle_option (pfile, argc, argv)
 	  break;
 	case OPT_fno_show_column:
 	  CPP_OPTION (pfile, show_column) = 0;
+	  break;
+	case OPT_fsigned_char:
+	  CPP_OPTION (pfile, signed_char) = 1;
+	  break;
+	case OPT_funsigned_char:
+	  CPP_OPTION (pfile, signed_char) = 0;
 	  break;
 	case OPT_ftabstop:
 	  /* Silently ignore empty string, non-longs and silly values.  */
@@ -1718,10 +1806,16 @@ cpp_handle_option (pfile, argc, argv)
 	  CPP_OPTION (pfile, print_deps_missing_files) = 1;
 	  break;
 	case OPT_M:
+	  /* When doing dependencies with -M or -MM, suppress normal
+	     preprocessed output, but still do -dM etc. as software
+	     depends on this.  Preprocessed output occurs if -MD, -MMD
+	     or environment var dependency generation is used.  */
 	  CPP_OPTION (pfile, print_deps) = 2;
+	  CPP_OPTION (pfile, no_output) = 1;
 	  break;
 	case OPT_MM:
 	  CPP_OPTION (pfile, print_deps) = 1;
+	  CPP_OPTION (pfile, no_output) = 1;
 	  break;
 	case OPT_MF:
 	  CPP_OPTION (pfile, deps_file) = arg;
@@ -1735,12 +1829,6 @@ cpp_handle_option (pfile, argc, argv)
 	  deps_add_target (pfile->deps, arg, opt_code == OPT_MQ);
 	  break;
 
-	  /* -MD and -MMD for cpp0 are deprecated and undocumented
-	     (use -M or -MM with -MF instead), and probably should be
-	     removed with the next major GCC version.  For the moment
-	     we allow these for the benefit of Automake 1.4, which
-	     uses these when dependency tracking is enabled.  Automake
-	     1.5 will fix this.  */
 	case OPT_MD:
 	  CPP_OPTION (pfile, print_deps) = 2;
 	  CPP_OPTION (pfile, deps_file) = arg;
@@ -1944,6 +2032,8 @@ cpp_handle_option (pfile, argc, argv)
   	  /* APPLE LOCAL -Wno-#warnings  Radar 2796309 ilr */
 	  else if (!strcmp (argv[i], "-Wno-#warnings"))
 	    CPP_OPTION (pfile, no_pound_warnings) = 1;
+	  else if (! ignore)
+	    return i;
 	  break;
  	}
     }
@@ -1965,7 +2055,7 @@ cpp_handle_options (pfile, argc, argv)
 
   for (i = 0; i < argc; i += strings_processed)
     {
-      strings_processed = cpp_handle_option (pfile, argc - i, argv + i);
+      strings_processed = cpp_handle_option (pfile, argc - i, argv + i, 1);
       if (strings_processed == 0)
 	break;
     }
@@ -2025,7 +2115,8 @@ cpp_post_options (pfile)
     cpp_fatal (pfile, "you must additionally specify either -M or -MM");
 }
 
-/* Set up dependency-file output.  */
+/* Set up dependency-file output.  On exit, if print_deps is non-zero
+   then deps_file is not NULL; stdout is the empty string.  */
 static void
 init_dependency_output (pfile)
      cpp_reader *pfile;
@@ -2064,21 +2155,16 @@ init_dependency_output (pfile)
       else
 	output_file = spec;
 
-      /* Command line overrides environment variables.  */
+      /* Command line -MF overrides environment variables and default.  */
       if (CPP_OPTION (pfile, deps_file) == 0)
 	CPP_OPTION (pfile, deps_file) = output_file;
+
       CPP_OPTION (pfile, print_deps_append) = 1;
     }
-
-  /* If dependencies go to standard output, or -MG is used, we should
-     suppress output, including -dM, -dI etc.  */
-  if (CPP_OPTION (pfile, deps_file) == 0
-      || CPP_OPTION (pfile, print_deps_missing_files))
-    {
-      CPP_OPTION (pfile, no_output) = 1;
-      CPP_OPTION (pfile, dump_macros) = 0;
-      CPP_OPTION (pfile, dump_includes) = 0;
-    }
+  else if (CPP_OPTION (pfile, deps_file) == 0)
+    /* If -M or -MM was seen without -MF, default output to wherever
+       was specified with -o.  out_fname is non-NULL here.  */
+    CPP_OPTION (pfile, deps_file) = CPP_OPTION (pfile, out_fname);
 }
 
 /* APPLE LOCAL begin -header-mapfile */
@@ -2313,7 +2399,6 @@ ilog_printf (cpp_reader *pfile, const char * format, ...)
 static void
 print_help ()
 {
-  fprintf (stderr, _("Usage: %s [switches] input output\n"), progname);
   /* To keep the lines from getting too long for some compilers, limit
      to about 500 characters (6 lines) per chunk.  */
   fputs (_("\
@@ -2376,6 +2461,8 @@ Switches:\n\
   fputs (_("\
   -M                        Generate make dependencies\n\
   -MM                       As -M, but ignore system header files\n\
+  -MD                       Generate make dependencies and compile\n\
+  -MMD                      As -MD, but ignore system header files\n\
   -MF <file>                Write dependency output to the given file\n\
   -MG                       Treat missing header file as generated files\n\
 "), stdout);
@@ -2387,8 +2474,8 @@ Switches:\n\
   fputs (_("\
   -D<macro>                 Define a <macro> with string '1' as its value\n\
   -D<macro>=<val>           Define a <macro> with <val> as its value\n\
-  -A<question> (<answer>)   Assert the <answer> to <question>\n\
-  -A-<question> (<answer>)  Disable the <answer> to <question>\n\
+  -A<question>=<answer>     Assert the <answer> to <question>\n\
+  -A-<question>=<answer>    Disable the <answer> to <question>\n\
   -U<macro>                 Undefine <macro> \n\
   -v                        Display the version number\n\
 "), stdout);
@@ -2405,7 +2492,7 @@ Switches:\n\
   -ftabstop=<number>        Distance between tab stops for column reporting\n\
   -P                        Do not generate #line directives\n\
   -$                        Do not allow '$' in identifiers\n\
-  -remap                    Remap file names when including files.\n\
+  -remap                    Remap file names when including files\n\
   --version                 Display version information\n\
   -h or --help              Display this information\n\
 "), stdout);

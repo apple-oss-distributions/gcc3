@@ -75,6 +75,14 @@ struct pfe_lang_compiler_state;	/* function of language */
    compilation after all symbols have been seen.  */
 extern tree pfe_predefined_global_names;
 
+/* Possible languages supported by PFE.  This is needed in order
+   to ensure that a loaded PFE header is for the expected language.
+   Note that we cannot use enum c_lang because (a) it doesn't
+   distinguish between objc and objc++ and it is not determined
+   until a reader is created which is too late for our purposes.  */
+enum pfe_lang {PFE_LANG_UNKNOWN = 0, PFE_LANG_C, PFE_LANG_CXX,
+               PFE_LANG_OBJC, PFE_LANG_OBJCXX};
+
 /* PFE state header.  This contains global variables whose state
    needs to be saved during a dump and restored during a load.
    These variables include pointers to the "roots" of the data
@@ -108,7 +116,7 @@ struct pfe_compiler_state {
 #endif
 
   /* The language we are preprocessing.  */
-  enum c_lang lang;
+  enum pfe_lang lang;
 
   /* Name of the program which generated this PFE database. For example,
      'cc1', 'cc1plus' etc...  */
@@ -154,7 +162,7 @@ struct pfe_compiler_state {
   rtx static_chain_incoming_rtx;
   rtx pic_offset_table_rtx;
   
-  /* globals from varasm.c.  */
+  /* Globals from varasm.c.  */
   int const_labelno;
   int var_labelno;
 
@@ -169,7 +177,7 @@ struct pfe_compiler_state {
   struct dbxout_stabs_t *dbxout_data_array;
   int dbxout_data_array_size;
   int dbxout_data_array_next;
- 
+  
   /* Is, or points to, target-specific additions to the pfe header.
      This is handled through the PFE_TARGET_ADDITIONS macro which,
      if defined, points to a target function that allocates the
@@ -179,6 +187,7 @@ struct pfe_compiler_state {
      When it's not null it should freeze/thaw its data.  */
   void *pfe_target_additions;
  
+  int cmd_ln_macro_count;
   /* Points to a structure whose details depend on the language in use.  */
   struct pfe_lang_compiler_state *lang_specific;
 };
@@ -206,12 +215,18 @@ extern int pfe_check_header             	 PARAMS ((const char *, time_t, ino_t))
    precompiled header.  */
 extern void pfe_add_header_name         	 PARAMS ((const char *, time_t, ino_t));
 
-/* Set the language for valdating the load file.  */
-extern void pfe_set_lang			 PARAMS ((enum c_lang));
+/* Set the language for validating the load file.  */
+extern void pfe_set_lang			 PARAMS ((enum pfe_lang));
+
+/* Set the language for validating the load file.  */
+extern void pfe_check_lang			 PARAMS ((enum pfe_lang));
 
 /* Check the compiler settings to see if they are compatible with the current
    settings of the compiler.  */
 extern void pfe_check_compiler			 PARAMS ((void));
+
+/* Check command line macros.  */
+extern void pfe_check_cmd_ln_macros        PARAMS ((void));
 
 /* Freeze/thaw a pointer to and a cpp_token struct (defined in 
    cpplib.h).  */

@@ -122,7 +122,7 @@ enum c_language_kind c_language;
 	tree complex_double_type_node;
 	tree complex_long_double_type_node;
 
-APPLE LOCAL AltiVec
+APPLE LOCAL begin AltiVec
 	tree vector_unsigned_char_type_node;
 	tree vector_signed_char_type_node;
 	tree vector_boolean_char_type_node;
@@ -134,6 +134,7 @@ APPLE LOCAL AltiVec
 	tree vector_boolean_long_type_node;
 	tree vector_float_type_node;
 	tree vector_pixel_type_node;
+APPLE LOCAL end AltiVec
 
 	tree intQI_type_node;
 	tree intHI_type_node;
@@ -221,10 +222,6 @@ int flag_short_double;
 
 int flag_short_wchar;
 
-/* APPLE LOCAL AltiVec */
-/* Nonzero means enable AltiVec extensions.  */
-int flag_altivec;
-
 /* Nonzero means warn about possible violations of sequence point rules.  */
 
 int warn_sequence_point;
@@ -249,6 +246,16 @@ void (*lang_expand_function_end)       PARAMS ((void));
 /* Nonzero means the expression being parsed will never be evaluated.
    This is a count, since unevaluated expressions can nest.  */
 int skip_evaluation;
+
+/* APPLE LOCAL begin long double */
+/* Nonzero means warn about usage of long double.  */
+
+int warn_long_double = 1;
+/* APPLE LOCAL end long double */
+
+/* APPLE LOCAL begin constant cfstrings */
+static void create_cfstring_template	PARAMS ((void));
+/* APPLE LOCAL end constant cfstrings */
 
 /* Information about how a function name is generated.  */
 struct fname_var_t
@@ -537,7 +544,7 @@ altivec_vector_constant (type, values)
      tree type;
      tree values;
 {
-  tree vtype;
+  tree vtype, t1, t2, t3, t4;
   tree valarray[16], valtail;
   int valnum, elements;
 
@@ -589,8 +596,11 @@ altivec_vector_constant (type, values)
 	}
       elements /= 2;
     }
-  return build_vector (type, valarray[0], valarray[1],
-		       valarray[2], valarray[3]);
+  t4 = tree_cons (0, valarray[3], 0);
+  t3 = tree_cons (0, valarray[2], t4);
+  t2 = tree_cons (0, valarray[1], t3);
+  t1 = tree_cons (0, valarray[0], t2);
+  return build_vector (type, t1);
 }
 /* APPLE LOCAL end AltiVec */
 
@@ -901,8 +911,8 @@ constant_expression_warning (value)
      tree value;
 {
   if ((TREE_CODE (value) == INTEGER_CST || TREE_CODE (value) == REAL_CST
-       /* APPLE LOCAL AltiVec */
-       || TREE_CODE (value) == COMPLEX_CST || TREE_CODE (value) == VECTOR_CST)
+       || TREE_CODE (value) == VECTOR_CST
+       || TREE_CODE (value) == COMPLEX_CST)
       && TREE_CONSTANT_OVERFLOW (value) && pedantic)
     pedwarn ("overflow in constant expression");
 }
@@ -936,14 +946,12 @@ overflow_warning (value)
       if (skip_evaluation == 0)
 	warning ("floating point overflow in expression");
     }
-  /* APPLE LOCAL begin AltiVec */
   else if (TREE_CODE (value) == VECTOR_CST && TREE_OVERFLOW (value))
     {
       TREE_OVERFLOW (value) = 0;
       if (skip_evaluation == 0)
 	warning ("vector overflow in expression");
     }
-  /* APPLE LOCAL end AltiVec */
 }
 
 /* Print a warning if a large constant is truncated to unsigned,
@@ -1616,6 +1624,8 @@ type_for_mode (mode, unsignedp)
 	  return unsignedp ? unsigned_V4HI_type_node : V4HI_type_node;
 	case V8QImode:
 	  return unsignedp ? unsigned_V8QI_type_node : V8QI_type_node;
+	case V16SFmode:
+	  return V16SF_type_node;
 	case V4SFmode:
 	  return V4SF_type_node;
 	case V2SFmode:
@@ -1625,9 +1635,6 @@ type_for_mode (mode, unsignedp)
 	}
     }
 #endif
-  /* APPLE LOCAL: Altivec */
-  if (mode == TYPE_MODE (V16QI_type_node))
-    return V16QI_type_node;
 
   return 0;
 }
@@ -2182,6 +2189,107 @@ shorten_compare (op0_ptr, op1_ptr, restype_ptr, rescode_ptr)
   *restype_ptr = boolean_type_node;
 
   return 0;
+}
+
+/* Return a tree for the sum or difference (RESULTCODE says which)
+   of pointer PTROP and integer INTOP.  */
+
+tree
+pointer_int_sum (resultcode, ptrop, intop)
+     enum tree_code resultcode;
+     tree ptrop, intop;
+{
+  tree size_exp;
+
+  tree result;
+  tree folded;
+
+  /* The result is a pointer of the same type that is being added.  */
+
+  tree result_type = TREE_TYPE (ptrop);
+
+  if (TREE_CODE (TREE_TYPE (result_type)) == VOID_TYPE)
+    {
+      if (pedantic || warn_pointer_arith)
+	pedwarn ("pointer of type `void *' used in arithmetic");
+      size_exp = integer_one_node;
+    }
+  else if (TREE_CODE (TREE_TYPE (result_type)) == FUNCTION_TYPE)
+    {
+      if (pedantic || warn_pointer_arith)
+	pedwarn ("pointer to a function used in arithmetic");
+      size_exp = integer_one_node;
+    }
+  else if (TREE_CODE (TREE_TYPE (result_type)) == METHOD_TYPE)
+    {
+      if (pedantic || warn_pointer_arith)
+	pedwarn ("pointer to member function used in arithmetic");
+      size_exp = integer_one_node;
+    }
+  else if (TREE_CODE (TREE_TYPE (result_type)) == OFFSET_TYPE)
+    {
+      if (pedantic || warn_pointer_arith)
+	pedwarn ("pointer to a member used in arithmetic");
+      size_exp = integer_one_node;
+    }
+  else
+    size_exp = size_in_bytes (TREE_TYPE (result_type));
+
+  /* If what we are about to multiply by the size of the elements
+     contains a constant term, apply distributive law
+     and multiply that constant term separately.
+     This helps produce common subexpressions.  */
+
+  if ((TREE_CODE (intop) == PLUS_EXPR || TREE_CODE (intop) == MINUS_EXPR)
+      && ! TREE_CONSTANT (intop)
+      && TREE_CONSTANT (TREE_OPERAND (intop, 1))
+      && TREE_CONSTANT (size_exp)
+      /* If the constant comes from pointer subtraction,
+	 skip this optimization--it would cause an error.  */
+      && TREE_CODE (TREE_TYPE (TREE_OPERAND (intop, 0))) == INTEGER_TYPE
+      /* If the constant is unsigned, and smaller than the pointer size,
+	 then we must skip this optimization.  This is because it could cause
+	 an overflow error if the constant is negative but INTOP is not.  */
+      && (! TREE_UNSIGNED (TREE_TYPE (intop))
+	  || (TYPE_PRECISION (TREE_TYPE (intop))
+	      == TYPE_PRECISION (TREE_TYPE (ptrop)))))
+    {
+      enum tree_code subcode = resultcode;
+      tree int_type = TREE_TYPE (intop);
+      if (TREE_CODE (intop) == MINUS_EXPR)
+	subcode = (subcode == PLUS_EXPR ? MINUS_EXPR : PLUS_EXPR);
+      /* Convert both subexpression types to the type of intop,
+	 because weird cases involving pointer arithmetic
+	 can result in a sum or difference with different type args.  */
+      ptrop = build_binary_op (subcode, ptrop,
+			       convert (int_type, TREE_OPERAND (intop, 1)), 1);
+      intop = convert (int_type, TREE_OPERAND (intop, 0));
+    }
+
+  /* Convert the integer argument to a type the same size as sizetype
+     so the multiply won't overflow spuriously.  */
+
+  if (TYPE_PRECISION (TREE_TYPE (intop)) != TYPE_PRECISION (sizetype)
+      || TREE_UNSIGNED (TREE_TYPE (intop)) != TREE_UNSIGNED (sizetype))
+    intop = convert (type_for_size (TYPE_PRECISION (sizetype), 
+				    TREE_UNSIGNED (sizetype)), intop);
+
+  /* Replace the integer argument with a suitable product by the object size.
+     Do this multiplication as signed, then convert to the appropriate
+     pointer type (actually unsigned integral).  */
+
+  intop = convert (result_type,
+		   build_binary_op (MULT_EXPR, intop,
+				    convert (TREE_TYPE (intop), size_exp), 1));
+
+  /* Create the sum or difference.  */
+
+  result = build (resultcode, result_type, ptrop, intop);
+
+  folded = fold (result);
+  if (folded == result)
+    TREE_CONSTANT (folded) = TREE_CONSTANT (ptrop) & TREE_CONSTANT (intop);
+  return folded;
 }
 
 /* Prepare expr to be an argument of a TRUTH_NOT_EXPR,
@@ -2994,6 +3102,11 @@ c_common_nodes_and_builtins ()
   /* ??? Perhaps there's a better place to do this.  But it is related
      to __builtin_va_arg, so it isn't that off-the-wall.  */
   lang_type_promotes_to = simple_type_promotes_to;
+  
+  /* APPLE LOCAL begin constant cfstrings */
+  if (flag_constant_cfstrings)
+    create_cfstring_template ();
+  /* APPLE LOCAL end constant cfstrings */
 }
 
 tree
@@ -3356,6 +3469,7 @@ statement_code_p (code)
 {
   switch (code)
     {
+    case CLEANUP_STMT:
     case EXPR_STMT:
     case COMPOUND_STMT:
     case DECL_STMT:
@@ -3371,6 +3485,7 @@ statement_code_p (code)
     case GOTO_STMT:
     case LABEL_STMT:
     case ASM_STMT:
+    case FILE_STMT:
     case CASE_LABEL:
       return 1;
 
@@ -3714,6 +3829,7 @@ c_expand_expr (exp, target, tmode, modifier)
       {
 	tree rtl_expr;
 	rtx result;
+	bool preserve_result = false;
 
 	/* Since expand_expr_stmt calls free_temp_slots after every
 	   expression statement, we must call push_temp_slots here.
@@ -3721,7 +3837,7 @@ c_expand_expr (exp, target, tmode, modifier)
 	   out-of-scope after the first EXPR_STMT from within the
 	   STMT_EXPR.  */
 	push_temp_slots ();
-	rtl_expr = expand_start_stmt_expr ();
+	rtl_expr = expand_start_stmt_expr (!STMT_EXPR_NO_SCOPE (exp));
 
 	/* If we want the result of this expression, find the last
            EXPR_STMT in the COMPOUND_STMT and mark it as addressable.  */
@@ -3740,12 +3856,30 @@ c_expand_expr (exp, target, tmode, modifier)
 
 	    if (TREE_CODE (last) == SCOPE_STMT
 		&& TREE_CODE (expr) == EXPR_STMT)
-	      TREE_ADDRESSABLE (expr) = 1;
+	      {
+	        TREE_ADDRESSABLE (expr) = 1;
+		preserve_result = true;
+	      }
 	  }
 
 	expand_stmt (STMT_EXPR_STMT (exp));
 	expand_end_stmt_expr (rtl_expr);
+
 	result = expand_expr (rtl_expr, target, tmode, modifier);
+	if (preserve_result && GET_CODE (result) == MEM)
+	  {
+	    if (GET_MODE (result) != BLKmode)
+	      result = copy_to_reg (result);
+	    else
+	      preserve_temp_slots (result);
+	  }
+
+	/* If the statment-expression does not have a scope, then the
+	   new temporaries we created within it must live beyond the
+	   statement-expression.  */
+	if (STMT_EXPR_NO_SCOPE (exp))
+	  preserve_temp_slots (NULL_RTX);
+
 	pop_temp_slots ();
 	return result;
       }
@@ -3816,7 +3950,8 @@ int
 c_unsafe_for_reeval (exp)
      tree exp;
 {
-  /* Statement expressions may not be reevaluated.  */
+  /* Statement expressions may not be reevaluated, likewise compound
+     literals.  */
   if (TREE_CODE (exp) == STMT_EXPR
       || TREE_CODE (exp) == COMPOUND_LITERAL_EXPR)
     return 2;
@@ -4264,15 +4399,14 @@ c_common_post_options ()
 {
   cpp_post_options (parse_in);
 
+  flag_inline_trees = 1;
+
   /* Use tree inlining if possible.  Function instrumentation is only
      done in the RTL level, so we disable tree inlining.  */
   if (! flag_instrument_function_entry_exit)
     {
       if (!flag_no_inline)
-	{
-	  flag_inline_trees = 1;
-	  flag_no_inline = 1;
-	}
+	flag_no_inline = 1;
       if (flag_inline_functions)
 	{
 	  flag_inline_trees = 2;
@@ -4392,3 +4526,124 @@ shadow_warning (msgid, name, decl)
 			      "shadowed declaration is here");
 }
 
+/* APPLE LOCAL begin long double dpatel */
+
+void
+warn_about_long_double ()
+{
+  /* Nonzero means we already warned about long doubles.  */
+  static int warned_about_long_double = 0;  
+
+  if (warn_long_double
+      && ! warned_about_long_double
+      /* Oh, the fromage of it all...  For hysterical reasons, the
+         preprocessor does not recognize things in the system
+         frameworks as "system headers", which confuses some types
+         of warnings.  So instead of hacking the preprocessors in
+         obscure ways, test for and ignore system headers here.  */
+      && ! in_system_header
+      && ! strstr (input_filename, "/System/Library/Frameworks/")
+      && ! strstr (input_filename, "/usr/include/"))
+    {       
+      warning ("use of `long double' type; its size may change in a future release");
+      warning ("(Long double usage is reported only once for each file.");
+      warning ("To disable this warning, use -Wno-long-double.)");
+      warned_about_long_double = 1;
+    }       
+}
+/* APPLE LOCAL end long double dpatel */
+
+/* APPLE LOCAL begin constant cfstrings */
+
+static tree cfstring_class_reference = NULL_TREE;
+static tree cfstring_object_template = NULL_TREE;
+
+static void
+create_cfstring_template ()
+{
+  /* "extern int __CFConstantStringClassReference[];"  */
+  cfstring_class_reference = build_decl
+			     (VAR_DECL, 
+			      get_identifier ("__CFConstantStringClassReference"),
+			      build_array_type (integer_type_node, 0));
+  DECL_EXTERNAL (cfstring_class_reference) = 1;
+  TREE_PUBLIC (cfstring_class_reference) = 1;
+  TREE_USED (cfstring_class_reference) = 1;
+  DECL_ARTIFICIAL (cfstring_class_reference) = 1;
+  pushdecl (cfstring_class_reference);
+  rest_of_decl_compilation (cfstring_class_reference, 0, 0, 0);
+}
+
+tree
+build_cfstring_ascii (str)
+     tree str;
+{
+  tree initlist, constructor;
+  int length;
+
+  length = TREE_STRING_LENGTH (str) - 1;
+
+  initlist = build_tree_list
+	     (NULL_TREE, convert (const_ptr_type_node, 
+				  copy_node (build_unary_op 
+					     (ADDR_EXPR, 
+					      cfstring_class_reference, 0))));
+  initlist = tree_cons (NULL_TREE, convert (const_ptr_type_node, 
+					    build_int_2 (0x000007c8, 0)), initlist);
+  initlist = tree_cons
+	     (NULL_TREE, convert (const_ptr_type_node,
+				  copy_node (build_unary_op 
+					     (ADDR_EXPR, str, 1))), initlist);
+  initlist = tree_cons (NULL_TREE, convert (const_ptr_type_node, 
+				  build_int_2 (length, 0)), initlist);
+  
+  /* Because we're lazy, we'll treat CFStrings (internally) as arrays of pointers.  
+     This shouldn't matter, anyway.  */
+  cfstring_object_template = build_array_type (const_ptr_type_node, 0);	 
+  TYPE_ALIGN (cfstring_object_template) = TYPE_ALIGN (const_ptr_type_node);
+  /* NB: We are initializing 'cfstring_object_template' every time, instead of
+     once in create_cfstring_template() above, because the compiler appears
+     to clobber it on occasion.  Exercise for the student: eliminate the
+     clobbering.  Primary suspect: memory manager.  */
+     
+  constructor = build (CONSTRUCTOR, cfstring_object_template, 
+		       NULL_TREE, nreverse (initlist));
+  TREE_CONSTANT (constructor) = 1;
+  TREE_STATIC (constructor) = 1;
+  TREE_READONLY (constructor) = 1;
+
+  /* Fromage: The C++ flavor of 'build_unary_op' expects constructor nodes to have
+     the TREE_HAS_CONSTRUCTOR (...) bit set.  However, this file (c-common.c) is built
+     without any knowledge of C++ tree accessors; hence, we shall use the generic
+     accessor that TREE_HAS_CONSTRUCTOR actually maps to!  */
+  if (c_language == clk_cplusplus)
+     TREE_LANG_FLAG_4 (constructor) = 1;   /* TREE_HAS_CONSTRUCTOR  */
+     
+  return build_c_cast (const_ptr_type_node, copy_node 
+					    (build_unary_op (ADDR_EXPR, constructor, 1)));
+}     
+/* APPLE LOCAL end constant cfstrings */
+
+/* APPLE LOCAL PFE */
+/*-------------------------------------------------------------------*/
+#ifdef PFE
+
+/* Replaces c_common_nodes_and_builtin() when doing a pfe load operation.  */
+void
+pfe_c_common_nodes_and_builtins ()
+{
+  /* We must initialize this before any builtin functions (which might have
+     attributes) are declared.  (c_common_init is too late.)  */
+  format_attribute_table = c_format_attribute_table;
+
+  /* ??? Perhaps there's a better place to do this.  But it is related
+     to __builtin_va_arg, so it isn't that off-the-wall.  */
+  lang_type_promotes_to = simple_type_promotes_to;
+
+  /* APPLE LOCAL begin constant cfstrings */
+  if (flag_constant_cfstrings)
+    create_cfstring_template ();
+  /* APPLE LOCAL end constant cfstrings */
+}
+
+#endif

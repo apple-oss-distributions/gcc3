@@ -75,7 +75,7 @@ DEFCHECKSTRUCT (tree_int_cst, 24)
 DEFCHECKSTRUCT (tree_real_cst, 36)
 DEFCHECKSTRUCT (tree_string, 24)
 DEFCHECKSTRUCT (tree_complex, 24)
-DEFCHECKSTRUCT (tree_vector, 24)
+DEFCHECKSTRUCT (tree_vector, 20)
 DEFCHECKSTRUCT (tree_identifier, 20)
 DEFCHECKSTRUCT (tree_decl, 112)
 DEFCHECKSTRUCT (tree_type, 88)
@@ -95,12 +95,16 @@ DEFCHECKSTRUCT (cpp_hashnode, 20)
 /* cpplib.c */
 DEFCHECKSTRUCT (answer, 24)
 
+/* c-common.h */
+DEFCHECKSTRUCT (language_function, 20)
+DEFCHECKSTRUCT (stmt_tree_s, 16)
+
 /* cppmacro.c */
 DEFCHECKSTRUCT (cpp_macro, 24)
 
 /* except.c */
 DEFCHECKSTRUCT (eh_status, 80)
-DEFCHECKSTRUCT (eh_region, 52)
+DEFCHECKSTRUCT (eh_region, 56)
 
 /* function.c */
 DEFCHECKSTRUCT (function, 264)
@@ -122,16 +126,16 @@ DEFCHECKSTRUCT (initial_value_pair, 8)
 
 /* varasm.c */
 DEFCHECKSTRUCT (pool_constant, 36)
-DEFCHECKSTRUCT (varasm_status, 24)
+DEFCHECKSTRUCT (varasm_status, 28)
 DEFCHECKSTRUCT (constant_descriptor, 20)
-DEFCHECKSTRUCT (rtx_const, 24)
+DEFCHECKSTRUCT (rtx_const, 132)
 
 #endif /* GCC_STRUCTS */
 /*-------------------------------------------------------------------*/
 #ifdef GCC_C_STRUCTS
 
 /* c-decl.c */
-DEFCHECKSTRUCT (c_language_function, 44)
+DEFCHECKSTRUCT (c_language_function, 52)
 DEFCHECKSTRUCT (binding_level, 40)
 
 #endif /* GCC_C_STRUCTS */

@@ -356,7 +356,7 @@ DEF_GCC_BUILTIN(BUILT_IN_TRAP,
 		BT_FN_VOID)
 DEF_GCC_BUILTIN(BUILT_IN_PREFETCH,
 		"__builtin_prefetch",
-		BT_FN_VOID_PTR_VAR)
+		BT_FN_VOID_CONST_PTR_VAR)
 
 /* Stdio builtins.  */
 DEF_FALLBACK_BUILTIN(BUILT_IN_PUTCHAR,
@@ -480,6 +480,13 @@ DEF_GCC_BUILTIN(BUILT_IN_VA_COPY,
 DEF_GCC_BUILTIN(BUILT_IN_EXPECT,
 		"__builtin_expect",
 		BT_FN_LONG_LONG_LONG)
+
+/* APPLE LOCAL begin constant cfstrings */
+/* const void * __builtin___CFStringMakeConstantString(const char *); */
+DEF_GCC_BUILTIN(BUILT_IN___CFSTRINGMAKECONSTANTSTRING,
+		"__builtin___CFStringMakeConstantString",
+		BT_FN_CONST_PTR_CONST_STRING)
+/* APPLE LOCAL end constant cfstrings */
 
 /* C++ extensions */
 DEF_UNUSED_BUILTIN(BUILT_IN_NEW)

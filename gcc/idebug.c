@@ -1,4 +1,4 @@
-/* APPLE LOCAL debugging */
+/* APPLE LOCAL file debugging */
 /* C tree & rtl accessors defined as functions for use in a debugger.
    Copyright (C) 2001  Free Software Foundation, Inc.
    Contributed by Ira L. Ruben (ira@apple.com)
@@ -300,9 +300,8 @@ fn_1( DECL_IGNORED_P, int, tree )
 fn_1( DECL_ABSTRACT, int, tree )
 fn_1( DECL_IN_SYSTEM_HEADER, int, tree )
 fn_1( DECL_COMMON, int, tree )
-#ifdef HAVE_COALESCED_SYMBOLS
 fn_1( DECL_COALESCED, int, tree )
-#endif
+fn_1 (DECL_PRIVATE_EXTERN, int, tree)
 fn_1( DECL_LANG_SPECIFIC, struct lang_decl *, tree )
 fn_1( DECL_EXTERNAL, int, tree )
 fn_1( TYPE_DECL_SUPPRESS_DEBUG, int, tree )

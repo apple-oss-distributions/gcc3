@@ -1,4 +1,4 @@
-/* APPLE LOCAL new tree dump */
+/* APPLE LOCAL file new tree dump */
 /* Common condensed tree display routines specific for objc and objc++.
    Copyright (C) 2001  Free Software Foundation, Inc.
    Contributed by Ira L. Ruben (ira@apple.com)
@@ -59,14 +59,17 @@ print_CLASS_INTERFACE_TYPE (file, annotation, node, indent)
      CLASS_IVARS(node), or as fields of the
      underlying C struct (itself accessible via
      CLASS_STATIC_TEMPLATE(node).  */
-  fprintf (file, " ivars="HOST_PTR_PRINTF,
+  fprintf (file, " ivars=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (CLASS_IVARS (node)));
   /* zlaski 2001-Jul-26:  not sure what the raw ivars are for...  */		
-  fprintf (file, " raw_ivars="HOST_PTR_PRINTF,
+  fprintf (file, " raw_ivars=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (CLASS_RAW_IVARS (node)));
   /* The "own ivars" list contains just the ivars defined by this
      class (i.e., not inherited).  */		
-  fprintf (file, " own_ivars="HOST_PTR_PRINTF,
+  fprintf (file, " own_ivars=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (CLASS_OWN_IVARS (node)));
 
   print_type (file, annotation, node, indent);
@@ -140,7 +143,8 @@ print_PROTOCOL_INTERFACE_TYPE (file, annotation, node, indent)
 {
   tree n;
   
-  fprintf (file, " fwd-decl="HOST_PTR_PRINTF,
+  fprintf (file, " fwd-decl=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (PROTOCOL_FORWARD_DECL (node)));
   fprintf (file, " defined=%d", PROTOCOL_DEFINED (node));
 
@@ -181,9 +185,11 @@ print_INSTANCE_METHOD_DECL (file, annotation, node, indent)
      tree node ATTRIBUTE_UNUSED;
      int indent ATTRIBUTE_UNUSED;
 {
-  fprintf (file, " args="HOST_PTR_PRINTF,
+  fprintf (file, " args=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (METHOD_SEL_ARGS (node)));
-  fprintf (file, " addl="HOST_PTR_PRINTF,
+  fprintf (file, " addl=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (METHOD_ADD_ARGS (node)));
   if (METHOD_ENCODING (node))		
     fprintf (file, " encode=%s",
@@ -216,7 +222,8 @@ print_CLASS_REFERENCE_EXPR (file, annotation, node, indent)
      tree node ATTRIBUTE_UNUSED;
      int indent ATTRIBUTE_UNUSED;
 {
-  fprintf (file, " ident="HOST_PTR_PRINTF,
+  fprintf (file, " ident=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (TREE_OPERAND (node, 0)));
   (void)node_seen (node, TRUE);
 }
@@ -228,11 +235,13 @@ print_MESSAGE_SEND_EXPR (file, annotation, node, indent)
      tree node ATTRIBUTE_UNUSED;
      int indent ATTRIBUTE_UNUSED;
 {
-  fprintf (file, " receiver="HOST_PTR_PRINTF,
+  fprintf (file, " receiver=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (TREE_OPERAND (node, 0)));
   fprintf (file, " sel_name=%s",
   		IDENTIFIER_POINTER (TREE_OPERAND (node, 1)));
-  fprintf (file, " args="HOST_PTR_PRINTF,
+  fprintf (file, " args=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (TREE_OPERAND (node, 2)));
   (void)node_seen (node, TRUE);
 }

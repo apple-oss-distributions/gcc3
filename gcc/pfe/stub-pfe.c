@@ -66,6 +66,20 @@ pfe_term ()
 {
 }
 
+void 
+pfe_open_pfe_file (pfe_dir, arch, fdump)
+     char *pfe_dir ATTRIBUTE_UNUSED;
+     char *arch ATTRIBUTE_UNUSED;
+     int fdump ATTRIBUTE_UNUSED;
+{
+}
+
+void
+pfe_close_pfe_file (delete_it)
+     int delete_it ATTRIBUTE_UNUSED;
+{
+}
+
 void * 
 pfe_malloc (size)
      size_t size;
@@ -156,13 +170,14 @@ pfe_add_header_name (name, timestamp, inode)
 }
 
 void 
-pfe_check_lang ()
+pfe_check_lang (lang)
+     enum pfe_lang lang ATTRIBUTE_UNUSED;
 {
 }
 
 void 
 pfe_set_lang (lang)
-     enum c_lang lang ATTRIBUTE_UNUSED;
+     enum pfe_lang lang ATTRIBUTE_UNUSED;
 {
 }
 
@@ -294,6 +309,32 @@ void
 pfe_check_compiler ()
 {
 }
+
+int pfe_macro_validation = 0;
+int pfe_cmd_ln_macro_count = 0;
+int pfe_macro_status = 0;
+
+void
+pfe_set_cmd_ln_processing ()
+{
+}
+
+void
+pfe_reset_cmd_ln_processing ()
+{
+}
+
+int
+pfe_is_cmd_ln_processing ()
+{
+  return 0;
+ }
+
+ void
+ pfe_check_cmd_ln_macros ()
+ {
+ }
+
 /*-------------------------------------------------------------------*/
 
 #endif /* PFE */

@@ -1,5 +1,5 @@
 /* Tree-dumping functionality for intermediate representation.
-   Copyright (C) 1999, 2000 Free Software Foundation, Inc.
+   Copyright (C) 1999, 2000, 2002 Free Software Foundation, Inc.
    Written by Mark Mitchell <mark@codesourcery.com>
 
 This file is part of GCC.
@@ -331,7 +331,7 @@ dequeue_and_dump (di)
 	  break;
 	      
 	default:
-	  abort();
+	  abort ();
 	}
     }
   else if (DECL_P (t))
@@ -548,6 +548,13 @@ dequeue_and_dump (di)
       dump_next_stmt (di, t);
       break;
 
+    case CLEANUP_STMT:
+      dump_stmt (di, t);
+      dump_child ("decl", CLEANUP_DECL (t));
+      dump_child ("expr", CLEANUP_EXPR (t));
+      dump_next_stmt (di, t);
+      break;
+
     case COMPOUND_STMT:
       dump_stmt (di, t);
       dump_child ("body", COMPOUND_BODY (t));
@@ -753,6 +760,16 @@ dump_node (t, flags, stream)
   struct dump_info di;
   dump_queue_p dq;
   dump_queue_p next_dq;
+  
+  /* APPLE LOCAL begin new tree dump  ilr */
+#ifdef ENABLE_DMP_TREE
+  /* The -fdmp-xxxx options indicate that we are to use dmp_tree() as
+     opposed to the dump format provided here.  */
+  if (flags & TDF_DMP_TREE)
+    if ((*lang_hooks.dmp_tree3) (stream, t, flags))
+      return;
+#endif
+  /* APPLE LOCAL end new tree dump  ilr */
 
   /* Initialize the dump-information structure.  */
   di.stream = stream;
@@ -793,13 +810,23 @@ struct dump_file_info
 
 /* Table of tree dump switches. This must be consistent with the
    TREE_DUMP_INDEX enumeration in tree.h */
-static struct dump_file_info dump_files[TDI_end] =
+/* APPLE LOCAL new tree dump  ilr */
+static struct dump_file_info dump_files[(int)TDI_end*2] =
 {
   {".tu", "dump-translation-unit", 0, 0},
   {".class", "dump-class-hierarchy", 0, 0},
   {".original", "dump-tree-original", 0, 0},
   {".optimized", "dump-tree-optimized", 0, 0},
   {".inlined", "dump-tree-inlined", 0, 0},
+  /* APPLE LOCAL begin new tree dump  ilr */
+#ifdef ENABLE_DMP_TREE
+  {".tu", "dmp-translation-unit", 0, 0},
+  {".class", "dmp-class-hierarchy", 0, 0},
+  {".original", "dmp-tree-original", 0, 0},
+  {".optimized", "dmp-tree-optimized", 0, 0},
+  {".inlined", "dmp-tree-inlined", 0, 0},
+#endif
+  /* APPLE LOCAL end new tree dump  ilr */
 };
 
 /* Define a name->number mapping for a dump flag value.  */
@@ -886,12 +913,26 @@ dump_switch_p (arg)
 {
   unsigned ix;
   const char *option_value;
-  
-  for (ix = 0; ix != TDI_end; ix++)
+
+  /* APPLE LOCAL new tree dump  ilr */
+  for (ix = 0; ix != (int)TDI_end*2; ix++)
     if ((option_value = skip_leading_substring (arg, dump_files[ix].swtch)))
       {
 	const char *ptr = option_value;
 	int flags = 0;
+
+	/* APPLE LOCAL begin new tree dump  ilr */
+#ifdef ENABLE_DMP_TREE
+  	unsigned ix1;
+	if (strncmp (arg, "dmp", 3) == 0)
+	  {
+	    flags |= TDF_DMP_TREE;
+	    ix1 = ix - (int)TDI_end; 
+	  }
+	else
+	  ix1 = ix;
+#endif
+	/* APPLE LOCAL end new tree dump  ilr */
 	
 	while (*ptr)
 	  {
@@ -914,14 +955,28 @@ dump_switch_p (arg)
 		  flags |= option_ptr->value;
 		  goto found;
 		}
+	    /* APPLE LOCAL begin new tree dump  ilr */
+#ifdef ENABLE_DMP_TREE
+	    warning ("ignoring unknown option `%.*s' in `-f%s'",
+		     length, ptr, dump_files[ix1].swtch);
+#else
 	    warning ("ignoring unknown option `%.*s' in `-f%s'",
 		     length, ptr, dump_files[ix].swtch);
+#endif
+	    /* APPLE LOCAL end new tree dump  ilr */
 	  found:;
 	    ptr = end_ptr;
 	  }
 	
+	/* APPLE LOCAL begin new tree dump  ilr */
+#ifdef ENABLE_DMP_TREE
+	dump_files[ix1].state = -1;
+	dump_files[ix1].flags = flags;
+#else
 	dump_files[ix].state = -1;
 	dump_files[ix].flags = flags;
+#endif
+	/* APPLE LOCAL end new tree dump  ilr */
 	
 	return 1;
       }

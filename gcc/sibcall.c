@@ -1,5 +1,5 @@
 /* Generic sibling call optimization support
-   Copyright (C) 1999, 2000, 2001 Free Software Foundation, Inc.
+   Copyright (C) 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -31,6 +31,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "basic-block.h"
 #include "output.h"
 #include "except.h"
+#include "tree.h"
 
 /* In case alternate_exit_block contains copy from pseudo, to return value,
    record the pseudo here.  In such case the pseudo must be set to function
@@ -546,7 +547,7 @@ replace_call_placeholder (insn, use)
   else if (use == sibcall_use_normal)
     emit_insns_before (XEXP (PATTERN (insn), 0), insn);
   else
-    abort();
+    abort ();
 
   /* Turn off LABEL_PRESERVE_P for the tail recursion label if it
      exists.  We only had to set it long enough to keep the jump
@@ -572,7 +573,7 @@ optimize_sibling_and_tail_recursive_calls ()
 {
   rtx insn, insns;
   basic_block alternate_exit = EXIT_BLOCK_PTR;
-  int current_function_uses_addressof;
+  bool no_sibcalls_this_function = false;
   int successful_sibling_call = 0;
   int replaced_call_placeholder = 0;
   edge e;
@@ -594,6 +595,12 @@ optimize_sibling_and_tail_recursive_calls ()
   /* If there are no basic blocks, then there is nothing to do.  */
   if (n_basic_blocks == 0)
     return;
+
+  /* If we are using sjlj exceptions, we may need to add a call to 
+     _Unwind_SjLj_Unregister at exit of the function.  Which means
+     that we cannot do any sibcall transformations.  */
+  if (USING_SJLJ_EXCEPTIONS && current_function_has_exception_handlers ())
+    no_sibcalls_this_function = true;
 
   return_value_pseudo = NULL_RTX;
 
@@ -655,7 +662,7 @@ optimize_sibling_and_tail_recursive_calls ()
 
   /* If the function uses ADDRESSOF, we can't (easily) determine
      at this point if the value will end up on the stack.  */
-  current_function_uses_addressof = sequence_uses_addressof (insns);
+  no_sibcalls_this_function |= sequence_uses_addressof (insns);
 
   /* Walk the insn chain and find any CALL_PLACEHOLDER insns.  We need to
      select one of the insn sequences attached to each CALL_PLACEHOLDER.
@@ -685,11 +692,10 @@ optimize_sibling_and_tail_recursive_calls ()
 
 	  /* See if there are any reasons we can't perform either sibling or
 	     tail call optimizations.  We must be careful with stack slots
-	     which are live at potential optimization sites.  ??? The first
-	     test is overly conservative and should be replaced.  */
-	  if (frame_offset
-	      /* Can't take address of local var if used by recursive call.  */
-	      || current_function_uses_addressof
+	     which are live at potential optimization sites.  */
+	  if (no_sibcalls_this_function
+	      /* ??? Overly conservative.  */
+	      || frame_offset
 	      /* Any function that calls setjmp might have longjmp called from
 		 any called function.  ??? We really should represent this
 		 properly in the CFG so that this needn't be special cased.  */
@@ -725,6 +731,7 @@ optimize_sibling_and_tail_recursive_calls ()
   if (successful_sibling_call)
     {
       rtx insn;
+      tree arg;
 
       /* A sibling call sequence invalidates any REG_EQUIV notes made for
 	 this function's incoming arguments. 
@@ -748,6 +755,16 @@ optimize_sibling_and_tail_recursive_calls ()
 	{
 	  if (INSN_P (insn))
 	    purge_mem_unchanging_flag (PATTERN (insn));
+	}
+
+      /* Similarly, invalidate RTX_UNCHANGING_P for any incoming
+	 arguments passed in registers. */
+      for (arg = DECL_ARGUMENTS (current_function_decl); 
+	   arg; 
+	   arg = TREE_CHAIN (arg))
+	{
+	  if (REG_P (DECL_RTL (arg)))
+	    RTX_UNCHANGING_P (DECL_RTL (arg)) = false;
 	}
     }
 

@@ -47,35 +47,21 @@ extern lang_dump_tree_p_t	objc_prev_lang_dump_tree_p;
 static void freeze_thaw_hash_entry     PARAMS ((hash **));
 static void freeze_thaw_hash_attribute PARAMS ((attr *));
 
-/* Freeze/thaw language specific compiler state.  */
-void 
-objc_freeze_thaw_compiler_state (pp)
-      struct pfe_lang_compiler_state **pp;
-{
-  struct pfe_lang_compiler_state *hdr;
-  int i;
- 
-  hdr = (struct pfe_lang_compiler_state *)pfe_freeze_thaw_ptr_fp (pp);
-
-  /* Freeze-thaw the state for the base language.  */
-  C_OR_CXX_(freeze_thaw_compiler_state) (&hdr->base_lang);
-  
-  /* Now freeze-thaw our stuff.  */
-  PFE_FREEZE_THAW_GLOBAL_TREE_ARRAY (objc_global_trees, OCTI_MAX);
-  PFE_FREEZE_THAW_GLOBAL_HASH_ENTRY (nst_method_hash_list);
-  PFE_FREEZE_THAW_GLOBAL_HASH_ENTRY (cls_method_hash_list);
-}  
-
 /* Initialize language specific compiler state.  */
 void
-objc_pfe_lang_init ()
+objc_pfe_lang_init (lang)
+  int lang ATTRIBUTE_UNUSED;
 {
   /* Initialize the base language.  */
-  C_OR_CXX_(pfe_lang_init) ();
+#ifdef OBJCPLUS
+  cxx_pfe_lang_init ((int) PFE_LANG_OBJCXX);
+#else
+  c_pfe_lang_init ((int) PFE_LANG_OBJC);
+#endif
 
   /* Initialize the language specific compiler state, and prepend it to the
      base language state.  */
-  if (pfe_compiler_state_ptr)
+  if (pfe_operation == PFE_DUMP)
   {
     struct pfe_base_lang_compiler_state *base_lang 
       = (struct pfe_base_lang_compiler_state *)pfe_compiler_state_ptr->lang_specific;
@@ -101,6 +87,35 @@ objc_pfe_lang_init ()
       add_objc_tree_codes ();
     }
 #endif
+}
+
+/* Freeze/thaw language specific compiler state.  */
+void 
+objc_freeze_thaw_compiler_state (pp)
+      struct pfe_lang_compiler_state **pp;
+{
+  struct pfe_lang_compiler_state *hdr;
+  int i;
+ 
+  hdr = (struct pfe_lang_compiler_state *)pfe_freeze_thaw_ptr_fp (pp);
+
+  /* Freeze-thaw the state for the base language.  */
+  C_OR_CXX_(freeze_thaw_compiler_state) (&hdr->base_lang);
+  
+  /* Now freeze-thaw our stuff.  */
+  PFE_FREEZE_THAW_GLOBAL_TREE_ARRAY (objc_global_trees, OCTI_MAX);
+  PFE_FREEZE_THAW_GLOBAL_HASH_ENTRY (nst_method_hash_list);
+  PFE_FREEZE_THAW_GLOBAL_HASH_ENTRY (cls_method_hash_list);
+
+  pfe_freeze_thaw_objc_act_globals (hdr);
+}  
+
+/* Check language-specific compiler options.  */
+void 
+objc_pfe_check_settings (lang_specific)
+    struct pfe_lang_compiler_state *lang_specific;
+{
+  C_OR_CXX_(pfe_check_settings) (lang_specific->base_lang);
 }
 
 /* See freeze-thaw.c for documentation of these routines.  */

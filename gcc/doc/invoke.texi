@@ -1,12 +1,12 @@
 @c Copyright (C) 1988, 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
-@c 2000, 2001 Free Software Foundation, Inc.
+@c 2000, 2001, 2002 Free Software Foundation, Inc.
 @c This is part of the GCC manual.
 @c For copying conditions, see the file gcc.texi.
 
 @ignore
 @c man begin COPYRIGHT
 Copyright @copyright{} 1988, 1989, 1992, 1993, 1994, 1995, 1996, 1997,
-1998, 1999, 2000, 2001 Free Software Foundation, Inc.
+1998, 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.1 or
@@ -40,6 +40,19 @@ gcc [@option{-c}|@option{-S}|@option{-E}] [@option{-std=}@var{standard}]
 
 Only the most useful options are listed here; see below for the
 remainder.  @samp{g++} accepts mostly the same options as @samp{gcc}.
+
+@c APPLE LOCAL begin manual
+In Apple's version of GCC, both @samp{cc} and @samp{gcc} are actually
+symbolic links to @samp{gcc3}, while @samp{c++} and @samp{g++} are links
+to @samp{g++3}.
+
+Note that Apple's GCC includes a number of extensions to standard GCC
+(flagged below with ``APPLE ONLY''), and that not all generic GCC
+options are available or supported on Darwin / Mac OS X.  In particular,
+Apple does not currently support the compilation of Fortran, Ada, or
+Java, although there are third parties who have made these work.
+@c APPLE LOCAL begin manual
+
 @c man end
 @c man begin SEEALSO
 gpl(7), gfdl(7), fsf-funding(7),
@@ -48,13 +61,15 @@ and the Info entries for @file{gcc}, @file{cpp}, @file{g77}, @file{as},
 @file{ld}, @file{binutils} and @file{gdb}.
 @c man end
 @c man begin BUGS
-For instructions on reporting bugs, see
-@w{@uref{http://gcc.gnu.org/bugs.html}}.  Use of the @command{gccbug}
-script to report bugs is recommended.
+@c APPLE LOCAL begin report bugs to Apple
+To report bugs to Apple, see
+@w{@uref{http://developer.apple.com/bugreporter}}.
+@c APPLE LOCAL end report bugs to Apple
 @c man end
 @c man begin AUTHOR
-See the Info entry for @file{gcc}, or
-@w{@uref{http://gcc.gnu.org/thanks.html}}, for contributors to GCC@.
+See the Info entry for @command{gcc}, or
+@w{@uref{http://gcc.gnu.org/onlinedocs/gcc/Contributors.html}},
+for contributors to GCC@.
 @c man end
 @end ignore
 
@@ -156,27 +171,34 @@ in the following sections.
 @xref{Overall Options,,Options Controlling the Kind of Output}.
 @gccoptlist{
 -c  -S  -E  -o @var{file}  -pipe  -pass-exit-codes  -x @var{language} @gol
-@c APPLE LOCAL begin -ObjC 2001-08-03 sts **
--ObjC (APPLE) -ObjC++ (APPLE) @gol
-@c APPLE LOCAL end -ObjC 2001-08-03 sts **
-@c APPLE LOCAL begin -### 2001-10-29 ilr **
+@c APPLE LOCAL -ObjC 2001-08-03 sts **
+-ObjC (APPLE ONLY) -ObjC++ (APPLE ONLY) @gol
+@c APPLE LOCAL fat builds
+-arch @var{arch} (APPLE ONLY) @gol
 -v  -###  --target-help  --help}
-@c APPLE LOCAL end -### 2001-10-29 ilr **
 
 @item C Language Options
 @xref{C Dialect Options,,Options Controlling C Dialect}.
 @gccoptlist{
 -ansi  -std=@var{standard}  -aux-info @var{filename} @gol
+@c APPLE LOCAL AltiVec
+-faltivec (APPLE ONLY) @gol
 -fno-asm  -fno-builtin -fno-builtin-@var{function} @gol
 -fhosted  -ffreestanding @gol
--trigraphs  -traditional  -traditional-cpp @gol
+-trigraphs  -no-integrated-cpp  -traditional  -traditional-cpp @gol
 -fallow-single-precision  -fcond-mismatch @gol
+@c APPLE LOCAL constant cfstrings
+-fconstant-cfstrings (APPLE ONLY) @gol
 -fsigned-bitfields  -fsigned-char @gol
 -funsigned-bitfields  -funsigned-char @gol
 @c APPLE LOCAL begin Pascal Strings 2001-07-05 zll **
 -fwritable-strings  -fshort-wchar @gol
 -fpascal-strings (APPLE ONLY) @gol
 @c APPLE LOCAL end Pascal Strings 2001-07-05 zll **
+@c APPLE LOCAL coalescing 2002-04-11 tur **
+-fcoalesce (APPLE ONLY) -fweak-coalesced (APPLE ONLY) @gol
+@c APPLE LOCAL -Wno-#warnings
+-Wno-#warnings (APPLE ONLY) @gol
 @c APPLE LOCAL -Wextra-tokens 2001-08-02 sts **
 -Wextra-tokens (APPLE ONLY) @gol
 @c APPLE LOCAL -Wpragma-once 2001-08-01 sts **
@@ -199,7 +221,11 @@ in the following sections.
 -fno-implicit-inline-templates @gol
 -fno-implement-inlines @gol
 @c APPLE LOCAL -findirect-virtual-calls 2001-10-30 sts **
--findirect-virtual-calls @gol
+-findirect-virtual-calls (APPLE ONLY) @gol
+@c APPLE LOCAL -fapple-kext
+-fapple-kext (APPLE ONLY) @gol
+@c APPLE LOCAL coalescing 2002-04-11 tur **
+-fcoalesce-templates (APPLE ONLY) @gol
 -fms-extensions @gol
 -fno-nonansi-builtins  -fno-operator-names @gol
 -fno-optional-diags  -fpermissive @gol
@@ -231,19 +257,22 @@ in the following sections.
 -fsyntax-only  -pedantic  -pedantic-errors @gol
 -w  -W  -Wall  -Waggregate-return @gol
 -Wcast-align  -Wcast-qual  -Wchar-subscripts  -Wcomment @gol
-@c APPLE LOCAL begin deprecated (Radar 2637521) ilr
 -Wconversion  -Wno-deprecated-declarations @gol
 -Wdisabled-optimization  -Wdiv-by-zero  -Werror @gol
-@c APPLE LOCAL end deprecated (Radar 2637521) ilr
 -Wfloat-equal  -Wformat  -Wformat=2 @gol
 -Wformat-nonliteral  -Wformat-security @gol
 -Wimplicit  -Wimplicit-int  @gol
 -Wimplicit-function-declaration @gol
 -Werror-implicit-function-declaration @gol
 -Wimport  -Winline @gol
--Wlarger-than-@var{len}  -Wlong-long @gol
+-Wlarger-than-@var{len} @gol
+@c APPLE LOCAL long double
+-Wno-long-double (APPLE ONLY) @gol
+-Wlong-long @gol
 -Wmain  -Wmissing-braces  -Wmissing-declarations @gol
 -Wmissing-format-attribute  -Wmissing-noreturn @gol
+@c APPLE LOCAL -Wmost
+-Wmost (APPLE ONLY) @gol
 -Wmultichar  -Wno-format-extra-args  -Wno-format-y2k @gol
 -Wno-import  -Wpacked  -Wpadded @gol
 -Wparentheses  -Wpointer-arith  -Wredundant-decls @gol
@@ -263,7 +292,7 @@ in the following sections.
 @xref{Debugging Options,,Options for Debugging Your Program or GCC}.
 @gccoptlist{
 -d@var{letters}  -dumpspecs  -dumpmachine  -dumpversion @gol
--fdump-unnumbered 
+-fdump-unnumbered -fdump-translation-unit@r{[}-@var{n}@r{]} @gol
 -fdump-class-hierarchy@r{[}-@var{n}@r{]} @gol
 -fdump-tree-original@r{[}-@var{n}@r{]} -fdump-tree-optimized@r{[}-@var{n}@r{]} @gol
 -fdump-tree-inlined@r{[}-@var{n}@r{]} @gol
@@ -294,8 +323,8 @@ in the following sections.
 -fno-inline  -fno-math-errno  -fno-peephole  -fno-peephole2 @gol
 -funsafe-math-optimizations -fno-trapping-math @gol
 -fomit-frame-pointer  -foptimize-register-move @gol
--foptimize-sibling-calls  -fprefetch-loop-arrays  -freduce-all-givs @gol
--fregmove  -frename-registers @gol
+-foptimize-sibling-calls  -fprefetch-loop-arrays @gol
+-freduce-all-givs -fregmove  -frename-registers @gol
 -frerun-cse-after-loop  -frerun-loop-opt @gol
 -fschedule-insns  -fschedule-insns2 @gol
 -fsingle-precision-constant  -fssa -fssa-ccp -fssa-dce @gol
@@ -317,6 +346,10 @@ in the following sections.
 -M  -MM  -MF  -MG  -MP  -MQ  -MT  -nostdinc  -P  -remap @gol
 @c APPLE LOCAL -dependency-file
 -dependency-file (APPLE ONLY) @gol
+@c APPLE LOCAL cpp-precomp
+-no-cpp-precomp (APPLE ONLY) @gol
+@c APPLE LOCAL PFE
+--dump-pch @var{name} (APPLE ONLY) --load-pch @var{name} (APPLE ONLY) @gol
 -trigraphs  -undef  -U@var{macro}  -Wp,@var{option}}
 
 @item Assembler Option
@@ -328,7 +361,8 @@ in the following sections.
 @xref{Link Options,,Options for Linking}.
 @gccoptlist{
 @var{object-file-name}  -l@var{library} @gol
--nostartfiles  -nodefaultlibs  -nostdlib @gol
+@c APPLE LOCAL radar 2466994 - -no-c++filt  ilr
+-nostartfiles  -nodefaultlibs  -nostdlib  -no-c++filt (APPLE ONLY)  @gol
 -s  -static  -static-libgcc  -shared  -shared-libgcc  -symbolic @gol
 -Wl,@var{option}  -Xlinker @var{option} @gol
 -u @var{symbol}}
@@ -336,7 +370,10 @@ in the following sections.
 @item Directory Options
 @xref{Directory Options,,Options for Directory Search}.
 @gccoptlist{
--B@var{prefix}  -I@var{dir}  -I-  -L@var{dir}  -specs=@var{file}}
+-B@var{prefix}  -I@var{dir}  -I- @gol
+@c APPLE LOCAL framework headers
+-F@var{dir} (APPLE ONLY) @gol
+-L@var{dir}  -specs=@var{file}}
 
 @item Target Options
 @c I wrote this xref this way to avoid overfull hbox. -- rms
@@ -346,6 +383,10 @@ in the following sections.
 
 @item Machine Dependent Options
 @xref{Submodel Options,,Hardware Models and Configurations}.
+
+@c APPLE LOCAL prune man page
+@ignore
+
 @emph{M680x0 Options}
 @gccoptlist{
 -m68000  -m68020  -m68020-40  -m68020-60  -m68030  -m68040 @gol
@@ -369,10 +410,10 @@ in the following sections.
 -mcmodel=@var{code-model} @gol
 -m32  -m64 @gol
 -mapp-regs  -mbroken-saverestore  -mcypress @gol
--mepilogue  -mfaster-structs  -mflat @gol
+-mfaster-structs  -mflat @gol
 -mfpu  -mhard-float  -mhard-quad-float @gol
 -mimpure-text  -mlive-g0  -mno-app-regs @gol
--mno-epilogue  -mno-faster-structs  -mno-flat  -mno-fpu @gol
+-mno-faster-structs  -mno-flat  -mno-fpu @gol
 -mno-impure-text  -mno-stack-bias  -mno-unaligned-doubles @gol
 -msoft-float  -msoft-quad-float  -msparclite  -mstack-bias @gol
 -msupersparc  -munaligned-doubles  -mv8}
@@ -446,6 +487,9 @@ in the following sections.
 -msvr4  -mtrap-large-shift  -muse-div-instruction @gol
 -mversion-03.00  -mwarn-passed-structs}
 
+@c APPLE LOCAL prune man page
+@end ignore
+
 @emph{RS/6000 and PowerPC Options}
 @gccoptlist{
 -mcpu=@var{cpu-type} @gol
@@ -456,7 +500,7 @@ in the following sections.
 -mpowerpc-gpopt  -mno-powerpc-gpopt @gol
 -mpowerpc-gfxopt  -mno-powerpc-gfxopt @gol
 -mnew-mnemonics  -mold-mnemonics @gol
--mfull-toc   -mminimal-toc  -mno-fop-in-toc  -mno-sum-in-toc @gol
+-mfull-toc   -mminimal-toc  -mno-fp-in-toc  -mno-sum-in-toc @gol
 -m64  -m32  -mxl-call  -mno-xl-call  -mpe @gol
 @c APPLE LOCAL begin -malign-mac68k
 -malign-mac68k (APPLE ONLY) @gol
@@ -469,12 +513,19 @@ in the following sections.
 -mstrict-align  -mno-strict-align  -mrelocatable @gol
 -mno-relocatable  -mrelocatable-lib  -mno-relocatable-lib @gol
 -mtoc  -mno-toc -mlittle  -mlittle-endian  -mbig  -mbig-endian @gol
+@c APPLE LOCAL dynamic-no-pic
+-mdynamic-no-pic (APPLE ONLY) @gol
+@c APPLE LOCAL long-branch
+-mlong-branch (APPLE ONLY) @gol
 -mcall-aix -mcall-sysv -mcall-netbsd @gol
 -maix-struct-return -msvr4-struct-return
--mabi=altivec @gol
+-mabi=altivec -mabi=no-altivec @gol
 -mprototype  -mno-prototype @gol
 -msim  -mmvme  -mads  -myellowknife  -memb -msdata @gol
 -msdata=@var{opt}  -mvxworks -G @var{num} -pthread}
+
+@c APPLE LOCAL prune man page
+@ignore
 
 @emph{RT Options}
 @gccoptlist{
@@ -500,6 +551,9 @@ in the following sections.
 -mabi=32  -mabi=n32  -mabi=64  -mabi=eabi @gol
 -mfix7000  -mno-crt0 -mflush-func=@var{func} -mno-flush-func}
 
+@c APPLE LOCAL prune man page
+@end ignore
+
 @emph{i386 and x86-64 Options}
 @gccoptlist{
 -mcpu=@var{cpu-type}  -march=@var{cpu-type} -mfpmath=@var{unit} @gol
@@ -513,6 +567,9 @@ in the following sections.
 -m96bit-long-double  -mregparm=@var{num}  -momit-leaf-frame-pointer @gol
 -mno-red-zone@gol
 -m32 -m64}
+
+@c APPLE LOCAL prune man page
+@ignore
 
 @emph{HPPA Options}
 @gccoptlist{
@@ -540,13 +597,14 @@ in the following sections.
 
 @emph{DEC Alpha Options}
 @gccoptlist{
--mfp-regs  -mno-fp-regs  -mno-soft-float  -msoft-float @gol
--malpha-as  -mgas @gol
+-mno-fp-regs  -msoft-float  -malpha-as  -mgas @gol
 -mieee  -mieee-with-inexact  -mieee-conformant @gol
 -mfp-trap-mode=@var{mode}  -mfp-rounding-mode=@var{mode} @gol
 -mtrap-precision=@var{mode}  -mbuild-constants @gol
--mcpu=@var{cpu-type} @gol
--mbwx  -mno-bwx  -mcix  -mno-cix  -mmax  -mno-max @gol
+-mcpu=@var{cpu-type}  -mtune=@var{cpu-type} @gol
+-mbwx  -mmax  -mfix  -mcix @gol
+-mfloat-vax  -mfloat-ieee @gol
+-mexplicit-relocs  -msmall-data  -mlarge-data @gol
 -mmemory-latency=@var{time}}
 
 @emph{DEC Alpha/VMS Options}
@@ -565,6 +623,9 @@ in the following sections.
 @gccoptlist{
 -m1  -m2  -m3  -m3e @gol
 -m4-nofpu  -m4-single-only  -m4-single  -m4 @gol
+-m5-64media -m5-64media-nofpu @gol
+-m5-32media -m5-32media-nofpu @gol
+-m5-compact -m5-compact-nofpu @gol
 -mb  -ml  -mdalign  -mrelax @gol
 -mbigtable  -mfmovd  -mhitachi  -mnomacsave @gol
 -mieee  -misize  -mpadstruct  -mspace @gol
@@ -618,8 +679,8 @@ in the following sections.
 @gccoptlist{
 -mlibfuncs -mno-libfuncs -mepsilon -mno-epsilon -mabi=gnu @gol
 -mabi=mmixware -mzero-extend -mknuthdiv -mtoplevel-symbols @gol
--melf -mbranch-predict -mreg-stack-fill-bug-workaround @gol
--mno-branch-predict -mno-reg-stack-fill-bug-workaround}
+-melf -mbranch-predict -mno-branch-predict -mbase-addresses @gol
+-mno-base-addresses}
 
 @emph{IA-64 Options}
 @gccoptlist{
@@ -628,6 +689,11 @@ in the following sections.
 -mconstant-gp  -mauto-pic  -minline-divide-min-latency @gol
 -minline-divide-max-throughput  -mno-dwarf2-asm @gol
 -mfixed-range=@var{register-range}}
+
+@emph{D30V Options}
+@gccoptlist{
+-mextmem  -mextmemory  -monchip  -mno-asm-optimize  -masm-optimize @gol
+-mbranch-cost=@var{n} -mcond-exec=@var{n}}
 
 @emph{S/390 and zSeries Options}
 @gccoptlist{
@@ -644,12 +710,47 @@ in the following sections.
 -m32-bit -m16-bit -m8-bit -mno-prologue-epilogue -mno-gotplt @gol
 -melf -maout -melinux -mlinux -sim -sim2}
 
+@emph{PDP-11 Options}
+@gccoptlist{
+-mfpu  -msoft-float  -mac0  -mno-ac0  -m40  -m45  -m10 @gol
+-mbcopy  -mbcopy-builtin  -mint32  -mno-int16 @gol
+-mint16  -mno-int32  -mfloat32  -mno-float64 @gol
+-mfloat64  -mno-float32  -mabshi  -mno-abshi @gol
+-mbranch-expensive  -mbranch-cheap @gol
+-msplit  -mno-split  -munix-asm  -mdec-asm}
+
+@emph{Xstormy16 Options}
+@gccoptlist{
+-msim}
+
+@emph{Xtensa Options}
+@gccoptlist{
+-mbig-endian -mlittle-endian @gol
+-mdensity -mno-density @gol
+-mmac16 -mno-mac16 @gol
+-mmul16 -mno-mul16 @gol
+-mmul32 -mno-mul32 @gol
+-mnsa -mno-nsa @gol
+-mminmax -mno-minmax @gol
+-msext -mno-sext @gol
+-mbooleans -mno-booleans @gol
+-mhard-float -msoft-float @gol
+-mfused-madd -mno-fused-madd @gol
+-mserialize-volatile -mno-serialize-volatile @gol
+-mtext-section-literals -mno-text-section-literals @gol
+-mtarget-align -mno-target-align @gol
+-mlongcalls -mno-longcalls}
+
+@c APPLE LOCAL prune man page
+@end ignore
+
 @item Code Generation Options
 @xref{Code Gen Options,,Options for Code Generation Conventions}.
 @gccoptlist{
 -fcall-saved-@var{reg}  -fcall-used-@var{reg} @gol
 -ffixed-@var{reg} -fexceptions @gol
--fnon-call-exceptions  -funwind-tables -fasynchronous-unwind-tables @gol
+-fnon-call-exceptions  -funwind-tables @gol
+-fasynchronous-unwind-tables @gol
 -finhibit-size-directive  -finstrument-functions @gol
 -fno-common  -fno-ident  -fno-gnu-linker @gol
 -fpcc-struct-return  -fpic  -fPIC @gol
@@ -727,6 +828,15 @@ C++ source code which must be preprocessed.  Note that in @samp{.cxx},
 the last two letters must both be literally @samp{x}.  Likewise,
 @samp{.C} refers to a literal capital C@.
 
+@c APPLE LOCAL begin Objective-C++
+@item @var{file}.mm
+@itemx @var{file}.M
+Objective-C++ source code which must be preprocessed.  (APPLE ONLY)
+
+@item @var{file}.mii
+Objective-C++ source code which should not be preprocessed.  (APPLE ONLY)
+@c APPLE LOCAL end Objective-C++
+
 @item @var{file}.f
 @itemx @var{file}.for
 @itemx @var{file}.FOR
@@ -768,12 +878,10 @@ package body).  Such files are also called @dfn{bodies}.
 @c @var{file}.p
 @c @var{file}.pas
 
-@item @var{file}.ch
-@itemx @var{file}.chi
-CHILL source code (preprocessed with the traditional preprocessor).
-
 @item @var{file}.s
-Assembler code.
+@c APPLE LOCAL preprocess .s files
+Assembler code.  Apple's version of GCC runs the preprocessor
+on these files as well as those ending in @samp{.S}.
 
 @item @var{file}.S
 Assembler code which must be preprocessed.
@@ -796,9 +904,10 @@ the next @option{-x} option.  Possible values for @var{language} are:
 c  c-header  cpp-output
 c++  c++-cpp-output
 objective-c  objc-cpp-output
+@c APPLE LOCAL Objective-C++
+objective-c++ (APPLE ONLY)
 assembler  assembler-with-cpp
 ada
-chill
 f77  f77-cpp-input  ratfor
 java
 @end example
@@ -811,10 +920,23 @@ has not been used at all).
 @c APPLE LOCAL begin -ObjC 2001-08-03 sts **
 @item -ObjC
 @item -ObjC++
+@opindex ObjC
+@opindex ObjC++
 These are similar in effect to @option{-x objective-c} and @option{-x
 objective-c++}, but affect only the choice of compiler for files already
 identified as source files. (APPLE ONLY)
 @c APPLE LOCAL end -ObjC 2001-08-03 sts **
+
+@c APPLE LOCAL begin fat builds
+@item -arch @var{arch}
+Compile for the specified target architecture @var{arch}.  The allowable
+values are @samp{i386} and @samp{ppc}.  Multiple options work, and
+direct the compiler to produce ``fat'' binaries including object code
+for each architecture specified with @option{-arch}.  This option only
+works if assembler and libraries are available for each architecture
+specified. (APPLE ONLY)
+@opindex arch
+@c APPLE LOCAL end fat builds
 
 @item -pass-exit-codes
 @opindex pass-exit-codes
@@ -885,13 +1007,11 @@ Print (on standard error output) the commands executed to run the stages
 of compilation.  Also print the version number of the compiler driver
 program and of the preprocessor and the compiler proper.
 
-@c APPLE LOCAL begin -### 2001-10-29 ilr **
 @item -###
 @opindex ###
 Like @option{-v} except the commands are not executed and all command
 arguments are quoted.  This is useful for shell scripts to capture the
 driver-generated command lines.
-@c APPLE LOCAL end -### 2001-10-29 ilr **
 
 @item -pipe
 @opindex pipe
@@ -1018,7 +1138,7 @@ ISO C89 as modified in amendment 1.
 @itemx iso9899:1999
 @itemx iso9899:199x
 ISO C99.  Note that this standard is not yet fully supported; see
-@w{@uref{http://gcc.gnu.org/c99status.html}} for more information.  The
+@w{@uref{http://gcc.gnu.org/gcc-3.1/c99status.html}} for more information.  The
 names @samp{c9x} and @samp{iso9899:199x} are deprecated.
 
 @item gnu89
@@ -1059,6 +1179,16 @@ definition (@samp{C} or @samp{F}, respectively, in the following
 character).  In the case of function definitions, a K&R-style list of
 arguments followed by their declarations is also provided, inside
 comments, after the declaration.
+
+@c APPLE LOCAL begin AltiVec
+@item -faltivec
+Enable the AltiVec language extensions, as defined in Motorola's AltiVec
+PIM.  This includes the recognition of @code{vector} and @code{pixel} as
+(context-dependent) keywords, the definition of built-in functions such
+as @code{vec_add}, and other extensions.  Note that unlike the option
+@samp{-maltivec}, the extensions do not require the inclusion of any
+special header files. (APPLE ONLY)
+@c APPLE LOCAL end AltiVec
 
 @item -fno-asm
 @opindex fno-asm
@@ -1142,6 +1272,50 @@ freestanding and hosted environments.
 Support ISO C trigraphs.  The @option{-ansi} option (and @option{-std}
 options for strict ISO C conformance) implies @option{-trigraphs}.
 
+@item -no-integrated-cpp
+@opindex no-integrated-cpp
+Invoke the external cpp during compilation.  The default is to use the
+integrated cpp (internal cpp).  This option also allows a
+user-supplied cpp via the @option{-B} option.  This flag is applicable
+in both C and C++ modes.
+
+We do not guarantee to retain this option in future, and we may change
+its semantics.
+
+@c APPLE LOCAL begin cpp-precomp
+@item -no-cpp-precomp
+@opindex no-cpp-precomp
+By default, Apple's GCC preprocesses C and Objective-C with a special
+preprocessor called @samp{cpp-precomp} that supports precompiled
+headers.  This preprocessor cannot always handle every construct that
+GCC supports; use @samp{-no-cpp-precomp} to switch to using GNU cpp
+instead.  (APPLE ONLY)
+@c APPLE LOCAL end cpp-precomp
+
+@c APPLE LOCAL begin PFE
+@item --dump-pch @var{name}
+@opindex dump-pch
+Dump the state of the compiler into a directory named @var{name}, after
+processing all the other arguments.  This is useful for creating
+precompiled headers.  (APPLE ONLY)
+
+@item --load-pch @var{name}
+@opindex load-pch
+Restore the state of the compiler from the directory @var{name} before
+processing the other arguments.  The net effect is similar to
+@option{-include}, but it happens much more quickly.  (APPLE ONLY)
+
+So for instance if the file @file{myprefix.c} #includes various
+headers that are useful to all files in your program, you can do
+@example
+gcc --dump-pch foo -c myprefix.c
+gcc --load-pch foo myfile1.c
+gcc --load-pch foo myfile2.c
+gcc --load-pch foo myfile2.c
+...
+@end example
+@c APPLE LOCAL end PFE
+
 @cindex traditional C language
 @cindex C language, traditional
 @item -traditional
@@ -1212,8 +1386,10 @@ The @option{-traditional} option also enables @option{-traditional-cpp}.
 
 @item -traditional-cpp
 @opindex traditional-cpp
-Attempt to support some aspects of traditional C preprocessors.
-See the GNU CPP manual for details.
+@c APPLE LOCAL cpp-precomp
+In Apple's version of GCC, this means to use GNU cpp instead of
+cpp-precomp to preprocess.  This meaning of the option is deprecated,
+and will eventually revert to its standard meaning.
 
 @item -fcond-mismatch
 @opindex fcond-mismatch
@@ -1274,6 +1450,14 @@ this effect.
 Writing into string constants is a very bad idea; ``constants'' should
 be constant.
 
+@c APPLE LOCAL begin constant cfstrings
+@item -fconstant-cfstrings
+@opindex fconstant-cfstrings
+Enable the automatic creation of a CoreFoundation-type constant string
+whenever a special builtin @code{__builtin__CFStringMakeConstantString}
+is called on a literal string.  (APPLE ONLY)
+@c APPLE LOCAL end constant cfstrings
+
 @item -fallow-single-precision
 @opindex fallow-single-precision
 Do not promote single precision math operations to double precision,
@@ -1295,12 +1479,26 @@ useful for building programs to run under WINE@.
 
 @c APPLE LOCAL begin Pascal Strings 2001-07-05 zll **
 @item -fpascal-strings
-Allow for Pascal-style string literals to be constructed.
+Allow Pascal-style string literals to be constructed.  (APPLE ONLY)
 
 @xref{Pascal Strings,,Constructing String Literals with a Pascal-style
 Length Byte}, for more information on the syntax and semantics of Pascal
-string literals.  (APPLE ONLY)
+string literals.
 @c APPLE LOCAL end Pascal Strings 2001-07-05 zll **
+
+@c APPLE LOCAL begin coalesced 2002-04-11 tur **
+@item -fcoalesce
+@opindex fcoalesce
+Coalesce duplicated functions and data. The linker will discard all
+but one, saving space.  Enabled by default. (APPLE ONLY)
+
+@item -fweak-coalesced 
+@opindex fweak-coalesced
+Use the new OS X "weak_definitions" section attribute for coalesced items.
+A single "normal" definition will be chosen by the linker over any number
+of weakly-coalesced ones.  (APPLE ONLY)
+@c APPLE LOCAL end coalesced 2002-04-11 tur **
+
 @end table
 
 @node C++ Dialect Options
@@ -1449,10 +1647,26 @@ errors if these functions are not inlined everywhere they are called.
 
 @c APPLE LOCAL begin -findirect-virtual-calls 2001-10-30 sts **
 @item -findirect-virtual-calls
-@opindex -findirect-virtual-calls
+@opindex findirect-virtual-calls
 Do not make direct calls to virtual functions; instead, always
 go through the vtable. (APPLE ONLY)
 @c APPLE LOCAL end -findirect-virtual-calls 2001-10-30 sts **
+
+@c APPLE LOCAL begin -fapple-kext
+@item -fapple-kext
+@opindex fapple-kext
+Alter vtables, destructors, and other implementation details to more
+closely resemble the GCC 2.95 ABI.  This is to make kernel extensions
+loadable by Darwin kernels built using older compilers, and is required
+to build any Darwin kernel extension.  (APPLE ONLY)
+@c APPLE LOCAL end -fapple-kext
+
+@c APPLE LOCAL begin -fcoalesce-templates 2002-04-11 tur **
+@item -fcoalesce-templates
+@opindex fcoalesce-templates
+Mark instantiated templates as "coalesced": the linker will discard
+all but one, thus saving space. (APPLE ONLY)
+@c APPLE LOCAL end -fcoalesce-templates 2002-04-11 tur **
 
 @item -fms-extensions
 @opindex fms-extensions
@@ -1518,6 +1732,8 @@ Register destructors for objects with static storage duration with the
 This option is required for fully standards-compliant handling of static
 destructors, but will only work if your C library supports
 @code{__cxa_atexit}.
+@c APPLE LOCAL manual
+This option is not supported on Mac OS X.
 
 @item -fvtable-gc
 @opindex fvtable-gc
@@ -1592,10 +1808,44 @@ The following @option{-W@dots{}} options are not affected by @option{-Wall}.
 @table @gcctabopt
 @item -Weffc++ @r{(C++ only)}
 @opindex Weffc++
-Warn about violations of various style guidelines from Scott Meyers'
-@cite{Effective C++} books.  If you use this option, you should be aware
-that the standard library headers do not obey all of these guidelines;
-you can use @samp{grep -v} to filter out those warnings.
+Warn about violations of the following style guidelines from Scott Meyers'
+@cite{Effective C++} book:
+
+@itemize @bullet
+@item
+Item 11:  Define a copy constructor and an assignment operator for classes
+with dynamically allocated memory.
+
+@item
+Item 12:  Prefer initialization to assignment in constructors.
+
+@item
+Item 14:  Make destructors virtual in base classes.
+
+@item
+Item 15:  Have @code{operator=} return a reference to @code{*this}.
+
+@item
+Item 23:  Don't try to return a reference when you must return an object.
+
+@end itemize
+
+and about violations of the following style guidelines from Scott Meyers'
+@cite{More Effective C++} book:
+
+@itemize @bullet
+@item
+Item 6:  Distinguish between prefix and postfix forms of increment and
+decrement operators.
+
+@item
+Item 7:  Never overload @code{&&}, @code{||}, or @code{,}.
+
+@end itemize
+
+If you use this option, you should be aware that the standard library
+headers do not obey all of these guidelines; you can use @samp{grep -v}
+to filter out those warnings.
 
 @item -Wno-deprecated @r{(C++ only)}
 @opindex Wno-deprecated
@@ -1804,7 +2054,9 @@ negative form beginning @samp{-Wno-} to turn off warnings;
 for example, @option{-Wno-implicit}.  This manual lists only one of the
 two forms, whichever is not the default.
 
-These options control the amount and kinds of warnings produced by GCC:
+The following options control the amount and kinds of warnings produced
+by GCC; for further, language-specific options also refer to
+@ref{C++ Dialect Options} and @ref{Objective-C Dialect Options}.
 
 @table @gcctabopt
 @cindex syntax checking
@@ -1865,6 +2117,12 @@ Inhibit all warning messages.
 @item -Wno-import
 @opindex Wno-import
 Inhibit warning messages about the use of @samp{#import}.
+
+@c APPLE LOCAL begin -Wno-#warnings
+@item -Wno-#warnings
+@opindex Wno-#warnings
+Inhibit warning messages issued by @samp{#warning}.
+@c APPLE LOCAL end -Wno-#warnings
 
 @c APPLE LOCAL begin -Wpragma-once 2001-08-01 sts **
 @item -Wpragma-once
@@ -2259,6 +2517,11 @@ warnings about constructions that some users consider questionable, and
 that are easy to avoid (or modify to prevent the warning), even in
 conjunction with macros.
 
+@c APPLE LOCAL -Wmost
+@item -Wmost
+@opindex Wmost
+This is equivalent to -Wall -Wno-parentheses. (APPLE ONLY)
+
 @item -Wdiv-by-zero
 @opindex Wno-div-by-zero
 @opindex Wdiv-by-zero
@@ -2591,14 +2854,12 @@ case, and some functions for which @code{format} attributes are
 appropriate may not be detected.  This option has no effect unless
 @option{-Wformat} is enabled (possibly by @option{-Wall}).
 
-@c APPLE LOCAL begin deprecated (Radar 2637521) ilr
 @item -Wno-deprecated-declarations
 @opindex Wno-deprecated-declarations
 Do not warn about uses of functions, variables, and types marked as
-deprecated by using the @code{deprecated} attribute. 
+deprecated by using the @code{deprecated} attribute.
 (@pxref{Function Attributes}, @pxref{Variable Attributes},
 @pxref{Type Attributes}.)
-@c APPLE LOCAL end deprecated (Radar 2637521) ilr
 
 @item -Wpacked
 @opindex Wpacked
@@ -2664,6 +2925,12 @@ code is to provide behavior which is selectable at compile-time.
 @opindex Winline
 Warn if a function can not be inlined and it was declared as inline.
 
+@c APPLE LOCAL begin long double
+@item -Wno-long-double
+@opindex Wno-long-double
+Inhibit warning if the @samp{long double} type is used. (APPLE ONLY)
+@c APPLE LOCAL end long double
+
 @item -Wlong-long
 @opindex Wlong-long
 @opindex Wno-long-long
@@ -2706,9 +2973,9 @@ debugging information that only GDB can use; this extra information
 makes debugging work better in GDB but will probably make other debuggers
 crash or
 refuse to read the program.  If you want to control for certain whether
-to generate the extra information, use @option{-gstabs+}, @option{-gstabs},
-@option{-gxcoff+}, @option{-gxcoff}, @option{-gdwarf-1+}, @option{-gdwarf-1},
-or @option{-gvms} (see below).
+@c APPLE LOCAL prune man page
+to generate the extra information, use @option{-gstabs+} or @option{-gstabs}
+(see below).
 
 Unlike most other C compilers, GCC allows you to use @option{-g} with
 @option{-O}.  The shortcuts taken by optimized code may occasionally
@@ -2745,6 +3012,11 @@ Produce debugging information in stabs format (if that is supported),
 using GNU extensions understood only by the GNU debugger (GDB)@.  The
 use of these extensions is likely to make other debuggers crash or
 refuse to read the program.
+
+@c APPLE LOCAL prune man page
+(Other debug formats, such as @option{-gcoff}, are not supported in
+Darwin or Mac OS X.)
+@ignore
 
 @item -gcoff
 @opindex gcoff
@@ -2788,14 +3060,21 @@ supported).  This is the format used by DBX on IRIX 6.
 Produce debugging information in VMS debug format (if that is
 supported).  This is the format used by DEBUG on VMS systems.
 
+@c APPLE LOCAL prune man page
+@end ignore
+
 @item -g@var{level}
 @itemx -ggdb@var{level}
 @itemx -gstabs@var{level}
+@c APPLE LOCAL prune man page
+@ignore
 @itemx -gcoff@var{level}
 @itemx -gxcoff@var{level}
 @itemx -gdwarf@var{level}
 @itemx -gdwarf-2@var{level}
 @itemx -gvms@var{level}
+@c APPLE LOCAL prune man page
+@end ignore
 Request debugging information and also use @var{level} to specify how
 much information.  The default level is 2.
 
@@ -2945,7 +3224,7 @@ Annotate the assembler output with miscellaneous debugging information.
 Dump after computing branch probabilities, to @file{@var{file}.14.bp}.
 @item B
 @opindex dB
-Dump after block reordering, to @file{@var{file}.28.bbro}.
+Dump after block reordering, to @file{@var{file}.29.bbro}.
 @item c
 @opindex dc
 Dump after instruction combination, to the file @file{@var{file}.16.combine}.
@@ -2978,6 +3257,9 @@ Dump after global register allocation, to @file{@var{file}.21.greg}.
 @item h
 @opindex dh
 Dump after finalization of EH handling code, to @file{@var{file}.02.eh}.
+@item k
+@opindex dk
+Dump after reg-to-stack conversion, to @file{@var{file}.28.stack}.
 @item o
 @opindex do
 Dump after post-reload optimizations, to @file{@var{file}.22.postreload}.
@@ -3071,6 +3353,15 @@ When doing debugging dumps (see @option{-d} option above), suppress instruction
 numbers and line number note output.  This makes it more feasible to
 use diff on debugging dumps for compiler invocations with different
 options, in particular with and without @option{-g}.
+
+@item -fdump-translation-unit @r{(C and C++ only)}
+@itemx -fdump-translation-unit-@var{options} @r{(C and C++ only)}
+@opindex fdump-translation-unit
+Dump a representation of the tree structure for the entire translation
+unit to a file.  The file name is made by appending @file{.tu} to the
+source file name.  If the @samp{-@var{options}} form is used, @var{options}
+controls the details of the dump as described for the
+@option{-fdump-tree} options.
 
 @item -fdump-class-hierarchy @r{(C++ only)}
 @itemx -fdump-class-hierarchy-@var{options} @r{(C++ only)}
@@ -3245,6 +3536,12 @@ and @option{-fdefer-pop} on all machines.  The compiler turns on
 @option{-fomit-frame-pointer} on machines that can support debugging even
 without a frame pointer.  On some machines the compiler also turns
 on other flags.
+
+@c APPLE LOCAL begin optimization
+In Apple's version of GCC, @option{-fstrict-aliasing},
+@option{-freorder-blocks}, and @option{-fsched-interblock}
+are disabled by default when optimizing.
+@c APPLE LOCAL end optimization
 
 @item -O2
 @opindex O2
@@ -3818,6 +4115,9 @@ are greater than this value, then their values are used instead.
 If @var{n} is not specified, use a machine-dependent default which is
 very likely to be @samp{1}, meaning no alignment.
 
+@c APPLE LOCAL manual
+This option does not work on Mac OS X.
+
 @item -falign-loops
 @itemx -falign-loops=@var{n}
 @opindex falign-loops
@@ -3828,6 +4128,9 @@ operations.
 
 If @var{n} is not specified, use a machine-dependent default.
 
+@c APPLE LOCAL manual
+This option does not work on Mac OS X.
+
 @item -falign-jumps
 @itemx -falign-jumps=@var{n}
 @opindex falign-jumps
@@ -3837,6 +4140,9 @@ bytes like @option{-falign-functions}.  In this case, no dummy operations
 need be executed.
 
 If @var{n} is not specified, use a machine-dependent default.
+
+@c APPLE LOCAL manual
+This option does not work on Mac OS X.
 
 @item -fssa
 @opindex fssa
@@ -3938,326 +4244,18 @@ Some of these options make sense only together with @option{-E} because
 they cause the preprocessor output to be unsuitable for actual
 compilation.
 
-@table @gcctabopt
-@item -include @var{file}
-@opindex include
-Process @var{file} as input before processing the regular input file.
-In effect, the contents of @var{file} are compiled first.  Any @option{-D}
-and @option{-U} options on the command line are always processed before
-@option{-include @var{file}}, regardless of the order in which they are
-written.  All the @option{-include} and @option{-imacros} options are
-processed in the order in which they are written.
-
-@item -imacros @var{file}
-@opindex imacros
-Process @var{file} as input, discarding the resulting output, before
-processing the regular input file.  Because the output generated from
-@var{file} is discarded, the only effect of @option{-imacros @var{file}}
-is to make the macros defined in @var{file} available for use in the
-main input.  All the @option{-include} and @option{-imacros} options are
-processed in the order in which they are written.
-
-@item -idirafter @var{dir}
-@opindex idirafter
-@cindex second include path
-Add the directory @var{dir} to the second include path.  The directories
-on the second include path are searched when a header file is not found
-in any of the directories in the main include path (the one that
-@option{-I} adds to).
-
-@item -iprefix @var{prefix}
-@opindex iprefix
-Specify @var{prefix} as the prefix for subsequent @option{-iwithprefix}
-options.
-
-@item -iwithprefix @var{dir}
-@opindex iwithprefix
-Add a directory to the second include path.  The directory's name is
-made by concatenating @var{prefix} and @var{dir}, where @var{prefix} was
-specified previously with @option{-iprefix}.  If you have not specified a
-prefix yet, the directory containing the installed passes of the
-compiler is used as the default.
-
-@item -iwithprefixbefore @var{dir}
-@opindex iwithprefixbefore
-Add a directory to the main include path.  The directory's name is made
-by concatenating @var{prefix} and @var{dir}, as in the case of
-@option{-iwithprefix}.
-
-@item -isystem @var{dir}
-@opindex isystem
-Add a directory to the beginning of the second include path, marking it
-as a system directory, so that it gets the same special treatment as
-is applied to the standard system directories.
-
-@item -nostdinc
-@opindex nostdinc
-Do not search the standard system directories for header files.  Only
-the directories you have specified with @option{-I} options (and the
-current directory, if appropriate) are searched.  @xref{Directory
-Options}, for information on @option{-I}.
-
-By using both @option{-nostdinc} and @option{-I-}, you can limit the include-file
-search path to only those directories you specify explicitly.
-
-@item -remap
-@opindex remap
-When searching for a header file in a directory, remap file names if a
-file named @file{header.gcc} exists in that directory.  This can be used
-to work around limitations of file systems with file name restrictions.
-The @file{header.gcc} file should contain a series of lines with two
-tokens on each line: the first token is the name to map, and the second
-token is the actual name to use.
-
-@item -undef
-@opindex undef
-Do not predefine any nonstandard macros.  (Including architecture flags).
-
-@item -E
-@opindex E
-Run only the C preprocessor.  Preprocess all the C source files
-specified and output the results to standard output or to the
-specified output file.
-
-@item -C
-@opindex C
-Tell the preprocessor not to discard comments.  Used with the
-@option{-E} option.
-
-@item -P
-@opindex P
-Tell the preprocessor not to generate @samp{#line} directives.
-Used with the @option{-E} option.
-
-@cindex make
-@cindex dependencies, make
-@item -M
-@opindex M
-Instead of outputting the result of preprocessing, output a rule
-suitable for @code{make} describing the dependencies of the main source
-file.  The preprocessor outputs one @code{make} rule containing the
-object file name for that source file, a colon, and the names of all the
-included files.  Unless overridden explicitly, the object file name
-consists of the basename of the source file with any suffix replaced with
-object file suffix.  If there are many included files then the
-rule is split into several lines using @samp{\}-newline.
-
-@option{-M} implies @option{-E}.
-
-@item -MM
-@opindex MM
-Like @option{-M}, but mention only the files included with @samp{#include
-"@var{file}"}.  System header files included with @samp{#include
-<@var{file}>} are omitted.
-
-@item -MD
-@opindex MD
-Like @option{-M} but the dependency information is written to a file
-rather than stdout.  @code{gcc} will use the same file name and
-directory as the object file, but with the suffix @file{.d} instead.
-
-This is in addition to compiling the main file as specified---@option{-MD}
-does not inhibit ordinary compilation the way @option{-M} does,
-unless you also specify @option{-MG}.
-
-With Mach, you can use the utility @code{md} to merge multiple
-dependency files into a single dependency file suitable for using with
-the @samp{make} command.
-
-@item -MMD
-@opindex MMD
-Like @option{-MD} except mention only user header files, not system
--header files.
-
-@item -MF @var{file}
-@opindex MF
-When used with @option{-M} or @option{-MM}, specifies a file to write the
-dependencies to.  This allows the preprocessor to write the preprocessed
-file to stdout normally.  If no @option{-MF} switch is given, CPP sends
-the rules to stdout and suppresses normal preprocessed output.
-
-Another way to specify output of a @code{make} rule is by setting
-the environment variable @env{DEPENDENCIES_OUTPUT} (@pxref{Environment
-Variables}).
-
-@c APPLE LOCAL begin -dependency-file
-@item -dependency-file
-@opindex dependency-file @var{name}
-Like @option{-MF}. (APPLE ONLY)
-@c APPLE LOCAL end -dependency-file
-
-@item -MG
-@opindex MG
-When used with @option{-M} or @option{-MM}, @option{-MG} says to treat missing
-header files as generated files and assume they live in the same
-directory as the source file.  It suppresses preprocessed output, as a
-missing header file is ordinarily an error.
-
-This feature is used in automatic updating of makefiles.
-
-@item -MP
-@opindex MP
-This option instructs CPP to add a phony target for each dependency
-other than the main file, causing each to depend on nothing.  These
-dummy rules work around errors @code{make} gives if you remove header
-files without updating the @code{Makefile} to match.
-
-This is typical output:-
-
-@smallexample
-/tmp/test.o: /tmp/test.c /tmp/test.h
-
-/tmp/test.h:
-@end smallexample
-
-@item -MQ @var{target}
-@item -MT @var{target}
-@opindex MQ
-@opindex MT
-By default CPP uses the main file name, including any path, and appends
-the object suffix, normally ``.o'', to it to obtain the name of the
-target for dependency generation.  With @option{-MT} you can specify a
-target yourself, overriding the default one.
-
-If you want multiple targets, you can specify them as a single argument
-to @option{-MT}, or use multiple @option{-MT} options.
-
-The targets you specify are output in the order they appear on the
-command line.  @option{-MQ} is identical to @option{-MT}, except that the
-target name is quoted for Make, but with @option{-MT} it isn't.  For
-example, @option{-MT '$(objpfx)foo.o'} gives
-
-@smallexample
-$(objpfx)foo.o: /tmp/foo.c
-@end smallexample
-
-but @option{-MQ '$(objpfx)foo.o'} gives
-
-@smallexample
-$$(objpfx)foo.o: /tmp/foo.c
-@end smallexample
-
-The default target is automatically quoted, as if it were given with
-@option{-MQ}.
-
-@item -H
-@opindex H
-Print the name of each header file used, in addition to other normal
-activities.
-
-@item -A@var{question}(@var{answer})
-@opindex A
-Assert the answer @var{answer} for @var{question}, in case it is tested
-with a preprocessing conditional such as @samp{#if
-#@var{question}(@var{answer})}.  @option{-A-} disables the standard
-assertions that normally describe the target machine.
-
-@item -D@var{macro}
-@opindex D
-Define macro @var{macro} with the string @samp{1} as its definition.
-
-@item -D@var{macro}=@var{defn}
-Define macro @var{macro} as @var{defn}.  All instances of @option{-D} on
-the command line are processed before any @option{-U} options.
-
-Any @option{-D} and @option{-U} options on the command line are processed in
-order, and always before @option{-imacros @var{file}}, regardless of the
-order in which they are written.
-
-@item -U@var{macro}
-@opindex U
-Undefine macro @var{macro}.  @option{-U} options are evaluated after all
-@option{-D} options, but before any @option{-include} and @option{-imacros}
-options.
-
-Any @option{-D} and @option{-U} options on the command line are processed in
-order, and always before @option{-imacros @var{file}}, regardless of the
-order in which they are written.
-
-@item -dM
-@opindex dM
-Tell the preprocessor to output only a list of the macro definitions
-that are in effect at the end of preprocessing.  Used with the @option{-E}
-option.
-
-@item -dD
-@opindex dD
-Tell the preprocessing to pass all macro definitions into the output, in
-their proper sequence in the rest of the output.
-
-@item -dN
-@opindex dN
-Like @option{-dD} except that the macro arguments and contents are omitted.
-Only @samp{#define @var{name}} is included in the output.
-
-@item -dI
-@opindex dI
-Output @samp{#include} directives in addition to the result of
-preprocessing.
-
-@item -fpreprocessed
-@opindex fpreprocessed
-Indicate to the preprocessor that the input file has already been
-preprocessed.  This suppresses things like macro expansion, trigraph
-conversion, escaped newline splicing, and processing of most directives.
-The preprocessor still recognizes and removes comments, so that you can
-pass a file preprocessed with @option{-C} to the compiler without
-problems.  In this mode the integrated preprocessor is little more than
-a tokenizer for the front ends.
-
-@option{-fpreprocessed} is implicit if the input file has one of the
-extensions @samp{i}, @samp{ii} or @samp{mi}.  These are the extensions
-that GCC uses for preprocessed files created by @option{-save-temps}.
-
-@item -trigraphs
-@opindex trigraphs
-Process ISO standard trigraph sequences.  These are three-character
-sequences, all starting with @samp{??}, that are defined by ISO C to
-stand for single characters.  For example, @samp{??/} stands for
-@samp{\}, so @samp{'??/n'} is a character constant for a newline.  By
-default, GCC ignores trigraphs, but in standard-conforming modes it
-converts them.  See the @option{-std} and @option{-ansi} options.
-
-The nine trigraph sequences are
-@table @samp
-@item ??(
-@expansion{} @samp{[}
-
-@item ??)
-@expansion{} @samp{]}
-
-@item ??<
-@expansion{} @samp{@{}
-
-@item ??>
-@expansion{} @samp{@}}
-
-@item ??=
-@expansion{} @samp{#}
-
-@item ??/
-@expansion{} @samp{\}
-
-@item ??'
-@expansion{} @samp{^}
-
-@item ??!
-@expansion{} @samp{|}
-
-@item ??-
-@expansion{} @samp{~}
-
-@end table
-
-Trigraph support is not popular, so many compilers do not implement it
-properly.  Portable code should not rely on trigraphs being either
-converted or ignored.
-
-@item -Wp,@var{option}
 @opindex Wp
-Pass @var{option} as an option to the preprocessor.  If @var{option}
-contains commas, it is split into multiple options at the commas.
-@end table
+You can use @option{-Wp,@var{option}} to bypass the compiler driver
+and pass @var{option} directly through to the preprocessor.  If
+@var{option} contains commas, it is split into multiple options at the
+commas.  However, many options are modified, translated or interpreted
+by the compiler driver before being passed to the preprocessor, and
+@option{-Wp} forcibly bypasses this phase.  The preprocessor's direct
+interface is undocumented and subject to change, so whenever possible
+you should avoid using @option{-Wp} and let the driver handle the
+options instead.
+
+@include cppopts.texi
 
 @node Assembler Options
 @section Passing Options to the Assembler
@@ -4280,6 +4278,15 @@ contains commas, it is split into multiple options at the commas.
 These options come into play when the compiler links object files into
 an executable output file.  They are meaningless if the compiler is
 not doing a link step.
+
+@c APPLE LOCAL begin linker flags
+In addition to the options listed below, Apple's GCC also accepts and
+passes nearly all of the options defined by the linker @samp{ld} and by
+the library tool @samp{libtool}.  Common options include
+@samp{-framework}, @samp{-dynamic}, @samp{-bundle},
+@samp{-flat_namespace}, and so forth.  See the ld and libtool man pages
+for further details.
+@c APPLE LOCAL end linker flags
 
 @table @gcctabopt
 @cindex file names
@@ -4362,6 +4369,12 @@ BSD environments.  These entries are usually resolved by entries in
 libc.  These entry points should be supplied through some other
 mechanism when this option is specified.
 
+@c APPLE LOCAL begin radar 2466994 - -no-c++filt  ilr
+@item -no-c++filt
+By default all linker diagnostic output is piped through c++filt.
+This option suppresses that behavior. (APPLE ONLY)
+@c APPLE LOCAL end radar 2466994 - -no-c++filt  ilr
+
 @cindex @option{-lgcc}, use with @option{-nostdlib}
 @cindex @option{-nostdlib} and unresolved references
 @cindex unresolved references and @option{-nostdlib}
@@ -4392,6 +4405,11 @@ Remove all symbol table and relocation information from the executable.
 On systems that support dynamic linking, this prevents linking with the shared
 libraries.  On other systems, this option has no effect.
 
+@c APPLE LOCAL manual
+This option will not work on Mac OS X unless all of your libraries
+(including @file{libgcc.a}) have also been compiled with
+@option{-static}.
+
 @item -shared
 @opindex shared
 Produce a shared object which can then be linked with other objects to
@@ -4404,6 +4422,9 @@ multi-libbed systems, @samp{gcc -shared} must select the correct support
 libraries to link against.  Failing to supply the correct flags may lead
 to subtle defects.  Supplying them in cases where they are not necessary
 is innocuous.}
+
+@c APPLE LOCAL manual
+This option is not supported on Mac OS X.
 
 @item -shared-libgcc
 @itemx -static-libgcc
@@ -4420,15 +4441,26 @@ of these is when the application wishes to throw and catch exceptions
 across different shared libraries.  In that case, each of the libraries
 as well as the application itself should use the shared @file{libgcc}.
 
-Therefore, whenever you specify the @option{-shared} option, the GCC
-driver automatically adds @option{-shared-libgcc}, unless you explicitly
-specify @option{-static-libgcc}.  The G++ driver automatically adds
-@option{-shared-libgcc} when you build a main executable as well because
-for C++ programs that is typically the right thing to do.
-(Exception-handling will not work reliably otherwise.)
+Therefore, the G++ and GCJ drivers automatically add
+@option{-shared-libgcc} whenever you build a shared library or a main
+executable, because C++ and Java programs typically use exceptions, so
+this is the right thing to do.
 
-However, when linking a main executable written in C, you must
-explicitly say @option{-shared-libgcc} if you want to use the shared
+If, instead, you use the GCC driver to create shared libraries, you may
+find that they will not always be linked with the shared @file{libgcc}.
+If GCC finds, at its configuration time, that you have a GNU linker that
+does not support option @option{--eh-frame-hdr}, it will link the shared
+version of @file{libgcc} into shared libraries by default.  Otherwise,
+it will take advantage of the linker and optimize away the linking with
+the shared version of @file{libgcc}, linking with the static version of
+libgcc by default.  This allows exceptions to propagate through such
+shared libraries, without incurring relocation costs at library load
+time.
+
+However, if a library or main executable is supposed to throw or catch
+exceptions, you must link it using the G++ or GCJ driver, as appropriate
+for the languages used in the program, or using the option
+@option{-shared-libgcc}, such that it is linked with the shared
 @file{libgcc}.
 
 @item -symbolic
@@ -4522,6 +4554,23 @@ independent.
 @opindex L
 Add directory @var{dir} to the list of directories to be searched
 for @option{-l}.
+
+@c APPLE LOCAL begin framework headers
+@item -F@var{dir}
+@opindex F
+In Apple's version of GCC only, add the directory @var{dir} to the head
+of the list of directories to be searched for frameworks.
+
+The framework search algorithm is, for an inclusion of
+@samp{<Fmwk/Header.h>}, to look for files named
+@file{@var{path}/Fmwk.framework/Headers/Header.h} or
+@file{@var{path}/Fmwk.framework/PrivateHeaders/Header.h} where
+@var{path} includes @file{/System/Library/Frameworks/}
+@file{/Library/Frameworks/}, and @file{/Local/Library/Frameworks/}, plus
+any additional paths specified by @option{-F}.
+
+All the @option{-F} options are also passed to the linker.
+@c APPLE LOCAL end framework headers
 
 @item -B@var{prefix}
 @opindex B
@@ -5156,6 +5205,8 @@ machine description.  The default for the options is also defined by
 that macro, which enables you to change the defaults.
 
 @menu
+@c APPLE LOCAL prune man page
+@ignore
 * M680x0 Options::
 * M68hc1x Options::
 * VAX Options::
@@ -5167,10 +5218,18 @@ that macro, which enables you to change the defaults.
 * MN10300 Options::
 * M32R/D Options::
 * M88K Options::
+@c APPLE LOCAL prune man page
+@end ignore
 * RS/6000 and PowerPC Options::
+@c APPLE LOCAL prune man page
+@ignore
 * RT Options::
 * MIPS Options::
+@c APPLE LOCAL prune man page
+@end ignore
 * i386 and x86-64 Options::
+@c APPLE LOCAL prune man page
+@ignore
 * HPPA Options::
 * Intel 960 Options::
 * DEC Alpha Options::
@@ -5190,8 +5249,15 @@ that macro, which enables you to change the defaults.
 * S/390 and zSeries Options::
 * CRIS Options::
 * MMIX Options::
+* PDP-11 Options::
+* Xstormy16 Options::
+* Xtensa Options::
+@c APPLE LOCAL prune man page
+@end ignore
 @end menu
 
+@c APPLE LOCAL prune man page
+@ignore
 @node M680x0 Options
 @subsection M680x0 Options
 @cindex M680x0 options
@@ -5490,18 +5556,6 @@ a trap handler for one of these instructions, and then the trap handler
 emulates the effect of the instruction.  Because of the trap handler overhead,
 this is much slower than calling the ABI library routines.  Thus the
 @option{-msoft-quad-float} option is the default.
-
-@item -mno-epilogue
-@itemx -mepilogue
-@opindex mno-epilogue
-@opindex mepilogue
-With @option{-mepilogue} (the default), the compiler always emits code for
-function exit at the end of each function.  Any function exit in
-the middle of the function (such as a return statement in C) will
-generate a jump to the exit code at the end of the function.
-
-With @option{-mno-epilogue}, the compiler tries to emit exit code inline
-at every function exit.
 
 @item -mno-flat
 @itemx -mflat
@@ -5921,7 +5975,8 @@ and conforming to the function calling standards for the APCS 32-bit
 option.  This option replaces the @option{-m6} option of previous releases
 of the compiler.
 
-@ignore
+@c APPLE LOCAL prune man page
+@c @ignore
 @c not currently implemented
 @item -mapcs-stack-check
 @opindex mapcs-stack-check
@@ -5948,7 +6003,8 @@ size if @option{-mapcs-float} is used.
 @opindex mapcs-reentrant
 Generate reentrant, position independent code.  The default is
 @option{-mno-apcs-reentrant}.
-@end ignore
+@c APPLE LOCAL prune man page
+@c @end ignore
 
 @item -mthumb-interwork
 @opindex mthumb-interwork
@@ -6591,6 +6647,9 @@ GCC issues no such warning.
 @c -zw, 2001-8-17
 @page
 
+@c APPLE LOCAL prune man page
+@end ignore
+
 @node RS/6000 and PowerPC Options
 @subsection IBM RS/6000 and PowerPC Options
 @cindex RS/6000 and PowerPC Options
@@ -6767,6 +6826,9 @@ These switches enable or disable the use of built-in functions that
 allow access to the AltiVec instruction set.  You may also need to set
 @option{-mabi=altivec} to adjust the current ABI with AltiVec ABI
 enhancements.
+
+@c APPLE LOCAL manual
+This option is not supported on Mac OS X; use @option{-faltivec} instead.
 
 @item -mfull-toc
 @itemx -mno-fp-in-toc
@@ -6966,6 +7028,23 @@ On System V.4 and embedded PowerPC systems compile code for the
 processor in big endian mode.  The @option{-mbig-endian} option is
 the same as @option{-mbig}.
 
+@c APPLE LOCAL begin dynamic-no-pic
+@item -mdynamic-no-pic
+@opindex mdynamic-no-pic
+On Darwin and Mac OS X systems, compile code so that it is not
+relocatable, but that its external references are relocatable.  The
+resulting code is suitable for applications, but not shared
+libraries. (APPLE ONLY)
+@c APPLE LOCAL end dynamic-no-pic
+
+@c APPLE LOCAL begin long-branch
+@item -mlong-branch
+@opindex mlong-branch
+On Darwin and Mac OS X systems, compile calls to use a 32-bit
+destination address.  This is to support kernel extensions, which may
+load anywhere within the kernel address space.  (APPLE ONLY)
+@c APPLE LOCAL end long-branch
+
 @item -mcall-sysv
 @opindex mcall-sysv
 On System V.4 and embedded PowerPC systems compile code using calling
@@ -7021,6 +7100,16 @@ SVR4 ABI)@.
 Extend the current ABI with AltiVec ABI extensions.  This does not
 change the default ABI, instead it adds the AltiVec ABI extensions to
 the current ABI@.
+
+@c APPLE LOCAL manual
+This option is effectively permanently enabled on Mac OS X.
+
+@item -mabi=no-altivec
+@opindex mabi=no-altivec
+Disable AltiVec ABI extensions for the current ABI.
+
+@c APPLE LOCAL manual
+This option will not work on Mac OS X.
 
 @item -mprototype
 @itemx -mno-prototype
@@ -7155,6 +7244,9 @@ Adds support for multithreading with the @dfn{pthreads} library.
 This option sets flags for both the preprocessor and linker.
 
 @end table
+
+@c APPLE LOCAL prune man page
+@ignore
 
 @node RT Options
 @subsection IBM RT Options
@@ -7571,6 +7663,9 @@ These options are defined by the macro
 options is also defined by that macro, which enables you to change the
 defaults.
 
+@c APPLE LOCAL prune man page
+@end ignore
+
 @node i386 and x86-64 Options
 @subsection Intel 386 and AMD x86-64 Options
 @cindex i386 Options
@@ -7701,9 +7796,12 @@ in ordinary CPU registers instead.
 @opindex mno-fancy-math-387
 Some 387 emulators do not support the @code{sin}, @code{cos} and
 @code{sqrt} instructions for the 387.  Specify this option to avoid
-generating those instructions.  This option is the default on FreeBSD@.
-As of revision 2.6.1, these instructions are not generated unless you
-also use the @option{-funsafe-math-optimizations} switch.
+generating those instructions.  This option is the default on FreeBSD,
+OpenBSD and NetBSD@.  This option is overridden when @option{-march}
+indicates that the target cpu will always have an FPU and so the
+instruction will not need emulation.  As of revision 2.6.1, these
+instructions are not generated unless you also use the
+@option{-funsafe-math-optimizations} switch.
 
 @item -malign-double
 @itemx -mno-align-double
@@ -7823,367 +7921,8 @@ preferred alignment to @option{-mpreferred-stack-boundary=2}.
 These switches enable or disable the use of built-in functions that allow
 direct access to the MMX, SSE and 3Dnow extensions of the instruction set.
 
-The following machine modes are available for use with MMX built-in functions
-(@pxref{Vector Extensions}): @code{V2SI} for a vector of two 32 bit integers,
-@code{V4HI} for a vector of four 16 bit integers, and @code{V8QI} for a
-vector of eight 8 bit integers.  Some of the built-in functions operate on
-MMX registers as a whole 64 bit entity, these use @code{DI} as their mode.
-
-If 3Dnow extensions are enabled, @code{V2SF} is used as a mode for a vector
-of two 32 bit floating point values.
-
-If SSE extensions are enabled, @code{V4SF} is used for a vector of four 32 bit
-floating point values.  Some instructions use a vector of four 32 bit
-integers, these use @code{V4SI}.  Finally, some instructions operate on an
-entire vector register, interpreting it as a 128 bit integer, these use mode
-@code{TI}.
-
-The following built-in functions are made available by @option{-mmmx}:
-@table @code
-@item v8qi __builtin_ia32_paddb (v8qi, v8qi)
-Generates the @code{paddb} machine instruction.
-@item v4hi __builtin_ia32_paddw (v4hi, v4hi)
-Generates the @code{paddw} machine instruction.
-@item v2si __builtin_ia32_paddd (v2si, v2si)
-Generates the @code{paddd} machine instruction.
-@item v8qi __builtin_ia32_psubb (v8qi, v8qi)
-Generates the @code{psubb} machine instruction.
-@item v4hi __builtin_ia32_psubw (v4hi, v4hi)
-Generates the @code{psubw} machine instruction.
-@item v2si __builtin_ia32_psubd (v2si, v2si)
-Generates the @code{psubd} machine instruction.
-
-@item v8qi __builtin_ia32_paddsb (v8qi, v8qi)
-Generates the @code{paddsb} machine instruction.
-@item v4hi __builtin_ia32_paddsw (v4hi, v4hi)
-Generates the @code{paddsw} machine instruction.
-@item v8qi __builtin_ia32_psubsb (v8qi, v8qi)
-Generates the @code{psubsb} machine instruction.
-@item v4hi __builtin_ia32_psubsw (v4hi, v4hi)
-Generates the @code{psubsw} machine instruction.
-
-@item v8qi __builtin_ia32_paddusb (v8qi, v8qi)
-Generates the @code{paddusb} machine instruction.
-@item v4hi __builtin_ia32_paddusw (v4hi, v4hi)
-Generates the @code{paddusw} machine instruction.
-@item v8qi __builtin_ia32_psubusb (v8qi, v8qi)
-Generates the @code{psubusb} machine instruction.
-@item v4hi __builtin_ia32_psubusw (v4hi, v4hi)
-Generates the @code{psubusw} machine instruction.
-
-@item v4hi __builtin_ia32_pmullw (v4hi, v4hi)
-Generates the @code{pmullw} machine instruction.
-@item v4hi __builtin_ia32_pmulhw (v4hi, v4hi)
-Generates the @code{pmulhw} machine instruction.
-
-@item di __builtin_ia32_pand (di, di)
-Generates the @code{pand} machine instruction.
-@item di __builtin_ia32_pandn (di,di)
-Generates the @code{pandn} machine instruction.
-@item di __builtin_ia32_por (di, di)
-Generates the @code{por} machine instruction.
-@item di __builtin_ia32_pxor (di, di)
-Generates the @code{pxor} machine instruction.
-
-@item v8qi __builtin_ia32_pcmpeqb (v8qi, v8qi)
-Generates the @code{pcmpeqb} machine instruction.
-@item v4hi __builtin_ia32_pcmpeqw (v4hi, v4hi)
-Generates the @code{pcmpeqw} machine instruction.
-@item v2si __builtin_ia32_pcmpeqd (v2si, v2si)
-Generates the @code{pcmpeqd} machine instruction.
-@item v8qi __builtin_ia32_pcmpgtb (v8qi, v8qi)
-Generates the @code{pcmpgtb} machine instruction.
-@item v4hi __builtin_ia32_pcmpgtw (v4hi, v4hi)
-Generates the @code{pcmpgtw} machine instruction.
-@item v2si __builtin_ia32_pcmpgtd (v2si, v2si)
-Generates the @code{pcmpgtd} machine instruction.
-
-@item v8qi __builtin_ia32_punpckhbw (v8qi, v8qi)
-Generates the @code{punpckhbw} machine instruction.
-@item v4hi __builtin_ia32_punpckhwd (v4hi, v4hi)
-Generates the @code{punpckhwd} machine instruction.
-@item v2si __builtin_ia32_punpckhdq (v2si, v2si)
-Generates the @code{punpckhdq} machine instruction.
-@item v8qi __builtin_ia32_punpcklbw (v8qi, v8qi)
-Generates the @code{punpcklbw} machine instruction.
-@item v4hi __builtin_ia32_punpcklwd (v4hi, v4hi)
-Generates the @code{punpcklwd} machine instruction.
-@item v2si __builtin_ia32_punpckldq (v2si, v2si)
-Generates the @code{punpckldq} machine instruction.
-
-@item v8qi __builtin_ia32_packsswb (v4hi, v4hi)
-Generates the @code{packsswb} machine instruction.
-@item v4hi __builtin_ia32_packssdw (v2si, v2si)
-Generates the @code{packssdw} machine instruction.
-@item v8qi __builtin_ia32_packuswb (v4hi, v4hi)
-Generates the @code{packuswb} machine instruction.
-
-@end table
-
-The following built-in functions are made available either with @option{-msse}, or
-with a combination of @option{-m3dnow} and @option{-march=athlon}.
-@table @code
-
-@item v4hi __builtin_ia32_pmulhuw (v4hi, v4hi)
-Generates the @code{pmulhuw} machine instruction.
-
-@item v8qi __builtin_ia32_pavgb (v8qi, v8qi)
-Generates the @code{pavgb} machine instruction.
-@item v4hi __builtin_ia32_pavgw (v4hi, v4hi)
-Generates the @code{pavgw} machine instruction.
-@item v4hi __builtin_ia32_psadbw (v8qi, v8qi)
-Generates the @code{psadbw} machine instruction.
-
-@item v8qi __builtin_ia32_pmaxub (v8qi, v8qi)
-Generates the @code{pmaxub} machine instruction.
-@item v4hi __builtin_ia32_pmaxsw (v4hi, v4hi)
-Generates the @code{pmaxsw} machine instruction.
-@item v8qi __builtin_ia32_pminub (v8qi, v8qi)
-Generates the @code{pminub} machine instruction.
-@item v4hi __builtin_ia32_pminsw (v4hi, v4hi)
-Generates the @code{pminsw} machine instruction.
-
-@item int __builtin_ia32_pextrw (v4hi, int)
-Generates the @code{pextrw} machine instruction.
-@item v4hi __builtin_ia32_pinsrw (v4hi, int, int)
-Generates the @code{pinsrw} machine instruction.
-
-@item int __builtin_ia32_pmovmskb (v8qi)
-Generates the @code{pmovmskb} machine instruction.
-@item void __builtin_ia32_maskmovq (v8qi, v8qi, char *)
-Generates the @code{maskmovq} machine instruction.
-@item void __builtin_ia32_movntq (di *, di)
-Generates the @code{movntq} machine instruction.
-@item void __builtin_ia32_sfence (void)
-Generates the @code{sfence} machine instruction.
-@item void __builtin_ia32_prefetch (char *, int selector)
-Generates a prefetch machine instruction, depending on the value of
-selector.  If @code{selector} is 0, it generates @code{prefetchnta}; for
-a value of 1, it generates @code{prefetcht0}; for a value of 2, it generates
-@code{prefetcht1}; and for a value of 3 it generates @code{prefetcht2}.
-
-@end table
-
-The following built-in functions are available when @option{-msse} is used.
-
-@table @code
-@item int __builtin_ia32_comieq (v4sf, v4sf)
-Generates the @code{comiss} machine instruction and performs an equality
-comparison.  The return value is the truth value of that comparison.
-@item int __builtin_ia32_comineq (v4sf, v4sf)
-Generates the @code{comiss} machine instruction and performs an inequality
-comparison.  The return value is the truth value of that comparison.
-@item int __builtin_ia32_comilt (v4sf, v4sf)
-Generates the @code{comiss} machine instruction and performs a ``less than''
-comparison.  The return value is the truth value of that comparison.
-@item int __builtin_ia32_comile (v4sf, v4sf)
-Generates the @code{comiss} machine instruction and performs a ``less or
-equal'' comparison.  The return value is the truth value of that comparison.
-@item int __builtin_ia32_comigt (v4sf, v4sf)
-Generates the @code{comiss} machine instruction and performs a ``greater than''
-comparison.  The return value is the truth value of that comparison.
-@item int __builtin_ia32_comige (v4sf, v4sf)
-Generates the @code{comiss} machine instruction and performs a ``greater or
-equal'' comparison.  The return value is the truth value of that comparison.
-
-@item int __builtin_ia32_ucomieq (v4sf, v4sf)
-Generates the @code{ucomiss} machine instruction and performs an equality
-comparison.  The return value is the truth value of that comparison.
-@item int __builtin_ia32_ucomineq (v4sf, v4sf)
-Generates the @code{ucomiss} machine instruction and performs an inequality
-comparison.  The return value is the truth value of that comparison.
-@item int __builtin_ia32_ucomilt (v4sf, v4sf)
-Generates the @code{ucomiss} machine instruction and performs a ``less than''
-comparison.  The return value is the truth value of that comparison.
-@item int __builtin_ia32_ucomile (v4sf, v4sf)
-Generates the @code{ucomiss} machine instruction and performs a ``less or
-equal'' comparison.  The return value is the truth value of that comparison.
-@item int __builtin_ia32_ucomigt (v4sf, v4sf)
-Generates the @code{ucomiss} machine instruction and performs a ``greater than''
-comparison.  The return value is the truth value of that comparison.
-@item int __builtin_ia32_ucomige (v4sf, v4sf)
-Generates the @code{ucomiss} machine instruction and performs a ``greater or
-equal'' comparison.  The return value is the truth value of that comparison.
-
-@item v4sf __builtin_ia32_addps (v4sf, v4sf)
-Generates the @code{addps} machine instruction.
-@item v4sf __builtin_ia32_addss (v4sf, v4sf)
-Generates the @code{addss} machine instruction.
-@item v4sf __builtin_ia32_subps (v4sf, v4sf)
-Generates the @code{subps} machine instruction.
-@item v4sf __builtin_ia32_subss (v4sf, v4sf)
-Generates the @code{subss} machine instruction.
-@item v4sf __builtin_ia32_mulps (v4sf, v4sf)
-Generates the @code{mulps} machine instruction.
-@item v4sf __builtin_ia32_mulss (v4sf, v4sf)
-Generates the @code{mulss} machine instruction.
-@item v4sf __builtin_ia32_divps (v4sf, v4sf)
-Generates the @code{divps} machine instruction.
-@item v4sf __builtin_ia32_divss (v4sf, v4sf)
-Generates the @code{divss} machine instruction.
-
-@item v4si __builtin_ia32_cmpeqps (v4sf, v4sf)
-Generates the @code{cmpeqps} machine instruction.
-@item v4si __builtin_ia32_cmplts (v4sf, v4sf)
-Generates the @code{cmpltps} machine instruction.
-@item v4si __builtin_ia32_cmpleps (v4sf, v4sf)
-Generates the @code{cmpleps} machine instruction.
-@item v4si __builtin_ia32_cmpgtps (v4sf, v4sf)
-Generates the @code{cmpgtps} machine instruction.
-@item v4si __builtin_ia32_cmpgeps (v4sf, v4sf)
-Generates the @code{cmpgeps} machine instruction.
-@item v4si __builtin_ia32_cmpunordps (v4sf, v4sf)
-Generates the @code{cmpunodps} machine instruction.
-@item v4si __builtin_ia32_cmpneqps (v4sf, v4sf)
-Generates the @code{cmpeqps} machine instruction.
-@item v4si __builtin_ia32_cmpnltps (v4sf, v4sf)
-Generates the @code{cmpltps} machine instruction.
-@item v4si __builtin_ia32_cmpnleps (v4sf, v4sf)
-Generates the @code{cmpleps} machine instruction.
-@item v4si __builtin_ia32_cmpngtps (v4sf, v4sf)
-Generates the @code{cmpgtps} machine instruction.
-@item v4si __builtin_ia32_cmpngeps (v4sf, v4sf)
-Generates the @code{cmpgeps} machine instruction.
-@item v4si __builtin_ia32_cmpordps (v4sf, v4sf)
-Generates the @code{cmpunodps} machine instruction.
-
-@item v4si __builtin_ia32_cmpeqss (v4sf, v4sf)
-Generates the @code{cmpeqss} machine instruction.
-@item v4si __builtin_ia32_cmpltss (v4sf, v4sf)
-Generates the @code{cmpltss} machine instruction.
-@item v4si __builtin_ia32_cmpless (v4sf, v4sf)
-Generates the @code{cmpless} machine instruction.
-@item v4si __builtin_ia32_cmpgtss (v4sf, v4sf)
-Generates the @code{cmpgtss} machine instruction.
-@item v4si __builtin_ia32_cmpgess (v4sf, v4sf)
-Generates the @code{cmpgess} machine instruction.
-@item v4si __builtin_ia32_cmpunordss (v4sf, v4sf)
-Generates the @code{cmpunodss} machine instruction.
-@item v4si __builtin_ia32_cmpneqss (v4sf, v4sf)
-Generates the @code{cmpeqss} machine instruction.
-@item v4si __builtin_ia32_cmpnlts (v4sf, v4sf)
-Generates the @code{cmpltss} machine instruction.
-@item v4si __builtin_ia32_cmpnless (v4sf, v4sf)
-Generates the @code{cmpless} machine instruction.
-@item v4si __builtin_ia32_cmpngtss (v4sf, v4sf)
-Generates the @code{cmpgtss} machine instruction.
-@item v4si __builtin_ia32_cmpngess (v4sf, v4sf)
-Generates the @code{cmpgess} machine instruction.
-@item v4si __builtin_ia32_cmpordss (v4sf, v4sf)
-Generates the @code{cmpunodss} machine instruction.
-
-@item v4sf __builtin_ia32_maxps (v4sf, v4sf)
-Generates the @code{maxps} machine instruction.
-@item v4sf __builtin_ia32_maxsss (v4sf, v4sf)
-Generates the @code{maxss} machine instruction.
-@item v4sf __builtin_ia32_minps (v4sf, v4sf)
-Generates the @code{minps} machine instruction.
-@item v4sf __builtin_ia32_minsss (v4sf, v4sf)
-Generates the @code{minss} machine instruction.
-
-@item ti __builtin_ia32_andps (ti, ti)
-Generates the @code{andps} machine instruction.
-@item ti __builtin_ia32_andnps (ti, ti)
-Generates the @code{andnps} machine instruction.
-@item ti __builtin_ia32_orps (ti, ti)
-Generates the @code{orps} machine instruction.
-@item ti __builtin_ia32_xorps (ti, ti)
-Generates the @code{xorps} machine instruction.
-
-@item v4sf __builtin_ia32_movps (v4sf, v4sf)
-Generates the @code{movps} machine instruction.
-@item v4sf __builtin_ia32_movhlps (v4sf, v4sf)
-Generates the @code{movhlps} machine instruction.
-@item v4sf __builtin_ia32_movlhps (v4sf, v4sf)
-Generates the @code{movlhps} machine instruction.
-@item v4sf __builtin_ia32_unpckhps (v4sf, v4sf)
-Generates the @code{unpckhps} machine instruction.
-@item v4sf __builtin_ia32_unpcklps (v4sf, v4sf)
-Generates the @code{unpcklps} machine instruction.
-
-@item v4sf __builtin_ia32_cvtpi2ps (v4sf, v2si)
-Generates the @code{cvtpi2ps} machine instruction.
-@item v2si __builtin_ia32_cvtps2pi (v4sf)
-Generates the @code{cvtps2pi} machine instruction.
-@item v4sf __builtin_ia32_cvtsi2ss (v4sf, int)
-Generates the @code{cvtsi2ss} machine instruction.
-@item int __builtin_ia32_cvtss2si (v4sf)
-Generates the @code{cvtsi2ss} machine instruction.
-@item v2si __builtin_ia32_cvttps2pi (v4sf)
-Generates the @code{cvttps2pi} machine instruction.
-@item int __builtin_ia32_cvttss2si (v4sf)
-Generates the @code{cvttsi2ss} machine instruction.
-
-@item v4sf __builtin_ia32_rcpps (v4sf)
-Generates the @code{rcpps} machine instruction.
-@item v4sf __builtin_ia32_rsqrtps (v4sf)
-Generates the @code{rsqrtps} machine instruction.
-@item v4sf __builtin_ia32_sqrtps (v4sf)
-Generates the @code{sqrtps} machine instruction.
-@item v4sf __builtin_ia32_rcpss (v4sf)
-Generates the @code{rcpss} machine instruction.
-@item v4sf __builtin_ia32_rsqrtss (v4sf)
-Generates the @code{rsqrtss} machine instruction.
-@item v4sf __builtin_ia32_sqrtss (v4sf)
-Generates the @code{sqrtss} machine instruction.
-
-@item v4sf __builtin_ia32_shufps (v4sf, v4sf, int)
-Generates the @code{shufps} machine instruction.
-
-@item v4sf __builtin_ia32_loadaps (float *)
-Generates the @code{movaps} machine instruction as a load from memory.
-@item void __builtin_ia32_storeaps (float *, v4sf)
-Generates the @code{movaps} machine instruction as a store to memory.
-@item v4sf __builtin_ia32_loadups (float *)
-Generates the @code{movups} machine instruction as a load from memory.
-@item void __builtin_ia32_storeups (float *, v4sf)
-Generates the @code{movups} machine instruction as a store to memory.
-@item v4sf __builtin_ia32_loadsss (float *)
-Generates the @code{movss} machine instruction as a load from memory.
-@item void __builtin_ia32_storess (float *, v4sf)
-Generates the @code{movss} machine instruction as a store to memory.
-
-@item v4sf __builtin_ia32_loadhps (v4sf, v2si *)
-Generates the @code{movhps} machine instruction as a load from memory.
-@item v4sf __builtin_ia32_loadlps (v4sf, v2si *)
-Generates the @code{movlps} machine instruction as a load from memory
-@item void __builtin_ia32_storehps (v4sf, v2si *)
-Generates the @code{movhps} machine instruction as a store to memory.
-@item void __builtin_ia32_storelps (v4sf, v2si *)
-Generates the @code{movlps} machine instruction as a store to memory.
-
-@item void __builtin_ia32_movntps (float *, v4sf)
-Generates the @code{movntps} machine instruction.
-@item int __builtin_ia32_movmskps (v4sf)
-Generates the @code{movntps} machine instruction.
-
-@item void __builtin_ia32_storeps1 (float *, v4sf)
-Generates the @code{movaps} machine instruction as a store to memory.
-Before storing, the value is modified with a @code{shufps} instruction
-so that the lowest of the four floating point elements is replicated
-across the entire vector that is stored.
-@item void __builtin_ia32_storerps (float *, v4sf)
-Generates the @code{movaps} machine instruction as a store to memory.
-Before storing, the value is modified with a @code{shufps} instruction
-so that the order of the four floating point elements in the vector is
-reversed.
-@item v4sf __builtin_ia32_loadps1 (float *)
-Generates a @code{movss} machine instruction to load a floating point
-value from memory, and a @code{shufps} instruction to replicate the
-loaded value across all four elements of the result vector.
-@item v4sf __builtin_ia32_loadrps (float *)
-Generates a @code{movaps} machine instruction to load a vector from
-memory, and a @code{shufps} instruction to reverse the order of the
-four floating point elements in the result vector.
-@item v4sf __builtin_ia32_setps (float, float, float, float)
-Constructs a vector from four single floating point values.  The return
-value is equal to the value that would result from storing the four
-arguments into consecutive memory locations and then executing a
-@code{movaps} to load the vector from memory.
-@item v4sf __builtin_ia32_setps1 (float)
-Constructs a vector from a single floating point value by replicating
-it across all four elements of the result vector.
-@end table
+@xref{X86 Built-in Functions}, for details of the functions enabled
+and disabled by these switches.
 
 @item -mpush-args
 @itemx -mno-push-args
@@ -8254,6 +7993,9 @@ stack pointer that will not be modified by signal or interrupt handlers
 and therefore can be used for temporary data without adjusting the stack
 pointer.  The flag @option{-mno-red-zone} disables this red zone.
 @end table
+
+@c APPLE LOCAL prune man page
+@ignore
 
 @node HPPA Options
 @subsection HPPA Options
@@ -8436,13 +8178,15 @@ the CB and CC@.
 Align code to 8-byte boundaries for faster fetching (or don't bother).
 Currently turned on by default for C-series implementations only.
 
-@ignore
+@c APPLE LOCAL prune man page
+@c @ignore
 @item -mclean-linkage
 @itemx -mno-clean-linkage
 @opindex mclean-linkage
 @opindex mno-clean-linkage
 These options are not fully implemented.
-@end ignore
+@c APPLE LOCAL prune man page
+@c @end ignore
 
 @item -mic-compat
 @itemx -mic2.0-compat
@@ -8511,8 +8255,8 @@ Generate code that uses (does not use) the floating-point register set.
 @option{-mno-fp-regs} implies @option{-msoft-float}.  If the floating-point
 register set is not used, floating point operands are passed in integer
 registers as if they were integers and floating-point results are passed
-in $0 instead of $f0.  This is a non-standard calling sequence, so any
-function with a floating-point argument or return value called by code
+in @code{$0} instead of @code{$f0}.  This is a non-standard calling sequence,
+so any function with a floating-point argument or return value called by code
 compiled with @option{-mno-fp-regs} must also be compiled with that
 option.
 
@@ -8655,33 +8399,77 @@ assembler (@option{-malpha-as}) or by the GNU assembler @option{-mgas}.
 @itemx -mno-bwx
 @itemx -mcix
 @itemx -mno-cix
+@itemx -mfix
+@itemx -mno-fix
 @itemx -mmax
 @itemx -mno-max
 @opindex mbwx
 @opindex mno-bwx
 @opindex mcix
 @opindex mno-cix
+@opindex mfix
+@opindex mno-fix
 @opindex mmax
 @opindex mno-max
 Indicate whether GCC should generate code to use the optional BWX,
-CIX, and MAX instruction sets.  The default is to use the instruction sets
-supported by the CPU type specified via @option{-mcpu=} option or that
+CIX, FIX and MAX instruction sets.  The default is to use the instruction
+sets supported by the CPU type specified via @option{-mcpu=} option or that
 of the CPU on which GCC was built if none was specified.
+
+@item -mfloat-vax
+@itemx -mfloat-ieee
+@opindex mfloat-vax
+@opindex mfloat-ieee
+Generate code that uses (does not use) VAX F and G floating point
+arithmetic instead of IEEE single and double precision.
+
+@item -mexplicit-relocs
+@itemx -mno-explicit-relocs
+@opindex mexplicit-relocs
+@opindex mno-explicit-relocs
+Older Alpha assemblers provided no way to generate symbol relocations
+except via assembler macros.  Use of these macros does not allow
+optimial instruction scheduling.  GNU binutils as of version 2.12
+supports a new syntax that allows the compiler to explicitly mark
+which relocations should apply to which instructions.  This option
+is mostly useful for debugging, as GCC detects the capabilities of
+the assembler when it is built and sets the default accordingly.
+
+@item -msmall-data
+@itemx -mlarge-data
+@opindex msmall-data
+@opindex mlarge-data
+When @option{-mexplicit-relocs} is in effect, static data is
+accessed via @dfn{gp-relative} relocations.  When @option{-msmall-data}
+is used, objects 8 bytes long or smaller are placed in a @dfn{small data area}
+(the @code{.sdata} and @code{.sbss} sections) and are accessed via
+16-bit relocations off of the @code{$gp} register.  This limits the
+size of the small data area to 64KB, but allows the variables to be
+directly accessed via a single instruction.
+
+The default is @option{-mlarge-data}.  With this option the data area
+is limited to just below 2GB.  Programs that require more than 2GB of
+data must use @code{malloc} or @code{mmap} to allocate the data in the
+heap instead of in the program's data segment.
+
+When generating code for shared libraries, @option{-fpic} implies
+@option{-msmall-data} and @option{-fPIC} implies @option{-mlarge-data}.
 
 @item -mcpu=@var{cpu_type}
 @opindex mcpu
-Set the instruction set, register set, and instruction scheduling
-parameters for machine type @var{cpu_type}.  You can specify either the
-@samp{EV} style name or the corresponding chip number.  GCC
-supports scheduling parameters for the EV4 and EV5 family of processors
-and will choose the default values for the instruction set from
-the processor you specify.  If you do not specify a processor type,
-GCC will default to the processor on which the compiler was built.
+Set the instruction set and instruction scheduling parameters for
+machine type @var{cpu_type}.  You can specify either the @samp{EV}
+style name or the corresponding chip number.  GCC supports scheduling
+parameters for the EV4, EV5 and EV6 family of processors and will
+choose the default values for the instruction set from the processor
+you specify.  If you do not specify a processor type, GCC will default
+to the processor on which the compiler was built.
 
 Supported values for @var{cpu_type} are
 
 @table @samp
 @item ev4
+@item ev45
 @itemx 21064
 Schedules as an EV4 and has no instruction set extensions.
 
@@ -8700,9 +8488,17 @@ Schedules as an EV5 and supports the BWX and MAX extensions.
 
 @item ev6
 @itemx 21264
-Schedules as an EV5 (until Digital releases the scheduling parameters
-for the EV6) and supports the BWX, CIX, and MAX extensions.
+Schedules as an EV6 and supports the BWX, FIX, and MAX extensions.
+
+@item ev67
+@item 21264a
+Schedules as an EV6 and supports the BWX, CIX, FIX, and MAX extensions.
 @end table
+
+@item -mtune=@var{cpu_type}
+@opindex mtune
+Set only the instruction scheduling parameters for machine type
+@var{cpu_type}.  The instruction set is not changed.
 
 @item -mmemory-latency=@var{time}
 @opindex mmemory-latency
@@ -8981,6 +8777,7 @@ count register BK@.
 Enable (disable) generation of code using decrement and branch,
 DBcond(D), instructions.  This is enabled by default for the C4x.  To be
 on the safe side, this is disabled for the C3x, since the maximum
+@c APPLE LOCAL work around a makeinfo complaint
 iteration count on the C3x is @math{2^23 + 1} (but who iterates loops more than
 @math{2^23} times on the C3x?).  Note that GCC will try to reverse a loop so
 that it can utilise the decrement and branch instruction, but will give
@@ -9050,8 +8847,10 @@ instruction, it is disabled by default.
 @opindex mloop-unsigned
 @opindex mno-loop-unsigned
 The maximum iteration count when using RPTS and RPTB (and DB on the C40)
+@c APPLE LOCAL work around a makeinfo complaint
 is @math{2^31 + 1} since these instructions test if the iteration count is
 negative to terminate the loop.  If the iteration count is unsigned
+@c APPLE LOCAL work around a makeinfo complaint
 there is a possibility than the @math{2^31 + 1} maximum iteration count may be
 exceeded.  This switch allows an unsigned iteration count.
 
@@ -9353,13 +9152,14 @@ at90s2333, at90s2343, at90s4414, at90s4433, at90s4434, at90s8515,
 at90c8534, at90s8535).
 
 Instruction set avr3 is for the classic AVR core with up to 128K program
-memory space (MCU types: atmega103, atmega603).
+memory space (MCU types: atmega103, atmega603, at43usb320, at76c711).
 
 Instruction set avr4 is for the enhanced AVR core with up to 8K program
-memory space (MCU types: atmega83, atmega85).
+memory space (MCU types: atmega8, atmega83, atmega85).
 
 Instruction set avr5 is for the enhanced AVR core with up to 128K program
-memory space (MCU types: atmega161, atmega163, atmega32, at94k).
+memory space (MCU types: atmega16, atmega161, atmega163, atmega32, atmega323,
+atmega64, atmega128, at43usb355, at94k).
 
 @item -msize
 @opindex msize
@@ -9633,7 +9433,7 @@ generates IEEE floating-point instructions.  This is the default.
 @itemx -mno-backchain
 @opindex mbackchain
 @opindex mno-backchain
-Generate (or do not generate) code which maintains an explicit 
+Generate (or do not generate) code which maintains an explicit
 backchain within the stack frame that points to the caller's frame.
 This is currently needed to allow debugging.  The default is to
 generate the backchain.
@@ -9642,8 +9442,8 @@ generate the backchain.
 @itemx -mno-small-exec
 @opindex msmall-exec
 @opindex mno-small-exec
-Generate (or do not generate) code using the @code{bras} instruction 
-to do subroutine calls. 
+Generate (or do not generate) code using the @code{bras} instruction
+to do subroutine calls.
 This only works reliably if the total executable size does not
 exceed 64k.  The default is to use the @code{basr} instruction instead,
 which does not have this limitation.
@@ -9656,14 +9456,14 @@ When @option{-m31} is specified, generate code compliant to the
 Linux for S/390 ABI@.  When @option{-m64} is specified, generate
 code compliant to the Linux for zSeries ABI@.  This allows GCC in
 particular to generate 64-bit instructions.  For the @samp{s390}
-targets, the default is @option{-m31}, while the @samp{s390x} 
+targets, the default is @option{-m31}, while the @samp{s390x}
 targets default to @option{-m64}.
 
 @item -mmvcle
 @itemx -mno-mvcle
 @opindex mmvcle
 @opindex mno-mvcle
-Generate (or do not generate) code using the @code{mvcle} instruction 
+Generate (or do not generate) code using the @code{mvcle} instruction
 to perform block moves.  When @option{-mno-mvcle} is specifed,
 use a @code{mvc} loop instead.  This is the default.
 
@@ -9819,31 +9619,41 @@ Like @option{-sim}, but pass linker options to locate initialized data at
 
 These options are defined for the MMIX:
 
-@table @code
+@table @gcctabopt
 @item -mlibfuncs
 @itemx -mno-libfuncs
+@opindex mlibfuncs
+@opindex mno-libfuncs
 Specify that intrinsic library functions are being compiled, passing all
 values in registers, no matter the size.
 
 @item -mepsilon
 @itemx -mno-epsilon
+@opindex mepsilon
+@opindex mno-epsilon
 Generate floating-point comparison instructions that compare with respect
 to the @code{rE} epsilon register.
 
 @item -mabi=mmixware
 @itemx -mabi=gnu
+@opindex mabi-mmixware
+@opindex mabi=gnu
 Generate code that passes function parameters and return values that (in
 the called function) are seen as registers @code{$0} and up, as opposed to
 the GNU ABI which uses global registers @code{$231} and up.
 
 @item -mzero-extend
 @itemx -mno-zero-extend
+@opindex mzero-extend
+@opindex mno-zero-extend
 When reading data from memory in sizes shorter than 64 bits, use (do not
 use) zero-extending load instructions by default, rather than
 sign-extending ones.
 
 @item -mknuthdiv
 @itemx -mno-knuthdiv
+@opindex mknuthdiv
+@opindex mno-knuthdiv
 Make the result of a division yielding a remainder have the same sign as
 the divisor.  With the default, @option{-mno-knuthdiv}, the sign of the
 remainder follows the sign of the dividend.  Both methods are
@@ -9851,25 +9661,329 @@ arithmetically valid, the latter being almost exclusively used.
 
 @item -mtoplevel-symbols
 @itemx -mno-toplevel-symbols
+@opindex mtoplevel-symbols
+@opindex mno-toplevel-symbols
 Prepend (do not prepend) a @samp{:} to all global symbols, so the assembly
 code can be used with the @code{PREFIX} assembly directive.
 
 @item -melf
+@opindex melf
 Generate an executable in the ELF format, rather than the default
 @samp{mmo} format used by the @command{mmix} simulator.
 
 @item -mbranch-predict
 @itemx -mno-branch-predict
+@opindex mbranch-predict
+@opindex mno-branch-predict
 Use (do not use) the probable-branch instructions, when static branch
 prediction indicates a probable branch.
 
-@item -mreg-stack-fill-bug-workaround
-@itemx -mno-reg-stack-fill-bug-workaround
-Work around (do not work around) an inconsistency in the circular
-register stack mechanism in the @command{mmix} simulator, which
-causes entries in the register stack to not be flushed to memory if
-the instruction causing the fill-up is @code{PUSHJ} or @code{PUSHGO}.
+@item -mbase-addresses
+@itemx -mno-base-addresses
+@opindex mbase-addresses
+@opindex mno-base-addresses
+Generate (do not generate) code that uses @emph{base addresses}.  Using a
+base address automatically generates a request (handled by the assembler
+and the linker) for a constant to be set up in a global register.  The
+register is used for one or more base address requests within the range 0
+to 255 from the value held in the register.  The generally leads to short
+and fast code, but the number of different data items that can be
+addressed is limited.  This means that a program that uses lots of static
+data may require @option{-mno-base-addresses}.
 @end table
+
+@node PDP-11 Options
+@subsection PDP-11 Options
+@cindex PDP-11 Options
+
+These options are defined for the PDP-11:
+
+@table @gcctabopt
+@item -mfpu
+@opindex mfpu
+Use hardware FPP floating point.  This is the default.  (FIS floating
+point on the PDP-11/40 is not supported.)
+
+@item -msoft-float
+@opindex msoft-float
+Do not use hardware floating point.
+
+@item -mac0
+@opindex mac0
+Return floating-point results in ac0 (fr0 in Unix assembler syntax).
+
+@item -mno-ac0
+@opindex mno-ac0
+Return floating-point results in memory.  This is the default.
+
+@item -m40
+@opindex m40
+Generate code for a PDP-11/40.
+
+@item -m45
+@opindex m45
+Generate code for a PDP-11/45.  This is the default.
+
+@item -m10
+@opindex m10
+Generate code for a PDP-11/10.
+
+@item -mbcopy-builtin
+@opindex bcopy-builtin
+Use inline @code{movstrhi} patterns for copying memory.  This is the
+default.
+
+@item -mbcopy
+@opindex mbcopy
+Do not use inline @code{movstrhi} patterns for copying memory.
+
+@item -mint16
+@itemx -mno-int32
+@opindex mint16
+@opindex mno-int32
+Use 16-bit @code{int}.  This is the default.
+
+@item -mint32
+@itemx -mno-int16
+@opindex mint32
+@opindex mno-int16
+Use 32-bit @code{int}.
+
+@item -mfloat64
+@itemx -mno-float32
+@opindex mfloat64
+@opindex mno-float32
+Use 64-bit @code{float}.  This is the default.
+
+@item -mfloat32
+@item -mno-float64
+@opindex mfloat32
+@opindex mno-float64
+Use 32-bit @code{float}.
+
+@item -mabshi
+@opindex mabshi
+Use @code{abshi2} pattern.  This is the default.
+
+@item -mno-abshi
+@opindex mno-abshi
+Do not use @code{abshi2} pattern.
+
+@item -mbranch-expensive
+@opindex mbranch-expensive
+Pretend that branches are expensive.  This is for experimenting with
+code generation only.
+
+@item -mbranch-cheap
+@opindex mbranch-cheap
+Do not pretend that branches are expensive.  This is the default.
+
+@item -msplit
+@opindex msplit
+Generate code for a system with split I&D.
+
+@item -mno-split
+@opindex mno-split
+Generate code for a system without split I&D.  This is the default.
+
+@item -munix-asm
+@opindex munix-asm
+Use Unix assembler syntax.  This is the default when configured for
+@samp{pdp11-*-bsd}.
+
+@item -mdec-asm
+@opindex mdec-asm
+Use DEC assembler syntax.  This is the default when configured for any
+PDP-11 target other than @samp{pdp11-*-bsd}.
+@end table
+
+@node Xstormy16 Options
+@subsection Xstormy16 Options
+@cindex Xstormy16 Options
+
+These options are defined for Xstormy16:
+
+@table @gcctabopt
+@item -msim
+@opindex msim
+Choose startup files and linker script suitable for the simulator.
+@end table
+
+@node Xtensa Options
+@subsection Xtensa Options
+@cindex Xtensa Options
+
+The Xtensa architecture is designed to support many different
+configurations.  The compiler's default options can be set to match a
+particular Xtensa configuration by copying a configuration file into the
+GCC sources when building GCC@.  The options below may be used to
+override the default options.
+
+@table @gcctabopt
+@item -mbig-endian
+@itemx -mlittle-endian
+@opindex mbig-endian
+@opindex mlittle-endian
+Specify big-endian or little-endian byte ordering for the target Xtensa
+processor.
+
+@item -mdensity
+@itemx -mno-density
+@opindex mdensity
+@opindex mno-density
+Enable or disable use of the optional Xtensa code density instructions.
+
+@item -mmac16
+@itemx -mno-mac16
+@opindex mmac16
+@opindex mno-mac16
+Enable or disable use of the Xtensa MAC16 option.  When enabled, GCC
+will generate MAC16 instructions from standard C code, with the
+limitation that it will use neither the MR register file nor any
+instruction that operates on the MR registers.  When this option is
+disabled, GCC will translate 16-bit multiply/accumulate operations to a
+combination of core instructions and library calls, depending on whether
+any other multiplier options are enabled.
+
+@item -mmul16
+@itemx -mno-mul16
+@opindex mmul16
+@opindex mno-mul16
+Enable or disable use of the 16-bit integer multiplier option.  When
+enabled, the compiler will generate 16-bit multiply instructions for
+multiplications of 16 bits or smaller in standard C code.  When this
+option is disabled, the compiler will either use 32-bit multiply or
+MAC16 instructions if they are available or generate library calls to
+perform the multiply operations using shifts and adds.
+
+@item -mmul32
+@itemx -mno-mul32
+@opindex mmul32
+@opindex mno-mul32
+Enable or disable use of the 32-bit integer multiplier option.  When
+enabled, the compiler will generate 32-bit multiply instructions for
+multiplications of 32 bits or smaller in standard C code.  When this
+option is disabled, the compiler will generate library calls to perform
+the multiply operations using either shifts and adds or 16-bit multiply
+instructions if they are available.
+
+@item -mnsa
+@itemx -mno-nsa
+@opindex mnsa
+@opindex mno-nsa
+Enable or disable use of the optional normalization shift amount
+(@code{NSA}) instructions to implement the built-in @code{ffs} function.
+
+@item -mminmax
+@itemx -mno-minmax
+@opindex mminmax
+@opindex mno-minmax
+Enable or disable use of the optional minimum and maximum value
+instructions.
+
+@item -msext
+@itemx -mno-sext
+@opindex msext
+@opindex mno-sext
+Enable or disable use of the optional sign extend (@code{SEXT})
+instruction.
+
+@item -mbooleans
+@itemx -mno-booleans
+@opindex mbooleans
+@opindex mno-booleans
+Enable or disable support for the boolean register file used by Xtensa
+coprocessors.  This is not typically useful by itself but may be
+required for other options that make use of the boolean registers (e.g.,
+the floating-point option).
+
+@item -mhard-float
+@itemx -msoft-float
+@opindex mhard-float
+@opindex msoft-float
+Enable or disable use of the floating-point option.  When enabled, GCC
+generates floating-point instructions for 32-bit @code{float}
+operations.  When this option is disabled, GCC generates library calls
+to emulate 32-bit floating-point operations using integer instructions.
+Regardless of this option, 64-bit @code{double} operations are always
+emulated with calls to library functions.
+
+@item -mfused-madd
+@itemx -mno-fused-madd
+@opindex mfused-madd
+@opindex mno-fused-madd
+Enable or disable use of fused multiply/add and multiply/subtract
+instructions in the floating-point option.  This has no effect if the
+floating-point option is not also enabled.  Disabling fused multiply/add
+and multiply/subtract instructions forces the compiler to use separate
+instructions for the multiply and add/subtract operations.  This may be
+desirable in some cases where strict IEEE 754-compliant results are
+required: the fused multiply add/subtract instructions do not round the
+intermediate result, thereby producing results with @emph{more} bits of
+precision than specified by the IEEE standard.  Disabling fused multiply
+add/subtract instructions also ensures that the program output is not
+sensitive to the compiler's ability to combine multiply and add/subtract
+operations.
+
+@item -mserialize-volatile
+@itemx -mno-serialize-volatile
+@opindex mserialize-volatile
+@opindex mno-serialize-volatile
+When this option is enabled, GCC inserts @code{MEMW} instructions before
+@code{volatile} memory references to guarantee sequential consistency.
+The default is @option{-mserialize-volatile}.  Use
+@option{-mno-serialize-volatile} to omit the @code{MEMW} instructions.
+
+@item -mtext-section-literals
+@itemx -mno-text-section-literals
+@opindex mtext-section-literals
+@opindex mno-text-section-literals
+Control the treatment of literal pools.  The default is
+@option{-mno-text-section-literals}, which places literals in a separate
+section in the output file.  This allows the literal pool to be placed
+in a data RAM/ROM, and it also allows the linker to combine literal
+pools from separate object files to remove redundant literals and
+improve code size.  With @option{-mtext-section-literals}, the literals
+are interspersed in the text section in order to keep them as close as
+possible to their references.  This may be necessary for large assembly
+files.
+
+@item -mtarget-align
+@itemx -mno-target-align
+@opindex mtarget-align
+@opindex mno-target-align
+When this option is enabled, GCC instructs the assembler to
+automatically align instructions to reduce branch penalties at the
+expense of some code density.  The assembler attempts to widen density
+instructions to align branch targets and the instructions following call
+instructions.  If there are not enough preceding safe density
+instructions to align a target, no widening will be performed.  The
+default is @option{-mtarget-align}.  These options do not affect the
+treatment of auto-aligned instructions like @code{LOOP}, which the
+assembler will always align, either by widening density instructions or
+by inserting no-op instructions.
+
+@item -mlongcalls
+@itemx -mno-longcalls
+@opindex mlongcalls
+@opindex mno-longcalls
+When this option is enabled, GCC instructs the assembler to translate
+direct calls to indirect calls unless it can determine that the target
+of a direct call is in the range allowed by the call instruction.  This
+translation typically occurs for calls to functions in other source
+files.  Specifically, the assembler translates a direct @code{CALL}
+instruction into an @code{L32R} followed by a @code{CALLX} instruction.
+The default is @option{-mno-longcalls}.  This option should be used in
+programs where the call target can potentially be out of range.  This
+option is implemented in the assembler, not the compiler, so the
+assembly code generated by GCC will still show direct call
+instructions---look at the disassembled object code to see the actual
+instructions.  Note that the assembler will use an indirect call for
+every cross-file call, not just those that really will be out of range.
+@end table
+
+@c APPLE LOCAL prune man page
+@end ignore
 
 @node Code Gen Options
 @section Options for Code Generation Conventions
@@ -10044,6 +10158,9 @@ only on certain machines.  For the 386, GCC supports PIC for System V
 but not for the Sun 386i.  Code generated for the IBM RS/6000 is always
 position-independent.
 
+@c APPLE LOCAL manual
+@option{-fpic} is not supported on Mac OS X.
+
 @item -fPIC
 @opindex fPIC
 If supported for the target machine, emit position-independent code,
@@ -10053,6 +10170,9 @@ and the Sparc.
 
 Position-independent code requires special support, and therefore works
 only on certain machines.
+
+@c APPLE LOCAL manual
+@option{-fPIC} is the default on Darwin and Mac OS X.
 
 @item -ffixed-@var{reg}
 @opindex ffixed
@@ -10321,35 +10441,6 @@ using GCC also uses these directories when searching for ordinary
 libraries for the @option{-l} option (but directories specified with
 @option{-L} come first).
 
-@item C_INCLUDE_PATH
-@itemx CPLUS_INCLUDE_PATH
-@itemx OBJC_INCLUDE_PATH
-@findex C_INCLUDE_PATH
-@findex CPLUS_INCLUDE_PATH
-@findex OBJC_INCLUDE_PATH
-@c @itemx OBJCPLUS_INCLUDE_PATH
-These environment variables pertain to particular languages.  Each
-variable's value is a colon-separated list of directories, much like
-@env{PATH}.  When GCC searches for header files, it tries the
-directories listed in the variable for the language you are using, after
-the directories specified with @option{-I} but before the standard header
-file directories.
-
-@item DEPENDENCIES_OUTPUT
-@findex DEPENDENCIES_OUTPUT
-@cindex dependencies for make as output
-If this variable is set, its value specifies how to output dependencies
-for Make based on the header files processed by the compiler.  This
-output looks much like the output from the @option{-M} option
-(@pxref{Preprocessor Options}), but it goes to a separate file, and is
-in addition to the usual results of compilation.
-
-The value of @env{DEPENDENCIES_OUTPUT} can be just a file name, in
-which case the Make rules are written to that file, guessing the target
-name from the source file name.  Or the value can have the form
-@samp{@var{file} @var{target}}, in which case the rules are written to
-file @var{file} using @var{target} as the target name.
-
 @item LANG
 @findex LANG
 @cindex locale definition
@@ -10372,6 +10463,12 @@ If @env{LANG} is not defined, or if it has some other value, then the
 compiler will use mblen and mbtowc as defined by the default locale to
 recognize and translate multibyte characters.
 @end table
+
+@noindent
+Some additional environments variables affect the behavior of the
+preprocessor.
+
+@include cppenv.texi
 
 @c man end
 

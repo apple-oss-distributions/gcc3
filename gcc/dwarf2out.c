@@ -193,6 +193,18 @@ typedef struct dw_fde_struct
   const char *dw_fde_end;
   dw_cfi_ref dw_fde_cfi;
   unsigned funcdef_number;
+  /* APPLE LOCAL begin C++ EH  */
+#ifdef COALESCED_UNWIND_INFO
+  const char *dw_real_name;
+  /* Is this symbol coalesced?  */
+  unsigned coalesced : 1;
+  /* Is this symbol an explicit instantiation?  */
+  unsigned explicit : 1;
+  unsigned public : 1;
+  unsigned private_extern : 1;
+  unsigned all_throwers_are_sibcalls : 1;
+#endif
+  /* APPLE LOCAL end C++ EH  */
   unsigned nothrow : 1;
   unsigned uses_eh_lsda : 1;
 }
@@ -297,11 +309,6 @@ static struct dw_loc_descr_struct *build_cfa_loc
 					PARAMS ((dw_cfa_location *));
 static void def_cfa_1		 	PARAMS ((const char *,
 						 dw_cfa_location *));
-
-/* .debug_str support.  */
-static hashnode indirect_string_alloc	PARAMS ((hash_table *));
-static int output_indirect_string	PARAMS ((struct cpp_reader *,
-						 hashnode, const PTR));
 
 /* How to start an assembler comment.  */
 #ifndef ASM_COMMENT_START
@@ -478,8 +485,18 @@ dwarf_cfi_name (cfi_opc)
       return "DW_CFA_def_cfa_register";
     case DW_CFA_def_cfa_offset:
       return "DW_CFA_def_cfa_offset";
+
+    /* DWARF 3 */
     case DW_CFA_def_cfa_expression:
       return "DW_CFA_def_cfa_expression";
+    case DW_CFA_expression:
+      return "DW_CFA_expression";
+    case DW_CFA_offset_extended_sf:
+      return "DW_CFA_offset_extended_sf";
+    case DW_CFA_def_cfa_sf:
+      return "DW_CFA_def_cfa_sf";
+    case DW_CFA_def_cfa_offset_sf:
+      return "DW_CFA_def_cfa_offset_sf";
 
     /* SGI/MIPS specific */
     case DW_CFA_MIPS_advance_loc8:
@@ -858,10 +875,7 @@ reg_save (label, reg, sreg, offset)
 #endif
       offset /= DWARF_CIE_DATA_ALIGNMENT;
       if (offset < 0)
-	{
-	  cfi->dw_cfi_opc = DW_CFA_GNU_negative_offset_extended;
-	  offset = -offset;
-	}
+	cfi->dw_cfi_opc = DW_CFA_offset_extended_sf;
 
       cfi->dw_cfi_oprnd2.dw_cfi_offset = offset;
     }
@@ -1771,9 +1785,12 @@ dwarf2out_frame_debug_expr (expr, label)
       break;
 
     default:
-      /* APPLE LOCAL AltiVec shenanigans (VRsave)  */
+      /* APPLE LOCAL begin AltiVec shenanigans (VRsave)  */
+#ifdef TARGET_ALTIVEC
       if (GET_CODE (dest) == UNSPEC_VOLATILE && flag_altivec)
 	return;
+#endif
+      /* APPLE LOCAL end AltiVec shenanigans (VRsave)  */
       abort ();
     }
 }
@@ -1896,11 +1913,17 @@ output_cfi (cfi, fde, for_eh)
 	  break;
 
 	case DW_CFA_offset_extended:
-	case DW_CFA_GNU_negative_offset_extended:
 	case DW_CFA_def_cfa:
 	  dw2_asm_output_data_uleb128 (cfi->dw_cfi_oprnd1.dw_cfi_reg_num,
 				       NULL);
 	  dw2_asm_output_data_uleb128 (cfi->dw_cfi_oprnd2.dw_cfi_offset, NULL);
+	  break;
+
+	case DW_CFA_offset_extended_sf:
+	case DW_CFA_def_cfa_sf:
+	  dw2_asm_output_data_uleb128 (cfi->dw_cfi_oprnd1.dw_cfi_reg_num,
+				       NULL);
+	  dw2_asm_output_data_sleb128 (cfi->dw_cfi_oprnd2.dw_cfi_offset, NULL);
 	  break;
 
 	case DW_CFA_restore_extended:
@@ -1923,12 +1946,21 @@ output_cfi (cfi, fde, for_eh)
 	  dw2_asm_output_data_uleb128 (cfi->dw_cfi_oprnd1.dw_cfi_offset, NULL);
 	  break;
 
+	case DW_CFA_def_cfa_offset_sf:
+	  dw2_asm_output_data_sleb128 (cfi->dw_cfi_oprnd1.dw_cfi_offset, NULL);
+	  break;
+
 	case DW_CFA_GNU_window_save:
 	  break;
 
 	case DW_CFA_def_cfa_expression:
+	case DW_CFA_expression:
 	  output_cfa_loc (cfi);
 	  break;
+
+	case DW_CFA_GNU_negative_offset_extended:
+	  /* Obsoleted by DW_CFA_offset_extended_sf.  */
+	  abort ();
 
 	default:
 	  break;
@@ -1980,6 +2012,14 @@ output_call_frame_info (for_eh)
   else
     named_section_flags (DEBUG_FRAME_SECTION, SECTION_DEBUG);
 
+  /* APPLE LOCAL begin C++ EH  */
+#ifdef COALESCED_UNWIND_INFO
+  /* We could probably mark the CIE as coalesced as well, since they're
+     all the same (or are they?!)  */
+  ASM_OUTPUT_LABEL (asm_out_file, "EH_unwind_info");
+#endif
+  /* APPLE LOCAL end C++ EH  */
+
   ASM_GENERATE_INTERNAL_LABEL (section_start_label, FRAME_BEGIN_LABEL, for_eh);
   ASM_OUTPUT_LABEL (asm_out_file, section_start_label);
 
@@ -2014,7 +2054,11 @@ output_call_frame_info (for_eh)
 	 P	Indicates the presence of an encoding + language
 		personality routine in the CIE augmentation.  */
 
-      fde_encoding = ASM_PREFERRED_EH_DATA_FORMAT (/*code=*/1, /*global=*/0);
+      /* APPLE LOCAL coalescing */
+      fde_encoding = flag_export_coalesced
+	? ASM_PREFERRED_EH_DATA_FORMAT (/*code=*/2, /*global=*/1)
+	: ASM_PREFERRED_EH_DATA_FORMAT (/*code=*/1, /*global=*/0);
+      /* APPLE LOCAL end coalescing */
       per_encoding = ASM_PREFERRED_EH_DATA_FORMAT (/*code=*/2, /*global=*/1);
       lsda_encoding = ASM_PREFERRED_EH_DATA_FORMAT (/*code=*/0, /*global=*/0);
 
@@ -2074,10 +2118,16 @@ output_call_frame_info (for_eh)
       dw2_asm_output_data_uleb128 (augmentation_size, "Augmentation size");
       if (eh_personality_libfunc)
 	{
+	  /* APPLE LOCAL begin C++ EH  turly 20020327  */
+#ifdef DW2_ENCODE_PERSONALITY_FUNC
+	  DW2_ENCODE_PERSONALITY_FUNC (eh_personality_libfunc);
+#else
 	  dw2_asm_output_data (1, per_encoding, "Personality (%s)",
 			       eh_data_format_name (per_encoding));
 	  dw2_asm_output_encoded_addr_rtx (per_encoding,
 					   eh_personality_libfunc, NULL);
+#endif
+	  /* APPLE LOCAL end C++ EH  turly 20020327  */
 	}
 
       if (any_lsda_needed)
@@ -2103,8 +2153,21 @@ output_call_frame_info (for_eh)
       fde = &fde_table[i];
 
       /* Don't emit EH unwind info for leaf functions that don't need it.  */
-      if (for_eh && fde->nothrow && ! fde->uses_eh_lsda)
+      /* APPLE LOCAL omit EH info for thunks */
+      if (for_eh && (fde->all_throwers_are_sibcalls || (fde->nothrow && ! fde->uses_eh_lsda)))
 	continue;
+
+      /* APPLE LOCAL begin C++ EH  */
+#ifdef COALESCED_UNWIND_INFO
+      ASM_OUTPUT_COAL_UNWIND_LABEL (asm_out_file, fde->dw_real_name,
+				    fde->coalesced, 
+				    fde->public && !fde->private_extern,
+				    fde->coalesced
+				      || fde->public
+				      || fde->private_extern
+				      || fde->explicit);
+#endif
+      /* APPLE LOCAL end C++ EH  */
 
       ASM_OUTPUT_INTERNAL_LABEL (asm_out_file, FDE_LABEL, for_eh + i * 2);
       ASM_GENERATE_INTERNAL_LABEL (l1, FDE_AFTER_SIZE_LABEL, for_eh + i * 2);
@@ -2114,13 +2177,25 @@ output_call_frame_info (for_eh)
       ASM_OUTPUT_LABEL (asm_out_file, l1);
 
       if (for_eh)
-	dw2_asm_output_delta (4, l1, section_start_label, "FDE CIE offset");
+	/* APPLE LOCAL begin C++ EH */
+	dw2_asm_output_reloc_delta (4, l1, section_start_label,
+				    "FDE CIE offset");
+	/* APPLE LOCAL end C++ EH */
       else
 	dw2_asm_output_offset (DWARF_OFFSET_SIZE, section_start_label,
 			       "FDE CIE offset");
 
       if (for_eh)
 	{
+	  /* APPLE LOCAL begin C++ EH  */
+#ifdef COALESCED_UNWIND_INFO
+	  if (fde->coalesced)
+	    dw2_asm_output_encoded_addr_rtx (fde_encoding,
+		   gen_rtx_SYMBOL_REF (Pmode, fde->dw_real_name),
+		   "FDE initial location");
+	  else
+#endif
+	  /* APPLE LOCAL end C++ EH  */
 	  dw2_asm_output_encoded_addr_rtx (fde_encoding,
 		   gen_rtx_SYMBOL_REF (Pmode, fde->dw_fde_begin),
 		   "FDE initial location");
@@ -2267,6 +2342,24 @@ dwarf2out_begin_prologue (line, file)
   fde->funcdef_number = current_funcdef_number;
   fde->nothrow = current_function_nothrow;
   fde->uses_eh_lsda = cfun->uses_eh_lsda;
+  /* APPLE LOCAL omit EH info for thunks */
+  fde->all_throwers_are_sibcalls = cfun->all_throwers_are_sibcalls;
+
+  /* APPLE LOCAL begin C++ EH  */
+#ifdef COALESCED_UNWIND_INFO
+  fde->coalesced = DECL_COALESCED (current_function_decl);
+  /* Sorry about this hackery: this is the only way I can figure out
+     whether this is an explicit template instantiation.  Ick.
+     DECL_LANG_FLAG_1 is DECL_TEMPLATE_INSTANTIATED in cp-tree.h.  */
+  fde->explicit = !fde->coalesced && TREE_PUBLIC (current_function_decl)
+		  && (strstr (lang_hooks.name, "C++") != NULL)
+		  && DECL_LANG_FLAG_1 (current_function_decl);
+  fde->dw_real_name = xstrdup (IDENTIFIER_POINTER
+				(DECL_ASSEMBLER_NAME (current_function_decl)));
+  fde->public = TREE_PUBLIC(current_function_decl);
+  fde->private_extern = DECL_PRIVATE_EXTERN(current_function_decl);
+#endif
+  /* APPLE LOCAL end C++ EH  */
 
   args_size = old_args_size = 0;
 
@@ -2289,7 +2382,7 @@ dwarf2out_end_epilogue ()
   char label[MAX_ARTIFICIAL_LABEL_BYTES];
 
   /* Output a label to mark the endpoint of the code generated for this
-     function.        */
+     function.  */
   ASM_GENERATE_INTERNAL_LABEL (label, FUNC_END_LABEL, current_funcdef_number);
   ASM_OUTPUT_LABEL (asm_out_file, label);
   fde = &fde_table[fde_table_in_use - 1];
@@ -3224,6 +3317,12 @@ get_cfa_from_loc_descr (cfa, loc)
 /* And now, the support for symbolic debugging information.  */
 #ifdef DWARF2_DEBUGGING_INFO
 
+/* .debug_str support.  */
+static hashnode indirect_string_alloc	PARAMS ((hash_table *));
+static int output_indirect_string	PARAMS ((struct cpp_reader *,
+                                                 hashnode, const PTR));
+
+
 static void dwarf2out_init 		PARAMS ((const char *));
 static void dwarf2out_finish		PARAMS ((const char *));
 static void dwarf2out_define	        PARAMS ((unsigned int, const char *));
@@ -3418,16 +3517,6 @@ extern int flag_traditional;
 #else
 #define DWARF2_ASM_LINE_DEBUG_INFO 0
 #endif
-#endif
-
-/* Define the architecture-dependent minimum instruction length (in bytes).
-   In this implementation of DWARF, this field is used for information
-   purposes only.  Since GCC generates assembly language, we have
-   no a priori knowledge of how many instruction bytes are generated
-   for each source line, and therefore can use only the  DW_LNE_set_address
-   and DW_LNS_fixed_advance_pc line information commands.  */
-#ifndef DWARF_LINE_MIN_INSTR_LENGTH
-#define DWARF_LINE_MIN_INSTR_LENGTH 4
 #endif
 
 /* Minimum line offset in a special line info. opcode.
@@ -5293,8 +5382,8 @@ equate_decl_number_to_die (decl, decl_die)
      tree decl;
      dw_die_ref decl_die;
 {
-  unsigned decl_id = DECL_UID (decl);
-  unsigned num_allocated;
+  unsigned int decl_id = DECL_UID (decl);
+  unsigned int num_allocated;
 
   if (decl_id >= decl_die_table_allocated)
     {
@@ -7186,8 +7275,17 @@ output_line_info ()
   dw2_asm_output_delta (DWARF_OFFSET_SIZE, p2, p1, "Prolog Length");
   ASM_OUTPUT_LABEL (asm_out_file, p1);
 
-  dw2_asm_output_data (1, DWARF_LINE_MIN_INSTR_LENGTH,
+  /* Define the architecture-dependent minimum instruction length (in
+   bytes).  In this implementation of DWARF, this field is used for
+   information purposes only.  Since GCC generates assembly language,
+   we have no a priori knowledge of how many instruction bytes are
+   generated for each source line, and therefore can use only the
+   DW_LNE_set_address and DW_LNS_fixed_advance_pc line information
+   commands.  Accordingly, we fix this as `1', which is "correct
+   enough" for all architectures, and don't let the target override.  */
+  dw2_asm_output_data (1, 1,
 		       "Minimum Instruction Length");
+
   dw2_asm_output_data (1, DWARF_LINE_DEFAULT_IS_STMT_START,
 		       "Default is_stmt_start flag");
   dw2_asm_output_data (1, DWARF_LINE_BASE,
@@ -7956,10 +8054,24 @@ mem_loc_descriptor (rtl, mode)
 	 by a different symbol.  */
       if (GET_CODE (rtl) == SYMBOL_REF && CONSTANT_POOL_ADDRESS_P (rtl))
 	{
-	  rtx tmp = get_pool_constant (rtl);
+	  bool marked;
+	  rtx tmp = get_pool_constant_mark (rtl, &marked);
 
 	  if (GET_CODE (tmp) == SYMBOL_REF)
-	    rtl = tmp;
+	    {
+	      rtl = tmp;
+	      if (CONSTANT_POOL_ADDRESS_P (tmp))
+		get_pool_constant_mark (tmp, &marked);
+	      else
+		marked = true;
+	    }
+
+	  /* If all references to this pool constant were optimized away,
+	     it was not output and thus we can't represent it.
+	     FIXME: might try to use DW_OP_const_value here, though
+	     DW_OP_piece complicates it.  */
+	  if (!marked)
+	    return 0;
 	}
 
       mem_loc_result = new_loc_descr (DW_OP_addr, 0, 0);
@@ -8030,6 +8142,14 @@ mem_loc_descriptor (rtl, mode)
     case CONST_INT:
       mem_loc_result = int_loc_descriptor (INTVAL (rtl));
       break;
+
+    case ADDRESSOF:
+      /* If this is a MEM, return its address.  Otherwise, we can't
+	 represent this.  */
+      if (GET_CODE (XEXP (rtl, 0)) == MEM)
+	return mem_loc_descriptor (XEXP (XEXP (rtl, 0), 0), mode);
+      else
+	return 0;
 
     default:
       abort ();
@@ -8142,6 +8262,24 @@ loc_descriptor_from_tree (loc, addressp)
 	 the names of types.  */
       return 0;
 
+    case CALL_EXPR:
+      return 0;
+
+    case ADDR_EXPR:
+      /* We can support this only if we can look through conversions and
+	 find an INDIRECT_EXPR.  */
+      for (loc = TREE_OPERAND (loc, 0);
+	   TREE_CODE (loc) == CONVERT_EXPR || TREE_CODE (loc) == NOP_EXPR
+	   || TREE_CODE (loc) == NON_LVALUE_EXPR
+	   || TREE_CODE (loc) == VIEW_CONVERT_EXPR
+	   || TREE_CODE (loc) == SAVE_EXPR;
+	   loc = TREE_OPERAND (loc, 0))
+	;
+
+       return (TREE_CODE (loc) == INDIRECT_REF
+	       ? loc_descriptor_from_tree (TREE_OPERAND (loc, 0), addressp)
+	       : 0);
+
     case VAR_DECL:
     case PARM_DECL:
       {
@@ -8235,14 +8373,19 @@ loc_descriptor_from_tree (loc, addressp)
 	return 0;
       break;
 
+    case TRUTH_AND_EXPR: 
+    case TRUTH_ANDIF_EXPR:
     case BIT_AND_EXPR:
       op = DW_OP_and;
       goto do_binop;
 
+    case TRUTH_XOR_EXPR:
     case BIT_XOR_EXPR:
       op = DW_OP_xor;
       goto do_binop;
 
+    case TRUTH_OR_EXPR:
+    case TRUTH_ORIF_EXPR:
     case BIT_IOR_EXPR:
       op = DW_OP_or;
       goto do_binop;
@@ -8336,6 +8479,7 @@ loc_descriptor_from_tree (loc, addressp)
       add_loc_descr (&ret, new_loc_descr (op, 0, 0));
       break;
 
+    case TRUTH_NOT_EXPR:
     case BIT_NOT_EXPR:
       op = DW_OP_not;
       goto do_unop;
@@ -8362,7 +8506,7 @@ loc_descriptor_from_tree (loc, addressp)
 			  TREE_OPERAND (loc, 0), TREE_OPERAND (loc, 1)),
 		   TREE_OPERAND (loc, 1), TREE_OPERAND (loc, 0));
 
-      /* ... fall through ... */
+      /* ... fall through ...  */
 
     case COND_EXPR:
       {
@@ -8938,7 +9082,12 @@ rtl_for_decl_location (decl)
 	  && (CONSTANT_P (rtl)
 	      || (GET_CODE (rtl) == MEM
 	          && CONSTANT_P (XEXP (rtl, 0)))))
-	return rtl;
+	{
+#ifdef ASM_SIMPLIFY_DWARF_ADDR
+	  rtl = ASM_SIMPLIFY_DWARF_ADDR (rtl);
+#endif
+	  return rtl;
+	}
       rtl = NULL_RTX;
     }
   else if (TREE_CODE (decl) == PARM_DECL)
@@ -9007,9 +9156,43 @@ rtl_for_decl_location (decl)
      and will have been substituted directly into all expressions that use it.
      C does not have such a concept, but C++ and other languages do.  */
   else if (TREE_CODE (decl) == VAR_DECL && DECL_INITIAL (decl))
-    rtl = expand_expr (DECL_INITIAL (decl), NULL_RTX, VOIDmode,
-		       EXPAND_INITIALIZER);
+    {
+      /* If a variable is initialized with a string constant without embedded
+	 zeros, build CONST_STRING.  */
+      if (TREE_CODE (DECL_INITIAL (decl)) == STRING_CST
+	  && TREE_CODE (TREE_TYPE (decl)) == ARRAY_TYPE)
+	{
+	  tree arrtype = TREE_TYPE (decl);
+	  tree enttype = TREE_TYPE (arrtype);
+	  tree domain = TYPE_DOMAIN (arrtype);
+	  tree init = DECL_INITIAL (decl);
+	  enum machine_mode mode = TYPE_MODE (enttype);
 
+	  if (GET_MODE_CLASS (mode) == MODE_INT && GET_MODE_SIZE (mode) == 1
+	      && domain
+	      && integer_zerop (TYPE_MIN_VALUE (domain))
+	      && compare_tree_int (TYPE_MAX_VALUE (domain),
+				   TREE_STRING_LENGTH (init) - 1) == 0
+	      && ((size_t) TREE_STRING_LENGTH (init)
+		  == strlen (TREE_STRING_POINTER (init)) + 1))
+	    rtl = gen_rtx_CONST_STRING (VOIDmode, TREE_STRING_POINTER (init));
+	}
+
+      if (rtl == NULL)
+	{
+	  rtl = expand_expr (DECL_INITIAL (decl), NULL_RTX, VOIDmode,
+			     EXPAND_INITIALIZER);
+	  /* If expand_expr returned a MEM, we cannot use it, since
+	     it won't be output, leading to unresolved symbol.  */
+	  if (rtl && GET_CODE (rtl) == MEM)
+	    rtl = NULL;
+	}
+    }
+
+#ifdef ASM_SIMPLIFY_DWARF_ADDR
+  if (rtl)
+    rtl = ASM_SIMPLIFY_DWARF_ADDR (rtl);
+#endif
   return rtl;
 }
 
@@ -9140,7 +9323,7 @@ add_bound_info (subrange_die, bound_attr, bound)
     case ERROR_MARK:
       return;
 
-    /* All fixed-bounds are represented by INTEGER_CST nodes.        */
+    /* All fixed-bounds are represented by INTEGER_CST nodes.  */
     case INTEGER_CST:
       if (! host_integerp (bound, 0)
 	  || (bound_attr == DW_AT_lower_bound
@@ -9239,6 +9422,15 @@ add_bound_info (subrange_die, bound_attr, bound)
 	  ctx = comp_unit_die;
 	else
 	  ctx = lookup_decl_die (current_function_decl);
+
+	/* If we weren't able to find a context, it's most likely the case
+	   that we are processing the return type of the function.  So
+	   make a SAVE_EXPR to point to it and have the limbo DIE code
+	   find the proper die.  The save_expr function doesn't always
+	   make a SAVE_EXPR, so do it ourselves.  */
+	if (ctx == 0)
+	  bound = build (SAVE_EXPR, TREE_TYPE (bound), bound,
+			 current_function_decl, NULL_TREE);
 
 	decl_die = new_die (DW_TAG_variable, ctx, bound);
 	add_AT_flag (decl_die, DW_AT_artificial, 1);
@@ -10681,6 +10873,20 @@ gen_inlined_subroutine_die (stmt, context_die, depth)
       decls_for_scope (stmt, subr_die, depth);
       current_function_has_inlines = 1;
     }
+  else
+    /* We may get here if we're the outer block of function A that was
+       inlined into function B that was inlined into function C.  When
+       generating debugging info for C, dwarf2out_abstract_function(B)
+       would mark all inlined blocks as abstract, including this one.
+       So, we wouldn't (and shouldn't) expect labels to be generated
+       for this one.  Instead, just emit debugging info for
+       declarations within the block.  This is particularly important
+       in the case of initializers of arguments passed from B to us:
+       if they're statement expressions containing declarations, we
+       wouldn't generate dies for their abstract variables, and then,
+       when generating dies for the real variables, we'd die (pun
+       intended :-)  */
+    gen_lexical_block_die (stmt, context_die, depth);
 }
 
 /* Generate a DIE for a field in a record, or structure.  */
@@ -11004,7 +11210,8 @@ gen_struct_or_union_type_die (type, context_die)
       add_AT_flag (type_die, DW_AT_declaration, 1);
 
       /* We don't need to do this for function-local types.  */
-      if (! decl_function_context (TYPE_STUB_DECL (type)))
+      if (TYPE_STUB_DECL (type)
+	  && ! decl_function_context (TYPE_STUB_DECL (type)))
 	VARRAY_PUSH_TREE (incomplete_types, type);
     }
 }
@@ -11986,13 +12193,6 @@ dwarf2out_define (lineno, buffer)
      unsigned lineno ATTRIBUTE_UNUSED;
      const char *buffer ATTRIBUTE_UNUSED;
 {
-  static int initialized = 0;
-  if (!initialized)
-    {
-      dwarf2out_start_source_file (0, primary_filename);
-      initialized = 1;
-    }
-
   if (debug_info_level >= DINFO_LEVEL_VERBOSE)
     {
       named_section_flags (DEBUG_MACINFO_SECTION, SECTION_DEBUG);
@@ -12181,6 +12381,18 @@ dwarf2out_finish (input_filename)
 	    add_child_die (origin->die_parent, die);
 	  else if (die == comp_unit_die)
 	    ;
+	  /* If this was an expression for a bound involved in a function
+	     return type, it may be a SAVE_EXPR for which we weren't able
+	     to find a DIE previously.  So try now.  */
+	  else if (node->created_for
+		   && TREE_CODE (node->created_for) == SAVE_EXPR
+		   && 0 != (origin = (lookup_decl_die
+				      (SAVE_EXPR_CONTEXT
+				       (node->created_for)))))
+	    add_child_die (origin, die);
+	  else if (errorcount > 0 || sorrycount > 0)
+	    /* It's OK to be confused by errors in the input.  */
+	    add_child_die (comp_unit_die, die);
 	  else if (node->created_for
 		   && ((DECL_P (node->created_for)
 		        && (context = DECL_CONTEXT (node->created_for)))
@@ -12198,9 +12410,6 @@ dwarf2out_finish (input_filename)
 		abort ();
 	      add_child_die (origin, die);
 	    }
-	  else if (errorcount > 0 || sorrycount > 0)
-	    /* It's OK to be confused by errors in the input.  */
-	    add_child_die (comp_unit_die, die);
 	  else
 	    abort ();
 	}

@@ -42,6 +42,7 @@ pfe_freeze_thaw_common_language_function (p)
     {
       PFE_FREEZE_THAW_WALK (p->x_stmt_tree.x_last_stmt);
       PFE_FREEZE_THAW_WALK (p->x_stmt_tree.x_last_expr_type);
+      pfe_freeze_thaw_ptr_fp (&p->x_stmt_tree.x_last_expr_filename);
       PFE_FREEZE_THAW_WALK (p->x_scope_stmt_stack);
     }
 }

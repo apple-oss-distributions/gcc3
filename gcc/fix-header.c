@@ -1331,6 +1331,7 @@ fatal VPARAMS ((const char *str, ...))
 /* Dummies to let cpp0 link.  */
 int c_language = -1;
 
+void warning PARAMS ((char *));
 void warning (char *msgid) { printf ("%s\n", msgid); }
 /* APPLE LOCAL end indexing */
 

@@ -59,7 +59,7 @@ Boston, MA 02111-1307, USA.  */
 
 /* String containing the assembler's comment-starter.  */
 
-#define ASM_COMMENT_START "/"
+#define ASM_COMMENT_START "#"
 
 /* We don't do APP_ON/APP_OFF.  */
 
@@ -155,7 +155,10 @@ do {									    \
 #undef ASM_OUTPUT_ALIGN
 #define ASM_OUTPUT_ALIGN(FILE,LOG)	\
  do { if ((LOG) != 0)			\
-      if (in_text_section ()) 		\
+      if (in_text_section ()		\
+          || darwin_named_section_is ("__TEXT,__textcoal,coalesced") \
+          || darwin_named_section_is ("__TEXT,__textcoal_nt,coalesced,no_toc") \
+          || darwin_named_section_is (STATIC_INIT_SECTION)) \
 	fprintf (FILE, "\t%s %d,0x90\n", ALIGN_ASM_OP, (LOG)); \
       else \
 	fprintf (FILE, "\t%s %d\n", ALIGN_ASM_OP, (LOG)); \
@@ -297,8 +300,10 @@ enum
 /* Macro to call darwin_pfe_freeze_thaw_target_additions().  If this macro is
    not defined then the target additions function is never called.  */
 #define PFE_TARGET_ADDITIONS(hdr) darwin_pfe_freeze_thaw_target_additions (hdr)
-#endif
 
-extern int flag_altivec;
+/* Macro to call darwin_pfe_maybe_savestring to determine whether strings
+   should be allocated by pfe_savestring() or not.  */
+#define PFE_TARGET_MAYBE_SAVESTRING(s) darwin_pfe_maybe_savestring ((char *)(s))
+#endif
 
 #define USER_LABEL_PREFIX ""

@@ -35,6 +35,11 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "intl.h"
 #include "diagnostic.h"
 
+/* APPLE LOCAL PFE */
+#ifdef PFE
+#include "pfe/pfe.h"
+#endif
+
 #define obstack_chunk_alloc xmalloc
 #define obstack_chunk_free  free
 
@@ -888,8 +893,8 @@ format_with_decl (buffer, decl)
   if (*p == '%')		/* Print the name.  */
     {
       const char *const n = (DECL_NAME (decl)
-		 ? (*decl_printable_name) (decl, 2)
-		 : _("((anonymous))"));
+			     ? (*decl_printable_name) (decl, 2)
+			     : _("((anonymous))"));
       output_add_string (buffer, n);
       while (*p)
 	{
@@ -920,6 +925,15 @@ diagnostic_for_decl (decl, msgid, args_ptr, warn)
 {
   output_state os;
 
+  /* APPLE LOCAL begin handle -Wno-system-headers (2910306)  ilr */
+  /* If -Wno-system-headers is in effect and we want to report a
+     decl warning then suppress it.  */
+  if (warn 
+      && (inhibit_warnings 
+          || (DECL_IN_SYSTEM_HEADER (decl) && !warn_system_headers)))
+    return;
+  /* APPLE LOCAL end handle -Wno-system-headers (2910306)  ilr */
+    
   if (diagnostic_lock++)
     error_recursion ();
 
@@ -1018,6 +1032,12 @@ fatal_io_error VPARAMS ((const char *msgid, ...))
   diagnostic_finish ((output_buffer *) global_dc);
   output_buffer_state (diagnostic_buffer) = os;
   VA_CLOSE (ap);
+
+/* APPLE LOCAL PFE */
+#ifdef PFE
+  pfe_close_pfe_file (pfe_operation == PFE_DUMP);
+#endif
+
   exit (FATAL_EXIT_CODE);
 }
 
@@ -1229,6 +1249,12 @@ fatal_error VPARAMS ((const char *msgid, ...))
   VA_CLOSE (ap);
 
   fnotice (stderr, "compilation terminated.\n");
+
+/* APPLE LOCAL PFE */
+#ifdef PFE
+  pfe_close_pfe_file (pfe_operation == PFE_DUMP);
+#endif
+
   exit (FATAL_EXIT_CODE);
 }
 
@@ -1257,12 +1283,18 @@ internal_error VPARAMS ((const char *msgid, ...))
   if (diagnostic_lock)
     error_recursion ();
 
+#ifndef ENABLE_CHECKING
   if (errorcount > 0 || sorrycount > 0)
     {
       fnotice (stderr, "%s:%d: confused by earlier errors, bailing out\n",
 	       input_filename, lineno);
+/* APPLE LOCAL PFE */
+#ifdef PFE
+      pfe_close_pfe_file (pfe_operation == PFE_DUMP);
+#endif
       exit (FATAL_EXIT_CODE);
     }
+#endif
 
   if (internal_error_function != 0)
     (*internal_error_function) (_(msgid), &ap);
@@ -1276,6 +1308,12 @@ internal_error VPARAMS ((const char *msgid, ...))
 "Please submit a full bug report,\n\
 with preprocessed source if appropriate.\n\
 See %s for instructions.\n", GCCBUGURL);
+
+/* APPLE LOCAL PFE */
+#ifdef PFE
+  pfe_close_pfe_file (pfe_operation == PFE_DUMP);
+#endif
+
   exit (FATAL_EXIT_CODE);
 }
 
@@ -1426,6 +1464,12 @@ error_recursion ()
 "Please submit a full bug report,\n\
 with preprocessed source if appropriate.\n\
 See %s for instructions.\n", GCCBUGURL);
+
+/* APPLE LOCAL PFE */
+#ifdef PFE
+  pfe_close_pfe_file (pfe_operation == PFE_DUMP);
+#endif
+
   exit (FATAL_EXIT_CODE);
 }
 
@@ -1557,74 +1601,72 @@ default_diagnostic_finalizer (buffer, dc)
   output_destroy_prefix (buffer);
 }
 
-/* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
 void 
 warn_deprecated_use (node)
      tree node;
 {
-  if (node)
+    /* APPLE LOCAL begin unavailable */
+  if (node == 0)
+    return;
+
+    /* APPLE LOCAL begin unavailable */
+  if (DECL_P (node) && TREE_UNAVAILABLE (node))
+    error ("`%s' is not available (declared at %s:%d)",
+	   IDENTIFIER_POINTER (DECL_NAME (node)),
+	   DECL_SOURCE_FILE (node), DECL_SOURCE_LINE (node));
+  else if (warn_deprecated_decl && DECL_P (node))
+    /* APPLE LOCAL end unavailable */
+    warning ("`%s' is deprecated (declared at %s:%d)",
+	     IDENTIFIER_POINTER (DECL_NAME (node)),
+	     DECL_SOURCE_FILE (node), DECL_SOURCE_LINE (node));
+  else if (TYPE_P (node))
     {
-      if (DECL_P (node))
+      const char *what = NULL;
+      tree decl = TYPE_STUB_DECL (node);
+
+      if (TREE_CODE (TYPE_NAME (node)) == IDENTIFIER_NODE)
+	what = IDENTIFIER_POINTER (TYPE_NAME (node));
+      else if (TREE_CODE (TYPE_NAME (node)) == TYPE_DECL
+	       && DECL_NAME (TYPE_NAME (node)))
+	what = IDENTIFIER_POINTER (DECL_NAME (TYPE_NAME (node)));
+	
+    /* APPLE LOCAL begin unavailable */
+      if (TREE_UNAVAILABLE (node))
 	{
-	  if (TREE_UNAVAILABLE (node))
-	    error ("`%s' is not available (declared at %s:%d)",
-		   IDENTIFIER_POINTER (DECL_NAME (node)),
-		   DECL_SOURCE_FILE (node), DECL_SOURCE_LINE (node));
-	  else if (warn_deprecated_decl)
-	    warning ("`%s' is deprecated (declared at %s:%d)",
-		     IDENTIFIER_POINTER (DECL_NAME (node)),
-		     DECL_SOURCE_FILE (node), DECL_SOURCE_LINE (node));
+	  if (what)
+	    {
+	      if (decl)
+		error ("`%s' is not available (declared at %s:%d)", what,
+		       DECL_SOURCE_FILE (decl), DECL_SOURCE_LINE (decl));
+	      else
+		error ("`%s' is not available", what);
+	    }
+	  else
+	    {
+	      if (decl)
+		error ("type is not available (declared at %s:%d)",
+		       DECL_SOURCE_FILE (decl), DECL_SOURCE_LINE (decl));
+	      else
+		error ("type is not available");
+	    }
 	}
-      else if (TYPE_P (node))
+      else if (warn_deprecated_decl)
 	{
-	  char *what = NULL;
-	  tree decl = TYPE_STUB_DECL (node);
-	  
-	  if (TREE_CODE (TYPE_NAME (node)) == IDENTIFIER_NODE)
-	    what = IDENTIFIER_POINTER (TYPE_NAME (node));
-	  else if (TREE_CODE (TYPE_NAME (node)) == TYPE_DECL
-		   && DECL_NAME (TYPE_NAME (node)))
-	    what = IDENTIFIER_POINTER (DECL_NAME (TYPE_NAME (node)));
-	    
-	  if (TREE_UNAVAILABLE (node))
-	    {
-	      if (what)
-		{
-		  if (decl)
-		    error ("`%s' is not available (declared at %s:%d)", what,
-			   DECL_SOURCE_FILE (decl), DECL_SOURCE_LINE (decl));
-		  else
-		    error ("`%s' is not available", what);
-		}
-	      else
-		{
-		  if (decl)
-		    error ("type is not available (declared at %s:%d)",
-			   DECL_SOURCE_FILE (decl), DECL_SOURCE_LINE (decl));
-		  else
-		    error ("type is not available");
-		}
-	    }
-	  else if (warn_deprecated_decl)
-	    {
-	      if (what)
-		{
-		  if (decl)
-		    warning ("`%s' is deprecated (declared at %s:%d)", what,
-			     DECL_SOURCE_FILE (decl), DECL_SOURCE_LINE (decl));
-		  else
-		    warning ("`%s' is deprecated", what);
-		}
-	      else
-		{
-		  if (decl)
-		    warning ("type is deprecated (declared at %s:%d)",
-			     DECL_SOURCE_FILE (decl), DECL_SOURCE_LINE (decl));
-		  else
-		    warning ("type is deprecated");
-		}
-	    }
+	  /* APPLE LOCAL end unavailable */
+      if (what)
+	{
+	  if (decl)
+	    warning ("`%s' is deprecated (declared at %s:%d)", what,
+		     DECL_SOURCE_FILE (decl), DECL_SOURCE_LINE (decl));
+	  else
+	    warning ("`%s' is deprecated", what);
+	}
+      else if (decl)
+	warning ("type is deprecated (declared at %s:%d)",
+		 DECL_SOURCE_FILE (decl), DECL_SOURCE_LINE (decl));
+      else
+	warning ("type is deprecated");
+      /* APPLE LOCAL unavailable */
 	}
     }
 }
-/* APPLE LOCAL end deprecated ilr */

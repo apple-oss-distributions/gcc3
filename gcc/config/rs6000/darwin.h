@@ -35,9 +35,12 @@ Boston, MA 02111-1307, USA.  */
 #define TARGET_TOC 0
 #define TARGET_NO_TOC 1
 
-/* APPLE LOCAL RS6000_LONG_BRANCH */
+/* APPLE LOCAL long-branch */
 #define RS6000_LONG_BRANCH (1)
 #define OUTPUT_COMPILER_STUB (1)
+
+/* Handle #pragma weak and #pragma pack.  */
+#define HANDLE_SYSV_PRAGMA
 
 /* The Darwin ABI always includes AltiVec, can't be (validly) turned
    off.  */
@@ -70,8 +73,25 @@ Boston, MA 02111-1307, USA.  */
 #undef  FRAME_POINTER_REGNUM
 #define FRAME_POINTER_REGNUM 30
 
-#undef  PIC_OFFSET_TABLE_REGNUM
-#define PIC_OFFSET_TABLE_REGNUM 31
+#undef  RS6000_PIC_OFFSET_TABLE_REGNUM
+#define RS6000_PIC_OFFSET_TABLE_REGNUM 31
+
+/* APPLE LOCAL */
+/* -pg has a problem which is normally concealed by -fPIC;
+   either -mdynamic-no-pic or -static exposes the -pg problem, causing the
+   crash.  FSF gcc for Darwin also has this bug.  The problem is that -pg
+   causes several int registers to be saved and restored although they may
+   not actually be used (config/rs6000/rs6000.c:first_reg_to_save()).  In the
+   rare case where none of them is actually used, a consistency check fails
+   (correctly).  This cannot happen with -fPIC because the PIC register (R31)
+   is always "used" in the sense checked by the consistency check.  The
+   easy fix, here, is therefore to mark R31 always "used" whenever -pg is on.
+   A better, but harder, fix would be to improve -pg's register-use
+   logic along the lines suggested by comments in the function listed above. */
+#undef PIC_OFFSET_TABLE_REGNUM
+#define PIC_OFFSET_TABLE_REGNUM ((flag_pic || profile_flag) \
+    ? RS6000_PIC_OFFSET_TABLE_REGNUM \
+    : INVALID_REGNUM)
 
 /* Pad the outgoing args area to 16 bytes instead of the usual 8.  */
 
@@ -281,6 +301,10 @@ extern unsigned round_type_align (union tree_node*, unsigned, unsigned); /* rs60
 /* Macro to call darwin_pfe_freeze_thaw_target_additions().  If this macro is
    not defined then the target additions function is never called.  */
 #define PFE_TARGET_ADDITIONS(hdr) darwin_pfe_freeze_thaw_target_additions (hdr)
+
+/* Macro to call darwin_pfe_maybe_savestring to determine whether strings
+   should be allocated by pfe_savestring() or not.  */
+#define PFE_TARGET_MAYBE_SAVESTRING(s) darwin_pfe_maybe_savestring ((char *)(s))
 #endif
 
 /* APPLE LOCAL begin branch cost */
@@ -297,3 +321,7 @@ extern unsigned round_type_align (union tree_node*, unsigned, unsigned); /* rs60
    space/speed.  */
 #undef MAX_LONG_TYPE_SIZE
 #define MAX_LONG_TYPE_SIZE 32
+
+/* APPLE LOCAL indirect calls in R12 */
+/* Address of indirect call must be computed here */
+#define MAGIC_INDIRECT_CALL_REG 12

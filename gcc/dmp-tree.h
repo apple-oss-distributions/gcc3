@@ -42,6 +42,8 @@ extern lang_dump_tree_p_t set_dump_tree_p PARAMS ((lang_dump_tree_p_t));
 /* Main entry  */
 extern void dmp_tree		   PARAMS ((tree));
 extern void dmp_tree1		   PARAMS ((tree, int));
+extern void dmp_tree2		   PARAMS ((tree));
+extern void dmp_tree3		   PARAMS ((FILE *, tree, int));
 
 /* Recursive entry  */
 extern void dump_tree 		   PARAMS ((FILE *, const char *, tree, int));
@@ -59,6 +61,15 @@ extern void print_real_constant    PARAMS ((FILE *, tree));
 extern void print_string_constant  PARAMS ((FILE *, const char *, int));
 extern void print_tree_flags	   PARAMS ((FILE *, tree));
 
+/* State switches for dmp_tree() to tell it how to record and handle
+   previously visited nodes.  */
+enum dmp_tree_visit_state {
+  DMP_TREE_VISIT_ANY,			/* allow display of any node anytime */
+  DMP_TREE_VISIT_ONCE,			/* only display once per dmp_tree()  */
+  DMP_TREE_VISIT_ONCE1,			/* only once, but need to init hash  */
+  DMP_TREE_VISIT_ONCE2			/* only once, but do not clear hash  */
+};
+
 typedef struct {		  	/* dmp_tree.c state switches... */
   int  max_code; 			/* max_node_code must be 1st    */
   int  nesting_depth;
@@ -71,6 +82,7 @@ typedef struct {		  	/* dmp_tree.c state switches... */
   int  line_cnt;
   int  doing_tree_list;
   int  max_depth;
+  enum dmp_tree_visit_state visit_only_once;
 } dump_tree_state_t;
 
 extern dump_tree_state_t dump_tree_state;
@@ -106,9 +118,7 @@ extern int dmp_tree_fputs	   PARAMS((const char *, FILE *));
 #define fputs dmp_tree_fputs
 #endif /* DMP_TREE_WRAPPED_OUTPUT */
 
-#undef HOST_PTR_PRINTF
-#define HOST_PTR_PRINTF "0x%X"	   /* dumpers use this instead */
-#define HOST_PTR_PRINTF_VALUE(p) (unsigned int) (p)
+#define HOST_PTR_PRINTF_VALUE(p) (char *) (p)
 
 #define INDENT 1		   /* controls nesting tab value */
 

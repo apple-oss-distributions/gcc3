@@ -1,4 +1,4 @@
-/* APPLE LOCAL debugging */
+/* APPLE LOCAL file debugging */
 /* ObjC tree & rtl accessors defined as functions for use in a debugger.
    Copyright (C) 2001  Free Software Foundation, Inc.
    Contributed by Ira L. Ruben (ira@apple.com)
@@ -68,8 +68,5 @@ fn_1 ( PROTOCOL_FORWARD_DECL, tree, tree )
 fn_1 ( PROTOCOL_DEFINED, tree, tree )
 fn_1 ( TREE_STATIC_TEMPLATE, int, tree )
 fn_1 ( TYPE_PROTOCOL_LIST, tree, tree)
-fn_1 ( IS_ID, int, tree )
-fn_1 ( IS_PROTOCOL_QUALIFIED_ID, int, tree )
-fn_1 ( IS_SUPER, int, tree )
 
 #endif /* ENABLE_IDEBUG */

@@ -74,22 +74,40 @@ c_dump_identifier (file, node, indent, after_id)
       if (C_IS_RESERVED_WORD (node))
 	{
 	  tree rid = ridpointers[C_RID_CODE (node)];
-	  fprintf (file, " rid="HOST_PTR_PRINTF"(%s)",
-	  		HOST_PTR_PRINTF_VALUE((void *)rid),
-			IDENTIFIER_POINTER (rid));
+	  fprintf (file, " rid=");
+	  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE((void *)rid));
+	  fprintf (file, "(%s)", IDENTIFIER_POINTER (rid));
 	}
       if (IDENTIFIER_GLOBAL_VALUE (node))
-	fprintf (file, " gbl="HOST_PTR_PRINTF, IDENTIFIER_GLOBAL_VALUE (node));
+	{
+	  fprintf (file, " gbl=");
+	  fprintf (file, HOST_PTR_PRINTF, IDENTIFIER_GLOBAL_VALUE (node));
+	}
       if (IDENTIFIER_LOCAL_VALUE (node))
-	fprintf (file, " lcl="HOST_PTR_PRINTF, IDENTIFIER_LOCAL_VALUE (node));
+	{
+	  fprintf (file, " lcl=");
+	  fprintf (file, HOST_PTR_PRINTF, IDENTIFIER_LOCAL_VALUE (node));
+	}
       if (IDENTIFIER_LABEL_VALUE (node))
-	fprintf (file, " lbl="HOST_PTR_PRINTF, IDENTIFIER_LABEL_VALUE (node));
+	{
+	  fprintf (file, " lbl=");
+	  fprintf (file, HOST_PTR_PRINTF, IDENTIFIER_LABEL_VALUE (node));
+	}
       if (IDENTIFIER_IMPLICIT_DECL (node))
-	fprintf (file, " impl="HOST_PTR_PRINTF, IDENTIFIER_IMPLICIT_DECL (node));
+	{
+	  fprintf (file, " impl=");
+	  fprintf (file, HOST_PTR_PRINTF, IDENTIFIER_IMPLICIT_DECL (node));
+	}
       if (IDENTIFIER_ERROR_LOCUS (node))
-	fprintf (file, " err-locus="HOST_PTR_PRINTF, IDENTIFIER_ERROR_LOCUS (node));
+	{
+	  fprintf (file, " err-locus=");
+	  fprintf (file, HOST_PTR_PRINTF, IDENTIFIER_ERROR_LOCUS (node));
+	}
       if (IDENTIFIER_LIMBO_VALUE (node))
-	fprintf (file, " limbo-value="HOST_PTR_PRINTF, IDENTIFIER_LIMBO_VALUE (node));
+	{
+	  fprintf (file, " limbo-value=");
+	  fprintf (file, HOST_PTR_PRINTF, IDENTIFIER_LIMBO_VALUE (node));
+	}
     }
   else
     {
@@ -198,6 +216,20 @@ c_dump_lineno_p (file, node)
   return 0;
 }
 
+/* Called only by tree-dump.c when doing a full compilation tree dump
+   under one of the -fdmp-xxxx options.  This makes tree_dump.c, which
+   is common to all languages, independent of dmp_tree, which currently
+   only supports the c languages.  */
+int 
+c_dmp_tree3 (file, node, flags)
+     FILE *file;
+     tree node;
+     int flags;
+{
+  dmp_tree3 (file, node, flags);
+  return 1;
+}
+
 #endif /* !CP_DMP_TREE */
 
 /*-------------------------------------------------------------------*/
@@ -283,9 +315,8 @@ print_DECL_STMT (file, annotation, node, indent)
 {
   tree type;
   
-  fprintf (file, " %s="HOST_PTR_PRINTF,
-  		tree_code_name[(int) TREE_CODE (DECL_STMT_DECL (node))],
-  		HOST_PTR_PRINTF_VALUE (DECL_STMT_DECL (node)));
+  fprintf (file, " %s=", tree_code_name[(int) TREE_CODE (DECL_STMT_DECL (node))]);
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (DECL_STMT_DECL (node)));
   
   type = TREE_TYPE (DECL_STMT_DECL (node));
   if (type && TREE_CODE_CLASS (TREE_CODE (type)) == 't') 
@@ -446,11 +477,27 @@ print_SCOPE_STMT (file, annotation, node, indent)
     fputs (" no-cleanups", file);
   if (SCOPE_PARTIAL_P (node))
     fputs (" partial", file);
-  fprintf (file, " block="HOST_PTR_PRINTF,
+  fprintf (file, " block=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (SCOPE_STMT_BLOCK (node)));
   
   if (SCOPE_BEGIN_P (node) || !node_seen (SCOPE_STMT_BLOCK (node), FALSE))
     dump_tree (file, NULL, SCOPE_STMT_BLOCK (node), indent + INDENT);
+  
+  (void)node_seen (node, TRUE);
+  
+  for (node = TREE_CHAIN (node); node; node = TREE_CHAIN (node))
+    dump_tree (file, annotation, node, indent + INDENT);
+}
+
+static void
+print_FILE_STMT (file, annotation, node, indent)
+     FILE *file;
+     const char *annotation ATTRIBUTE_UNUSED;
+     tree node;
+     int indent;
+{
+  print_operands (file, node, indent, TRUE, NULL);
 }
 
 static void
@@ -483,6 +530,15 @@ print_COMPOUND_LITERAL_EXPR (file, annotation, node, indent)
   print_operands (file, node, indent, TRUE, NULL);
 }
 
+static void
+print_CLEANUP_STMT (FILE *file,
+		    const char *annotation ATTRIBUTE_UNUSED,
+		    tree node,
+		    int indent)
+{
+  print_operands (file, node, indent, TRUE, "(decl)", "(expr)", NULL);
+}
+
 /*-------------------------------------------------------------------*/
 
 /* Return 1 if tree node is a C++ specific tree node from cp-tree.def
@@ -499,10 +555,10 @@ c_dump_tree_p (file, annotation, node, indent)
 {
    switch (TREE_CODE (node)) 
    {
-   #define DEFTREECODE(SYM, NAME, TYPE, LENGTH) \
+#   define DEFTREECODE(SYM, NAME, TYPE, LENGTH) \
      	   case SYM: print_ ## SYM (file, annotation, node, indent); break;
-   #include "c-common.def"
-   #undef DEFTREECODE
+#   include "c-common.def"
+#   undef DEFTREECODE
    default:
      return c_prev_lang_dump_tree_p (file, annotation, node, indent);
    }

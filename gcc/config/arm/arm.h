@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler, for ARM.
    Copyright (C) 1991, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
-   2001 Free Software Foundation, Inc.
+   2001, 2002 Free Software Foundation, Inc.
    Contributed by Pieter `Tiggr' Schoenmakers (rcpieter@win.tue.nl)
    and Martin Simmons (@harleqn.co.uk).
    More major hacks by Richard Earnshaw (rearnsha@arm.com)
@@ -81,8 +81,6 @@ extern struct rtx_def * pool_vector_label;
 /* Set to 1 when a return insn is output, this means that the epilogue
    is not needed. */
 extern int return_used_this_function;
-/* Nonzero if the prologue must setup `fp'.  */
-extern int current_function_anonymous_args;
 
 /* Just in case configure has failed to define anything. */
 #ifndef TARGET_CPU_DEFAULT
@@ -847,14 +845,15 @@ extern const char * structure_size_string;
 
 #define CONDITIONAL_REGISTER_USAGE				\
 {								\
+  int regno;							\
+								\
   if (TARGET_SOFT_FLOAT || TARGET_THUMB)			\
     {								\
-      int regno;						\
       for (regno = FIRST_ARM_FP_REGNUM;				\
 	   regno <= LAST_ARM_FP_REGNUM; ++regno)		\
 	fixed_regs[regno] = call_used_regs[regno] = 1;		\
     }								\
-  if (flag_pic)							\
+  if (PIC_OFFSET_TABLE_REGNUM != INVALID_REGNUM)		\
     {								\
       fixed_regs[PIC_OFFSET_TABLE_REGNUM] = 1;			\
       call_used_regs[PIC_OFFSET_TABLE_REGNUM] = 1;		\
@@ -1004,23 +1003,9 @@ extern const char * structure_size_string;
     && REGNO != ARG_POINTER_REGNUM)	\
    ? 1 : NUM_REGS (MODE))
 
-/* Value is 1 if hard register REGNO can hold a value of machine-mode MODE.
-   This is TRUE for ARM regs since they can hold anything, and TRUE for FPU
-   regs holding FP.
-   For the Thumb we only allow values bigger than SImode in registers 0 - 6,
-   so that there is always a second lo register available to hold the upper
-   part of the value.  Probably we ought to ensure that the register is the
-   start of an even numbered register pair.  */
+/* Return true if REGNO is suitable for holding a quantity of type MODE.  */
 #define HARD_REGNO_MODE_OK(REGNO, MODE)					\
-  (TARGET_ARM ?								\
-   ((GET_MODE_CLASS (MODE) == MODE_CC) ? (REGNO == CC_REGNUM) :		\
-    (   REGNO <= LAST_ARM_REGNUM					\
-     || REGNO == FRAME_POINTER_REGNUM					\
-     || REGNO == ARG_POINTER_REGNUM					\
-     || GET_MODE_CLASS (MODE) == MODE_FLOAT))				\
-   :									\
-   ((GET_MODE_CLASS (MODE) == MODE_CC) ? (REGNO == CC_REGNUM) :		\
-    (NUM_REGS (MODE) < 2 || REGNO < LAST_LO_REGNUM)))
+  arm_hard_regno_mode_ok ((REGNO), (MODE))
 
 /* Value is 1 if it is a good idea to tie two pseudo registers
    when one has mode MODE1 and one has mode MODE2.
@@ -1042,6 +1027,13 @@ extern const char * structure_size_string;
     16, 17, 18, 19, 20, 21, 22, 23, \
     24, 25, 26			    \
 }
+
+/* Interrupt functions can only use registers that have already been
+   saved by the prologue, even if they would normally be
+   call-clobbered.  */
+#define HARD_REGNO_RENAME_OK(SRC, DST)					\
+	(! IS_INTERRUPT (cfun->machine->func_type) ||			\
+		regs_ever_live[DST])
 
 /* Register and constant classes.  */
 
@@ -1092,7 +1084,7 @@ enum reg_class
   { 0x200FFFF }, /* GENERAL_REGS */	\
   { 0x2FFFFFF }  /* ALL_REGS */		\
 }
-  
+
 /* The same information, inverted:
    Return the class number of the smallest class containing
    reg number REGNO.  This could be a conditional expression
@@ -1287,8 +1279,8 @@ enum reg_class
 					  GEN_INT (high)),		   \
 			    GEN_INT (low));				   \
 	  push_reload (XEXP (X, 0), NULL_RTX, &XEXP (X, 0), NULL,	   \
-		       BASE_REG_CLASS, GET_MODE (X), VOIDmode, 0, 0,	   \
-		       OPNUM, TYPE);					   \
+		       MODE_BASE_REG_CLASS (MODE), GET_MODE (X), 	   \
+		       VOIDmode, 0, 0, OPNUM, TYPE);			   \
 	  goto WIN;							   \
 	}								   \
     }									   \
@@ -1314,7 +1306,7 @@ enum reg_class
       rtx orig_X = X;							\
       X = copy_rtx (X);							\
       push_reload (orig_X, NULL_RTX, &X, NULL,				\
-		   BASE_REG_CLASS,					\
+		   MODE_BASE_REG_CLASS (MODE),				\
 		   Pmode, VOIDmode, 0, 0, OPNUM, TYPE);			\
       goto WIN;								\
     }									\
@@ -1467,6 +1459,8 @@ typedef struct machine_function
   int lr_save_eliminated;
   /* Records the type of the current function.  */
   unsigned long func_type;
+  /* Record if the function has a variable argument list.  */
+  int uses_anonymous_args;
 }
 machine_function;
 
@@ -1549,8 +1543,7 @@ typedef struct
    that way.  */
 #define SETUP_INCOMING_VARARGS(CUM, MODE, TYPE, PRETEND_SIZE, NO_RTL)	\
 {									\
-  extern int current_function_anonymous_args;				\
-  current_function_anonymous_args = 1;					\
+  cfun->machine->uses_anonymous_args = 1;				\
   if ((CUM).nregs < NUM_ARG_REGS)					\
     (PRETEND_SIZE) = (NUM_ARG_REGS - (CUM).nregs) * UNITS_PER_WORD;	\
 }
@@ -1594,12 +1587,14 @@ typedef struct
 }
 #endif
 
+#ifndef THUMB_FUNCTION_PROFILER
 #define THUMB_FUNCTION_PROFILER(STREAM, LABELNO)	\
 {							\
   fprintf (STREAM, "\tmov\tip, lr\n");			\
   fprintf (STREAM, "\tbl\tmcount\n");			\
   fprintf (STREAM, "\t.word\tLP%d\n", LABELNO);		\
 }
+#endif
 
 #define FUNCTION_PROFILER(STREAM, LABELNO)		\
   if (TARGET_ARM)					\
@@ -1769,8 +1764,8 @@ typedef struct
 /* Length in units of the trampoline for entering a nested function.  */
 #define TRAMPOLINE_SIZE  (TARGET_ARM ? 16 : 24)
 
-/* Alignment required for a trampoline in units.  */
-#define TRAMPOLINE_ALIGN  4
+/* Alignment required for a trampoline in bits.  */
+#define TRAMPOLINE_ALIGNMENT  32
 
 /* Emit RTL insns to initialize the variable parts of a trampoline.
    FNADDR is an RTX for the address of the function's pure code.
@@ -1855,7 +1850,8 @@ typedef struct
 #define THUMB_LEGITIMATE_CONSTANT_P(X)	\
  (   GET_CODE (X) == CONST_INT		\
   || GET_CODE (X) == CONST_DOUBLE	\
-  || CONSTANT_ADDRESS_P (X))
+  || CONSTANT_ADDRESS_P (X)		\
+  || flag_pic)
 
 #define LEGITIMATE_CONSTANT_P(X)	\
   (TARGET_ARM ? ARM_LEGITIMATE_CONSTANT_P (X) : THUMB_LEGITIMATE_CONSTANT_P (X))
@@ -1903,13 +1899,13 @@ typedef struct
    or known to be defined in this file then encode a short call flag.
    This macro is used inside the ENCODE_SECTION macro.  */
 #define ARM_ENCODE_CALL_TYPE(decl)					\
-  if (TREE_CODE (decl) == FUNCTION_DECL)				\
+  if (TREE_CODE_CLASS (TREE_CODE (decl)) == 'd')			\
     {									\
-      if (DECL_WEAK (decl))						\
+      if (TREE_CODE (decl) == FUNCTION_DECL && DECL_WEAK (decl))	\
         arm_encode_call_attribute (decl, LONG_CALL_FLAG_CHAR);		\
       else if (! TREE_PUBLIC (decl))        				\
         arm_encode_call_attribute (decl, SHORT_CALL_FLAG_CHAR);		\
-    }									\
+    }
 
 /* Symbols in the text segment can be accessed without indirecting via the
    constant pool; it may take an extra binary operation, but this is still
@@ -2356,12 +2352,6 @@ typedef struct
    Do not define this if the table should contain absolute addresses. */
 /* #define CASE_VECTOR_PC_RELATIVE 1 */
 
-/* Specify the tree operation to be used to convert reals to integers.  */
-#define IMPLICIT_FIX_EXPR  FIX_ROUND_EXPR
-
-/* This is the kind of divide that is easiest to do in the general case.  */
-#define EASY_DIV_EXPR  TRUNC_DIV_EXPR
-
 /* signed 'char' is most compatible, but RISC OS wants it unsigned.
    unsigned is probably best, but may break some code.  */
 #ifndef DEFAULT_SIGNED_CHAR
@@ -2390,11 +2380,6 @@ typedef struct
   (TARGET_THUMB ? ZERO_EXTEND :						\
    ((arm_arch4 || (MODE) == QImode) ? ZERO_EXTEND			\
     : ((BYTES_BIG_ENDIAN && (MODE) == HImode) ? SIGN_EXTEND : NIL)))
-
-/* Define this if zero-extension is slow (more than one real instruction).
-   On the ARM, it is more than one instruction only if not fetching from
-   memory.  */
-/* #define SLOW_ZERO_EXTEND */
 
 /* Nonzero if access to memory by bytes is slow and undesirable.  */
 #define SLOW_BYTE_ACCESS 0

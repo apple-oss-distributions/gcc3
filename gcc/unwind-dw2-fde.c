@@ -38,10 +38,12 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "unwind-dw2-fde.h"
 #include "gthr.h"
 #endif
+/* APPLE LOCAL FSF candidate */
+#include <string.h>
 
 /* APPLE LOCAL  */
 #ifdef DWARF2_OBJECT_END_PTR_EXTENSION
-static inline VALID_FDE_P(struct object *OB, struct dwarf_fde *FDE)
+static inline int VALID_FDE_P(struct object *OB, struct dwarf_fde *FDE)
 {
   if ((char *)FDE < OB->dwarf_fde_end) 
     {
@@ -89,9 +91,10 @@ static struct km_object_info {
 
 /* Bits in the examined_p field of struct __live_images.  */
 enum {
-  EXAMINED_IMAGE_MASK = 1,	/* We've seen this one  */
-  ALLOCED_IMAGE_MASK = 2	/* We had to alloc a duplicate FDE  */
+  EXAMINED_IMAGE_MASK = 1,	/* We've seen this one.  */
+  ALLOCED_IMAGE_MASK = 2,	/* We had to alloc a duplicate FDE  */
 				/* (there was a missing NULL terminator!)  */
+  IMAGE_IS_TEXT_MASK = 4	/* This image is in the TEXT segment.  */
 };
 
 /* Now just redefine the SEEN_OBJECTS and UNSEEN_OBJECTS vars to be
@@ -152,6 +155,14 @@ static void init_object_mutex_once (void)
 	  image->examined_p |= EXAMINED_IMAGE_MASK;
 
 	  fde = getsectdatafromheader (image->mh, "__DATA", "__eh_frame", &sz);
+	  if (fde == NULL)
+	    {
+	      fde = getsectdatafromheader (image->mh, "__TEXT",
+					   "__eh_frame", &sz);
+	      if (fde != NULL)
+		image->examined_p |= IMAGE_IS_TEXT_MASK;
+	    }
+
 	  /* If .eh_frame is empty, don't register at all.  */
 	  if (fde != NULL && sz > 0
 #ifndef DWARF2_OBJECT_END_PTR_EXTENSION
@@ -264,7 +275,7 @@ __register_frame_info_bases (void *begin, struct object *ob,
 			     void *tbase, void *dbase)
 {
   /* If .eh_frame is empty, don't register at all.  */
-  if (*(uword *)begin == 0)
+  if (*(uword *) begin == 0)
     return;
 
   ob->pc_begin = (void *)-1;
@@ -295,7 +306,7 @@ __register_frame (void *begin)
   struct object *ob;
 
   /* If .eh_frame is empty, don't register at all.  */
-  if (*(uword *)begin == 0)
+  if (*(uword *) begin == 0)
     return;
 
   ob = (struct object *) malloc (sizeof (struct object));
@@ -359,7 +370,7 @@ __deregister_frame_info_bases (void *begin)
   struct object *ob = 0;
 
   /* If .eh_frame is empty, we haven't registered.  */
-  if (*(uword *)begin == 0)
+  if (*(uword *) begin == 0)
     return ob;
 
   init_object_mutex_once ();
@@ -416,7 +427,7 @@ void
 __deregister_frame (void *begin)
 {
   /* If .eh_frame is empty, we haven't registered.  */
-  if (*(uword *)begin != 0)
+  if (*(uword *) begin != 0)
     free (__deregister_frame_info (begin));
 }
 
@@ -636,10 +647,10 @@ fde_split (struct object *ob, fde_compare_t fde_compare,
            probe != &marker && fde_compare (ob, linear->array[i], *probe) < 0;
            probe = chain_end)
         {
-          chain_end = (fde **)erratic->array[probe - linear->array];
+          chain_end = (fde **) erratic->array[probe - linear->array];
           erratic->array[probe - linear->array] = NULL;
         }
-      erratic->array[i] = (fde *)chain_end;
+      erratic->array[i] = (fde *) chain_end;
       chain_end = &linear->array[i];
     }
 
@@ -734,16 +745,18 @@ fde_merge (struct object *ob, fde_compare_t fde_compare,
   if (i2 > 0)
     {
       i1 = v1->count;
-      do {
-        i2--;
-        fde2 = v2->array[i2];
-        while (i1 > 0 && fde_compare (ob, v1->array[i1-1], fde2) > 0)
-          {
-            v1->array[i1+i2] = v1->array[i1-1];
-            i1--;
-          }
+      do
+	{
+	  i2--;
+	  fde2 = v2->array[i2];
+	  while (i1 > 0 && fde_compare (ob, v1->array[i1-1], fde2) > 0)
+	    {
+	      v1->array[i1+i2] = v1->array[i1-1];
+	      i1--;
+	    }
         v1->array[i1+i2] = fde2;
-      } while (i2 > 0);
+	}
+      while (i2 > 0);
       v1->count += v2->count;
     }
 }
@@ -842,8 +855,8 @@ classify_object_over_fdes (struct object *ob, fde *this_fde)
 	continue;
 
       count += 1;
-      if ((void *)pc_begin < ob->pc_begin)
-	ob->pc_begin = (void *)pc_begin;
+      if ((void *) pc_begin < ob->pc_begin)
+	ob->pc_begin = (void *) pc_begin;
     }
 
   Dprintf("  return %d\n", (unsigned int)count);
@@ -885,7 +898,7 @@ add_fdes (struct object *ob, struct fde_accumulator *accu, fde *this_fde)
 
       if (encoding == DW_EH_PE_absptr)
 	{
-	  if (*(_Unwind_Ptr *)this_fde->pc_begin == 0)
+	  if (*(_Unwind_Ptr *) this_fde->pc_begin == 0)
 	    continue;
 	}
       else
@@ -1011,8 +1024,8 @@ linear_search_fdes (struct object *ob, fde *this_fde, void *pc)
 
       if (encoding == DW_EH_PE_absptr)
 	{
-	  pc_begin = ((_Unwind_Ptr *)this_fde->pc_begin)[0];
-	  pc_range = ((_Unwind_Ptr *)this_fde->pc_begin)[1];
+	  pc_begin = ((_Unwind_Ptr *) this_fde->pc_begin)[0];
+	  pc_range = ((_Unwind_Ptr *) this_fde->pc_begin)[1];
 	  if (pc_begin == 0)
 	    continue;
 	}
@@ -1039,7 +1052,7 @@ linear_search_fdes (struct object *ob, fde *this_fde, void *pc)
 	    continue;
 	}
 
-      if ((_Unwind_Ptr)pc - pc_begin < pc_range)
+      if ((_Unwind_Ptr) pc - pc_begin < pc_range)
         return this_fde;
     }
 
@@ -1063,8 +1076,8 @@ binary_search_unencoded_fdes (struct object *ob, void *pc)
       void *pc_begin;
       uaddr pc_range;
 
-      pc_begin = ((void **)f->pc_begin)[0];
-      pc_range = ((uaddr *)f->pc_begin)[1];
+      pc_begin = ((void **) f->pc_begin)[0];
+      pc_range = ((uaddr *) f->pc_begin)[1];
 
       Dprintf("testing range %p + %x\n", pc_begin, pc_range);
       if (pc < pc_begin)
@@ -1099,9 +1112,9 @@ binary_search_single_encoding_fdes (struct object *ob, void *pc)
       read_encoded_value_with_base (encoding & 0x0F, 0, p, &pc_range);
 
       Dprintf("testing range %x + %x\n", pc_begin, pc_range);
-      if ((_Unwind_Ptr)pc < pc_begin)
+      if ((_Unwind_Ptr) pc < pc_begin)
 	hi = i;
-      else if ((_Unwind_Ptr)pc >= pc_begin + pc_range)
+      else if ((_Unwind_Ptr) pc >= pc_begin + pc_range)
 	lo = i + 1;
       else
 	return f;
@@ -1131,9 +1144,9 @@ binary_search_mixed_encoding_fdes (struct object *ob, void *pc)
 					f->pc_begin, &pc_begin);
       read_encoded_value_with_base (encoding & 0x0F, 0, p, &pc_range);
 
-      if ((_Unwind_Ptr)pc < pc_begin)
+      if ((_Unwind_Ptr) pc < pc_begin)
 	hi = i;
-      else if ((_Unwind_Ptr)pc >= pc_begin + pc_range)
+      else if ((_Unwind_Ptr) pc >= pc_begin + pc_range)
 	lo = i + 1;
       else
 	return f;

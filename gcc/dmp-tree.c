@@ -177,6 +177,10 @@ Boston, MA 02111-1307, USA.  */
 #include <limits.h>
 #include "langhooks.h"
 
+/* c-common.h defines a macro called c-common.h.  But we need to use it
+   as the enum defined by tree.def.  */
+#undef RETURN_EXPR
+
 #define DMP_TREE
 #include "dmp-tree.h"
 
@@ -207,6 +211,13 @@ struct bucket
 
 static struct bucket **table;
 
+static tree *type_array = NULL;
+#define TYPE_ARRAY_INITIAL_SIZE 20000
+#define TYPE_ARRAY_INCR         10000
+static int type_array_size = 0;
+static int type_array_next = 0;
+static int type_array_incr = TYPE_ARRAY_INITIAL_SIZE;
+
 #if DMP_TREE_WRAPPED_OUTPUT
 static char curr_line[2 * MAX_LINE_WRAP];
 static int prefix_len;
@@ -233,7 +244,8 @@ dump_tree_state_t dump_tree_state = {
   0, 					/* no_new_line */
   0, 					/* line_cnt */
   0,					/* doing_tree_list */
-  INT_MAX				/* max_depth */
+  INT_MAX,				/* max_depth */
+  DMP_TREE_VISIT_ANY			/* visit_only_once */
 };
 
 #define DEFTREECODE(SYM, NAME, TYPE, LENGTH) \
@@ -241,8 +253,9 @@ static void print_ ## SYM (FILE *file, const char *annotation, tree node, int in
 #include "tree.def"
 #undef DEFTREECODE
 
-static void init_dump_state (tree node);
-static int no_dump_tree_p (FILE *file, const char *annotation, tree node, int indent);
+static void init_dump_state PARAMS ((tree node));
+static int no_dump_tree_p   PARAMS ((FILE *file, const char *annotation, tree node, int indent));
+static void free_hash_table PARAMS ((void));
 
 static lang_dump_tree_p_t lang_dump_tree_p = no_dump_tree_p;
 
@@ -271,6 +284,7 @@ init_dump_state (node)
   dump_tree_state.curr_file	  = NULL;
   dump_tree_state.doing_tree_list = 0;
   /*dump_tree_state.max_depth	  = INT_MAX;*/
+  /*dump_tree_state.visit_only_once = DMP_TREE_VISIT_ANY;*/
 }
 
 /* Always end the current line by writing a '\n'.
@@ -291,6 +305,9 @@ newline_and_indent (file, column)
     fprintf (file, "%*c", column, ' ');
 }
 
+/* Return 1 if node has been previously seen and 0 otherwise.
+   If record_it is non-zero then record that the node was
+   seen.  */
 int 
 node_seen (node, record_it)
      tree node;
@@ -318,6 +335,32 @@ node_seen (node, record_it)
   return 0;
 }
 
+/* Free the hash table used to record visited nodes.  */
+static void
+free_hash_table()
+{
+  int hash;
+  struct bucket *b, *next;
+  
+  if (!table)
+    return;
+  
+  for (hash = 0; hash < HASH_SIZE; ++hash)
+    {
+      b = table[hash];
+      while (b)
+	{
+	  next = b->next;
+	  free (b);
+	  b = next;
+	}
+    }
+    
+  free (table);
+  table = NULL;
+}
+
+
 /*-------------------------------------------------------------------*/
 
 void
@@ -329,7 +372,7 @@ print_type (file, annotation, node, indent)
 {
   int newline = 0;
   
-  #define PRINT_TYPE_NAME(node) 					\
+#   define PRINT_TYPE_NAME(node) 					\
     if (!newline && TYPE_NAME (node))					\
       {									\
 	if (TREE_CODE (TYPE_NAME (node)) == IDENTIFIER_NODE)		\
@@ -342,8 +385,11 @@ print_type (file, annotation, node, indent)
       }
   
   if (TYPE_CONTEXT (node))
-      fprintf (file, " cntxt="HOST_PTR_PRINTF, 
+    {
+      fprintf (file, " cntxt=");
+      fprintf (file, HOST_PTR_PRINTF, 
       			HOST_PTR_PRINTF_VALUE (TYPE_CONTEXT (node)));
+    }
       
   if (TYPE_NEEDS_CONSTRUCTING (node))
     fputs (" need-ctor", file);
@@ -394,50 +440,75 @@ print_type (file, annotation, node, indent)
   			TYPE_ALIAS_SET (node));
   
   if (TYPE_POINTER_TO (node))
-    fprintf (file, " *this="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " *this=");
+      fprintf (file, HOST_PTR_PRINTF,
     		HOST_PTR_PRINTF_VALUE (TYPE_POINTER_TO (node)));
+    }
   
   if (TYPE_REFERENCE_TO (node))
-    fprintf (file, " &this="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " &this=");
+      fprintf (file, HOST_PTR_PRINTF,
     		HOST_PTR_PRINTF_VALUE (TYPE_REFERENCE_TO (node)));
+    }
   
   if (TREE_CODE (node) == ARRAY_TYPE || TREE_CODE (node) == SET_TYPE)
     {
       if (TYPE_DOMAIN (node))
-	fprintf (file, " domain="HOST_PTR_PRINTF,
+	{
+	  fprintf (file, " domain=");
+	  fprintf (file, HOST_PTR_PRINTF,
 			HOST_PTR_PRINTF_VALUE (TYPE_DOMAIN (node)));
+	}
     }
   else if (TREE_CODE (node) == ENUMERAL_TYPE)
     {
       if (TYPE_VALUES (node))
-	fprintf (file, " values="HOST_PTR_PRINTF,
+	{
+	  fprintf (file, " values=");
+	  fprintf (file, HOST_PTR_PRINTF,
 			HOST_PTR_PRINTF_VALUE (TYPE_VALUES (node)));
+	}
     }
   else if (TREE_CODE (node) == VECTOR_TYPE)
     {
       if (TYPE_DEBUG_REPRESENTATION_TYPE (node))
-	fprintf (file, " values="HOST_PTR_PRINTF,
+	{
+	  fprintf (file, " values=");
+	  fprintf (file, HOST_PTR_PRINTF,
 			HOST_PTR_PRINTF_VALUE (TYPE_DEBUG_REPRESENTATION_TYPE (node)));
+	}
     }
   
   if (TYPE_ATTRIBUTES (node))
-    fprintf (file, " attr="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " attr=");
+      fprintf (file, HOST_PTR_PRINTF,
   			HOST_PTR_PRINTF_VALUE (TYPE_ATTRIBUTES (node)));
+    }
   
   if (TYPE_PRECISION (node))
     fprintf (file, " prec=%d", TYPE_PRECISION (node));
     
   if (TYPE_MAIN_VARIANT (node) != node)
-    fprintf (file, " main-variant="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " main-variant=");
+      fprintf (file, HOST_PTR_PRINTF,
 		    HOST_PTR_PRINTF_VALUE (TYPE_MAIN_VARIANT (node)));
+    }
   if (TYPE_NEXT_VARIANT (node))
-    fprintf (file, " next-variant="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " next-variant=");
+      fprintf (file, HOST_PTR_PRINTF,
 		    HOST_PTR_PRINTF_VALUE (TYPE_NEXT_VARIANT (node)));
+    }
   
   if (TYPE_NAME (node) && TREE_CODE (TYPE_NAME (node)) == TYPE_DECL
       && DECL_ORIGINAL_TYPE (TYPE_NAME (node)))
     { 
-      fprintf (file, " orig-type="HOST_PTR_PRINTF,
+      fprintf (file, " orig-type=");
+      fprintf (file, HOST_PTR_PRINTF,
 		      HOST_PTR_PRINTF_VALUE (DECL_ORIGINAL_TYPE (TYPE_NAME (node))));
     }
 
@@ -500,7 +571,7 @@ print_type (file, annotation, node, indent)
   	dump_tree (file, "(values)", TYPE_VALUES (node), indent + INDENT);
     }
   
-  #if 0
+#if 0
   if (TYPE_MAIN_VARIANT (node) == node)
     {
       tree n = TYPE_MAIN_VARIANT (node);
@@ -508,15 +579,15 @@ print_type (file, annotation, node, indent)
       for (n = TYPE_NEXT_VARIANT (n); n; n = TYPE_NEXT_VARIANT (n))
         dump_tree (file, "(next-variant)", n, indent + INDENT);
     }
-  #endif
+#endif
   
-  #if 0
+#if 0
   if (TYPE_POINTER_TO (node))
     dump_tree (file, "(ptr-to-this)", TYPE_POINTER_TO (node), indent + INDENT);
   
   if (TYPE_REFERENCE_TO (node))
     dump_tree (file, "(ref-to-this)", TYPE_REFERENCE_TO (node), indent + INDENT);
-  #endif
+#endif
   
   if (TREE_TYPE (node))
     dump_tree (file, NULL, TREE_TYPE (node), indent + INDENT);
@@ -547,16 +618,19 @@ print_decl (file, annotation, node, indent)
 	fputs (" comm", file);
       if (DECL_NONLOCAL (node))
 	fputs (" nonlcl", file);
-      #if 0
+#if 0
       if (DECL_ARTIFICIAL (node))
         fputs (" artifical", file);
-      #endif
+#endif
       if (DECL_WEAK (node))
         fputs (" weak", file);
       /* APPLE LOCAL private extern */
       if (DECL_PRIVATE_EXTERN (node))
 	fputs (" pvt-ext", file);
-      /* APPLE LOCAL begin weak_import  (Radar 2809704) ilr */
+      /* APPLE LOCAL coalesced */
+      if (DECL_COALESCED (node))
+	fputs (" coal", file);
+      /* APPLE LOCAL begin weak_import (Radar 2809704) ilr */
       if (DECL_WEAK_IMPORT (node))
 	fputs (" weak_import", file);
       /* APPLE LOCAL end weak_import ilr */
@@ -591,16 +665,25 @@ print_decl (file, annotation, node, indent)
   }
   
   if (DECL_ATTRIBUTES (node))
-    fprintf (file, " attr="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " attr=");
+      fprintf (file, HOST_PTR_PRINTF,
   			HOST_PTR_PRINTF_VALUE (DECL_ATTRIBUTES (node)));
+    }
   
   if (DECL_CONTEXT (node))
-    fprintf (file, " cntxt="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " cntxt=");
+      fprintf (file, HOST_PTR_PRINTF,
 		      HOST_PTR_PRINTF_VALUE (DECL_CONTEXT (node)));
+    }
   
   if (DECL_RTL_SET_P (node))
-    fprintf (file, " rtl="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " rtl=");
+      fprintf (file, HOST_PTR_PRINTF,
 		      HOST_PTR_PRINTF_VALUE (DECL_RTL (node)));
+    }
     
   (*lang_hooks.dump_decl) (file, node, indent, 0);
  
@@ -611,7 +694,8 @@ print_decl (file, annotation, node, indent)
           if (DECL_BIT_FIELD_TYPE (node))
             {
               tree bf_type = DECL_BIT_FIELD_TYPE (node);
-	      fprintf (file, " bf-type="HOST_PTR_PRINTF,
+	      fprintf (file, " bf-type=");
+	      fprintf (file, HOST_PTR_PRINTF,
 		       HOST_PTR_PRINTF_VALUE (bf_type));
 	      if (TYPE_NAME (bf_type))
 		{
@@ -774,7 +858,8 @@ print_operands VPARAMS ((FILE *file, tree node, int indent, int follow, ...))
       if (s == NULL)
 	{
 	  nomore = 1;
-      	  fprintf (file, " "HOST_PTR_PRINTF,	
+      	  fprintf (file, " ");
+	  fprintf (file, HOST_PTR_PRINTF,	
       	  		HOST_PTR_PRINTF_VALUE (TREE_OPERAND (node, i)));
 	}
       else
@@ -790,7 +875,8 @@ print_operands VPARAMS ((FILE *file, tree node, int indent, int follow, ...))
               s = strcpy (temp, ++s);
               temp[strlen (temp) - 1] = '\0';
             }
-	  fprintf (file, " %s="HOST_PTR_PRINTF, s,
+	  fprintf (file, " %s=", s);
+	  fprintf (file, HOST_PTR_PRINTF,
 	  			HOST_PTR_PRINTF_VALUE (TREE_OPERAND (node, i)));
 	}
     }
@@ -823,11 +909,11 @@ print_operands VPARAMS ((FILE *file, tree node, int indent, int follow, ...))
       
       /* Reusing the arg list -- does this work when !ANSI_PROTOTYPES?  */
       VA_START (ap, follow);
-    #ifndef ANSI_PROTOTYPES
+#     ifndef ANSI_PROTOTYPES
       file = va_arg (ap, FILE *);
       node = va_arg (ap, tree);
       indent = va_arg (ap, int);
-    #endif
+#     endif
       
       for (i = nomore = 0; i < len && i < first_rtl; ++i)
 	{
@@ -865,15 +951,17 @@ print_lineno (file, node)
       && TREE_CODE_CLASS (TREE_CODE (node)) == 'd')
     {
       if (TREE_CODE (node) != FUNCTION_DECL || !DECL_BUILT_IN (node))
-	if (dump_tree_state.curr_file
-	    && strcmp(dump_tree_state.curr_file, DECL_SOURCE_FILE (node)) == 0)
-	  fprintf (file, " line=%d", DECL_SOURCE_LINE (node));
-	else
-	  {
-	    dump_tree_state.curr_file = (char *)DECL_SOURCE_FILE (node);
-	    fprintf (file, " line=%d(%s)", DECL_SOURCE_LINE (node),
-			    lbasename(DECL_SOURCE_FILE (node)));
+        {
+	  if (dump_tree_state.curr_file
+	      && strcmp(dump_tree_state.curr_file, DECL_SOURCE_FILE (node)) == 0)
+	    fprintf (file, " line=%d", DECL_SOURCE_LINE (node));
+	  else
+	    {
+	      dump_tree_state.curr_file = (char *)DECL_SOURCE_FILE (node);
+	      fprintf (file, " line=%d(%s)", DECL_SOURCE_LINE (node),
+			      lbasename(DECL_SOURCE_FILE (node)));
 	  }
+	}
     }
 }
 
@@ -1043,7 +1131,7 @@ print_tree_flags (file, node)
   if (TREE_DEPRECATED (node))
     fputs (" deprecated", file);
   /* APPLE LOCAL end deprecated ilr */
-  /* APPLE LOCAL begin unavailable  (Radar 2809697) ilr */
+  /* APPLE LOCAL begin unavailable (Radar 2809697) ilr */
   if (TREE_UNAVAILABLE (node))
     fputs (" unavailable", file);
   /* APPLE LOCAL end unavailable ilr */
@@ -1086,11 +1174,17 @@ print_ERROR_MARK (file, annotation, node, indent)
      int indent ATTRIBUTE_UNUSED;
 {
   if (TREE_CHAIN (node))
-    fprintf (file, " chain="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " chain=");
+      fprintf (file, HOST_PTR_PRINTF,
 	      HOST_PTR_PRINTF_VALUE (TREE_CHAIN (node)));
+    }
   if (TREE_TYPE (node))
-    fprintf (file, " type="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " type=");
+      fprintf (file, HOST_PTR_PRINTF,
 	      HOST_PTR_PRINTF_VALUE (TREE_TYPE (node)));
+    }
   print_tree_flags (file, node);
 }
 
@@ -1127,12 +1221,12 @@ print_TREE_LIST (file, annotation, node, indent)
     fputs (" via-private", file);
   if (TREE_VIA_PROTECTED (node))
     fputs (" via-protected", file);
-  fprintf (file, " purpose="HOST_PTR_PRINTF
-  		 " value="HOST_PTR_PRINTF
-  		 " chain="HOST_PTR_PRINTF, 
-  		HOST_PTR_PRINTF_VALUE (TREE_PURPOSE (node)),
-  		HOST_PTR_PRINTF_VALUE (TREE_VALUE (node)),
-  		HOST_PTR_PRINTF_VALUE (TREE_CHAIN (node)));
+  fprintf (file, " purpose=");
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (TREE_PURPOSE (node)));
+  fprintf (file, " value=");
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (TREE_VALUE (node)));
+  fprintf (file, " chain=");
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (TREE_CHAIN (node)));
   		
   ++dump_tree_state.doing_tree_list;
   (void)node_seen (node, TRUE);
@@ -1204,18 +1298,19 @@ print_BLOCK (file, annotation, node, indent)
 {
   tree n;
   
-  fprintf (file, " vars="HOST_PTR_PRINTF
-  		 " abs-orig="HOST_PTR_PRINTF
-  		 " super="HOST_PTR_PRINTF
-  		 " sub="HOST_PTR_PRINTF
-  		 " frag-origin="HOST_PTR_PRINTF
-  		 " frag-chain="HOST_PTR_PRINTF,
-		 HOST_PTR_PRINTF_VALUE (BLOCK_VARS (node)),
-		 HOST_PTR_PRINTF_VALUE (BLOCK_ABSTRACT_ORIGIN (node)),
-		 HOST_PTR_PRINTF_VALUE (BLOCK_SUPERCONTEXT (node)),
-		 HOST_PTR_PRINTF_VALUE (BLOCK_SUBBLOCKS (node)),
-		 HOST_PTR_PRINTF_VALUE (BLOCK_FRAGMENT_ORIGIN (node)),
-		 HOST_PTR_PRINTF_VALUE (BLOCK_FRAGMENT_CHAIN (node)));
+  fprintf (file, " vars=");
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (BLOCK_VARS (node)));
+  fprintf (file, " abs-orig=");
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (BLOCK_ABSTRACT_ORIGIN (node)));
+  fprintf (file, " super=");
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (BLOCK_SUPERCONTEXT (node)));
+  fprintf (file, " sub=");
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (BLOCK_SUBBLOCKS (node)));
+  fprintf (file, " frag-origin=");
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (BLOCK_FRAGMENT_ORIGIN (node)));
+  fprintf (file, " frag-chain=");
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (BLOCK_FRAGMENT_CHAIN (node)));
+
   if (BLOCK_HANDLER_BLOCK (node))
       fputs (" handler_block_flag", file);
   if (BLOCK_ABSTRACT (node))
@@ -1225,11 +1320,11 @@ print_BLOCK (file, annotation, node, indent)
     if (!node_seen (n, FALSE))
       dump_tree (file, NULL, n, indent + INDENT);
   
-  #if 0
+#if 0
   for (n = BLOCK_SUBBLOCKS (node); n; n = BLOCK_CHAIN (n))
     if (!node_seen (n))
       dump_tree (file, NULL, n, indent + INDENT);
-  #endif
+#endif
   
   /*dump_tree (file, NULL, BLOCK_SUPERCONTEXT (node), indent + INDENT);*/
   
@@ -1342,7 +1437,8 @@ print_OFFSET_TYPE (file, annotation, node, indent)
      tree node;
      int indent;
 {
-  fprintf (file, " basetype="HOST_PTR_PRINTF,
+  fprintf (file, " basetype=");
+  fprintf (file, HOST_PTR_PRINTF,
   			HOST_PTR_PRINTF_VALUE (TYPE_OFFSET_BASETYPE (node)));
   
   print_type (file, annotation, node, indent);
@@ -1368,9 +1464,13 @@ print_METHOD_TYPE (file, annotation, node, indent)
   tree n;
   
   if (TYPE_METHOD_BASETYPE (node))
-    fprintf (file, " basetype="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " basetype=");
+      fprintf (file, HOST_PTR_PRINTF,
     			HOST_PTR_PRINTF_VALUE (TYPE_METHOD_BASETYPE (node)));
-  fprintf (file, " args="HOST_PTR_PRINTF,
+    }
+  fprintf (file, " args=");
+  fprintf (file, HOST_PTR_PRINTF,
   			HOST_PTR_PRINTF_VALUE (TYPE_ARG_TYPES (node)));
   
   print_type (file, annotation, node, indent);
@@ -1428,7 +1528,8 @@ print_RECORD_TYPE (file, annotation, node, indent)
   
   if (TYPE_NO_FORCE_BLK (node))
     fputs (" no-force-blk", file);
-  fprintf (file, " fields="HOST_PTR_PRINTF,
+  fprintf (file, " fields=");
+  fprintf (file, HOST_PTR_PRINTF,
   			HOST_PTR_PRINTF_VALUE (TYPE_FIELDS (node)));
     
   print_type (file, annotation, node, indent);
@@ -1449,7 +1550,8 @@ print_UNION_TYPE (file, annotation, node, indent)
     fputs (" no-force-blk", file);
   if (TYPE_TRANSPARENT_UNION (node))
     fputs (" transparent-union", file);
-  fprintf (file, " fields="HOST_PTR_PRINTF,
+  fprintf (file, " fields=");
+  fprintf (file, HOST_PTR_PRINTF,
   			HOST_PTR_PRINTF_VALUE (TYPE_FIELDS (node)));
     
   print_type (file, annotation, node, indent);
@@ -1468,7 +1570,8 @@ print_QUAL_UNION_TYPE (file, annotation, node, indent)
 {  
   if (TYPE_NO_FORCE_BLK (node))
     fputs (" no-force-blk", file);
-  fprintf (file, " fields="HOST_PTR_PRINTF,
+  fprintf (file, " fields=");
+  fprintf (file, HOST_PTR_PRINTF,
   				HOST_PTR_PRINTF_VALUE (TYPE_FIELDS (node)));
     
   print_type (file, annotation, node, indent);
@@ -1488,13 +1591,18 @@ print_FUNCTION_TYPE (file, annotation, node, indent)
   tree n;
   
   if (TYPE_METHOD_BASETYPE (node))
-    fprintf (file, " basetype="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " basetype=");
+      fprintf (file, HOST_PTR_PRINTF,
     			HOST_PTR_PRINTF_VALUE (TYPE_METHOD_BASETYPE (node)));
+    }
+    
   if (TYPE_RETURNS_STACK_DEPRESSED (node))
     fputs (" ret-stk-depressed", file);
   if (TYPE_AMBIENT_BOUNDEDNESS (node))
     fputs (" ambient-boundedness", file);
-  fprintf (file, " args="HOST_PTR_PRINTF,
+  fprintf (file, " args=");
+  fprintf (file, HOST_PTR_PRINTF,
   			HOST_PTR_PRINTF_VALUE (TYPE_ARG_TYPES (node)));
   
   print_type (file, annotation, node, indent);
@@ -1546,10 +1654,10 @@ print_COMPLEX_CST (file, annotation, node, indent)
      int indent;
 {
   print_tree_flags (file, node);
-  fprintf (file, " real="HOST_PTR_PRINTF
-  		 " imag="HOST_PTR_PRINTF,
-  		HOST_PTR_PRINTF_VALUE (TREE_REALPART (node)),
-  		HOST_PTR_PRINTF_VALUE (TREE_IMAGPART (node)));
+  fprintf (file, " real=");
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (TREE_REALPART (node)));
+  fprintf (file, " imag=");
+  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (TREE_IMAGPART (node)));
   
   dump_tree (file, "(real)", TREE_REALPART (node), indent + INDENT);
   dump_tree (file, "(imag)", TREE_IMAGPART (node), indent + INDENT);
@@ -1563,7 +1671,7 @@ print_VECTOR_CST (file, annotation, node, indent)
      tree node;
      int indent;
 {
-  tree n, type = TREE_TYPE (node);
+  tree n, type = TREE_TYPE (node), t1;
   int  i, ok, size = 0;
   char *fmt = (char *)"this is just to stop compiler warning";
   
@@ -1574,13 +1682,14 @@ print_VECTOR_CST (file, annotation, node, indent)
   } vec_value;
   
   print_tree_flags (file, node);
-  
+
   ok = (type && TREE_CODE (type) == VECTOR_TYPE);
   if (ok)
     {
       type = TREE_TYPE (type);
       n    = TYPE_SIZE_UNIT (type);
       size = CST_VALUE (n, ok);
+      t1 = TREE_VECTOR_CST_ELTS (node);
      
       if (ok)
         {
@@ -1588,16 +1697,16 @@ print_VECTOR_CST (file, annotation, node, indent)
 	      && (size == 1 || size == 2 || size == 4))
 	    {
 	      fmt = (char *) (TREE_UNSIGNED (type) ? "%u%s" : "%d%s");
-	      if (TREE_CODE (TREE_VECTOR_CST_0 (node)) == INTEGER_CST)
+	      if (TREE_CODE (TREE_VALUE (t1)) == INTEGER_CST)
 		{
-		  vec_value.ul[0] = CST_VALUE (TREE_VECTOR_CST_0 (node), ok);
-		  vec_value.ul[1] = CST_VALUE (TREE_VECTOR_CST_1 (node), ok);
-		  vec_value.ul[2] = CST_VALUE (TREE_VECTOR_CST_2 (node), ok);
-		  vec_value.ul[3] = CST_VALUE (TREE_VECTOR_CST_3 (node), ok);
+		  vec_value.ul[0] = CST_VALUE (TREE_VALUE (t1), ok);
+		  vec_value.ul[1] = CST_VALUE (TREE_VALUE (TREE_CHAIN (t1)), ok);
+		  vec_value.ul[2] = CST_VALUE (TREE_VALUE (TREE_CHAIN (TREE_CHAIN (t1))), ok);
+		  vec_value.ul[3] = CST_VALUE (TREE_VALUE (TREE_CHAIN (TREE_CHAIN (TREE_CHAIN (t1)))), ok);
 		}
 	    }
 	  else if (TREE_CODE (type) != REAL_TYPE
-		   || TREE_CODE (TREE_VECTOR_CST_0 (node)) != REAL_CST
+		   || TREE_CODE (TREE_VALUE (t1)) != REAL_CST
 		   || size != 4)
 	    ok = 0;
         }
@@ -1605,12 +1714,16 @@ print_VECTOR_CST (file, annotation, node, indent)
   
   if (ok)
     {
-      fprintf (file, " "HOST_PTR_PRINTF" "HOST_PTR_PRINTF
-      		     " "HOST_PTR_PRINTF" "HOST_PTR_PRINTF,
-      			HOST_PTR_PRINTF_VALUE(TREE_VECTOR_CST_0 (node)),
-      			HOST_PTR_PRINTF_VALUE(TREE_VECTOR_CST_1 (node)),
-      			HOST_PTR_PRINTF_VALUE(TREE_VECTOR_CST_2 (node)),
-      			HOST_PTR_PRINTF_VALUE(TREE_VECTOR_CST_3 (node)));
+      fprintf (file, " ");
+      fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE(TREE_VALUE (t1)));
+      fprintf (file, " ");
+      fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE(TREE_VALUE (TREE_CHAIN (t1))));
+      fprintf (file, " ");
+      fprintf (file, HOST_PTR_PRINTF,
+			HOST_PTR_PRINTF_VALUE(TREE_VALUE (TREE_CHAIN (TREE_CHAIN (t1)))));
+      fprintf (file, " ");
+      fprintf (file, HOST_PTR_PRINTF,
+      			HOST_PTR_PRINTF_VALUE(TREE_VALUE (TREE_CHAIN (TREE_CHAIN (TREE_CHAIN (t1))))));
       newline_and_indent (file, indent + INDENT);
       fputc ('(', file);
       
@@ -1632,13 +1745,13 @@ print_VECTOR_CST (file, annotation, node, indent)
 	      fprintf (file, fmt, vec_value.ul[i], (i < 3) ? "," : "");
 	  else
 	    {
-	      print_real_constant (file, TREE_VECTOR_CST_0 (node));
+	      print_real_constant (file, TREE_VALUE (t1));
 	      fputc (',', file);
-	      print_real_constant (file, TREE_VECTOR_CST_1 (node));
+	      print_real_constant (file, TREE_VALUE (TREE_CHAIN (t1)));
 	      fputc (',', file);
-	      print_real_constant (file, TREE_VECTOR_CST_2 (node));
+	      print_real_constant (file, TREE_VALUE (TREE_CHAIN (TREE_CHAIN (t1))));
 	      fputc (',', file);
-	      print_real_constant (file, TREE_VECTOR_CST_3 (node));
+	      print_real_constant (file, TREE_VALUE (TREE_CHAIN (TREE_CHAIN (TREE_CHAIN (t1)))));
 	    }
 	  break;
 	}
@@ -1647,10 +1760,10 @@ print_VECTOR_CST (file, annotation, node, indent)
     }
   else
     {
-      dump_tree (file, NULL, TREE_VECTOR_CST_0 (node), indent + INDENT);
-      dump_tree (file, NULL, TREE_VECTOR_CST_1 (node), indent + INDENT);
-      dump_tree (file, NULL, TREE_VECTOR_CST_2 (node), indent + INDENT);
-      dump_tree (file, NULL, TREE_VECTOR_CST_3 (node), indent + INDENT);
+      dump_tree (file, NULL, TREE_VALUE (t1), indent + INDENT);
+      dump_tree (file, NULL, TREE_VALUE (TREE_CHAIN (t1)), indent + INDENT);
+      dump_tree (file, NULL, TREE_VALUE (TREE_CHAIN (TREE_CHAIN (t1))), indent + INDENT);
+      dump_tree (file, NULL, TREE_VALUE (TREE_CHAIN (TREE_CHAIN (TREE_CHAIN (t1)))), indent + INDENT);
     }
 }
 
@@ -1662,13 +1775,16 @@ print_STRING_CST (file, annotation, node, indent)
      int indent ATTRIBUTE_UNUSED;
 {
   print_tree_flags (file, node);
-  fprintf (file, " ptr="HOST_PTR_PRINTF" ",
+  fprintf (file, " ptr=");
+  fprintf (file, HOST_PTR_PRINTF,
   		HOST_PTR_PRINTF_VALUE (TREE_STRING_POINTER (node)));
+  fprintf (file, " ");
   print_string_constant (file, (char *)TREE_STRING_POINTER (node), 30);
   
   if (TREE_CHAIN (node))
     {
-      fprintf(file, " chain="HOST_PTR_PRINTF, 
+      fprintf (file, " chain=");
+      fprintf (file, HOST_PTR_PRINTF, 
       			HOST_PTR_PRINTF_VALUE (TREE_CHAIN (node)));
   
       for (node = TREE_CHAIN (node); node; node = TREE_CHAIN (node))
@@ -1686,11 +1802,14 @@ print_FUNCTION_DECL (file, annotation, node, indent)
   tree n;
   
   if (DECL_BUILT_IN (node))
+    {
       if (DECL_BUILT_IN_CLASS (node) == BUILT_IN_MD)
 	fprintf (file, " BUILT_IN_MD %d", DECL_FUNCTION_CODE (node));
       else
 	fprintf (file, " %s",
 		 built_in_class_names[(int) DECL_BUILT_IN_CLASS (node)]);
+    }
+    
   if (DECL_BUILT_IN_NONANSI (node))
     fputs (" builtin-nonansi", file);
   
@@ -1708,12 +1827,12 @@ print_FUNCTION_DECL (file, annotation, node, indent)
     fputs (" pvt", file);
   if (TREE_PROTECTED (node))
     fputs (" prot", file);
-  #if 0
+#if 0
   if (TREE_STATIC (node))
     fputs (" def", file);
   if (TREE_ADDRESSABLE (node))
     fputs (" addrsable", file);
-  #endif
+#endif
   if (TREE_ASM_WRITTEN (node))
     fputs (" asm-wrtn", file);
   if (TREE_NOTHROW (node))
@@ -1731,23 +1850,34 @@ print_FUNCTION_DECL (file, annotation, node, indent)
     fputs (" static-dtor", file);
   
   if (DECL_INITIAL (node))
-    fprintf (file, " initial="HOST_PTR_PRINTF,	
+    {
+      fprintf (file, " initial=");
+      fprintf (file, HOST_PTR_PRINTF,	
 			  HOST_PTR_PRINTF_VALUE (DECL_INITIAL (node)));
+    }
     
   if (DECL_SAVED_INSNS (node))
-    fprintf (file, " saved-insns="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " saved-insns=");
+      fprintf (file, HOST_PTR_PRINTF,
     	     HOST_PTR_PRINTF_VALUE (DECL_SAVED_INSNS (node)));
+    }
 
   if (!DECL_EXTERNAL (node))
-    fprintf (file, " "HOST_PTR_PRINTF"("HOST_PTR_PRINTF"){"HOST_PTR_PRINTF"}",
-  		 HOST_PTR_PRINTF_VALUE (DECL_RESULT (node)),
-  		 HOST_PTR_PRINTF_VALUE (DECL_ARGUMENTS (node)), 
+    {
+      fprintf (file, " ");
+      fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (DECL_RESULT (node)));
+      fprintf (file, "(");
+      fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (DECL_ARGUMENTS (node)));
+      fprintf (file, "){");
+      fprintf (file, HOST_PTR_PRINTF,
 		 HOST_PTR_PRINTF_VALUE (DECL_LANG_SPECIFIC(node)
 		 			   ? DECL_SAVED_TREE (node) : 0));
-    
+      fprintf (file, "}");
+    }    
   print_decl (file, annotation, node, indent);
   
-  //if (DECL_LANG_SPECIFIC(node) && DECL_SAVED_TREE (node)) // ??
+  /*if (DECL_LANG_SPECIFIC(node) && DECL_SAVED_TREE (node)) ?? */
   if (DECL_RESULT (node))
     dump_tree (file, NULL, DECL_RESULT (node), indent + INDENT);
   
@@ -1808,8 +1938,11 @@ print_TYPE_DECL (file, annotation, node, indent)
      int indent;
 {  
   if (DECL_ORIGINAL_TYPE (node))
-    fprintf (file, " orig_type="HOST_PTR_PRINTF,
+    {
+      fprintf (file, " orig_type=");
+      fprintf (file, HOST_PTR_PRINTF,
     			HOST_PTR_PRINTF_VALUE (DECL_ORIGINAL_TYPE (node)));
+    }
   if (TYPE_DECL_SUPPRESS_DEBUG (node))
     fputs (" suppress-debug", file);
   print_decl (file, annotation, node, indent);
@@ -1852,7 +1985,8 @@ print_VAR_DECL (file, annotation, node, indent)
  
   if (TREE_CODE (node) != PARM_DECL)
     {
-      fprintf (file, " initial="HOST_PTR_PRINTF,
+      fprintf (file, " initial=");
+      fprintf (file, HOST_PTR_PRINTF,
       				HOST_PTR_PRINTF_VALUE (DECL_INITIAL (node)));
       print_decl (file, annotation, node, indent);
       dump_tree (file, NULL, DECL_INITIAL (node), indent + INDENT);
@@ -1871,16 +2005,25 @@ print_PARM_DECL (file, annotation, node, indent)
   if (dump_tree_state.doing_parm_decl)
     {
       if (DECL_ARG_TYPE (node))
-	fprintf (file, " arg-type="HOST_PTR_PRINTF,
+        {
+	  fprintf (file, " arg-type=");
+	  fprintf (file, HOST_PTR_PRINTF,
 		HOST_PTR_PRINTF_VALUE (DECL_ARG_TYPE (node)));
+	}
       if (DECL_ARG_TYPE_AS_WRITTEN (node))
-	fprintf (file, " as-written="HOST_PTR_PRINTF,
+	{
+	  fprintf (file, " as-written=");
+	  fprintf (file, HOST_PTR_PRINTF,
 		HOST_PTR_PRINTF_VALUE (DECL_ARG_TYPE_AS_WRITTEN (node)));
+	}
       if (DECL_INCOMING_RTL (node))
-      	fprintf (file, " incoming-rtl="HOST_PTR_PRINTF,
+	{
+      	  fprintf (file, " incoming-rtl=");
+	  fprintf (file, HOST_PTR_PRINTF,
       		HOST_PTR_PRINTF_VALUE (DECL_INCOMING_RTL (node)));
+	}
     }
-  print_VAR_DECL(file, annotation, node, indent);
+  print_VAR_DECL (file, annotation, node, indent);
 }
 
 static void
@@ -3102,9 +3245,19 @@ dump_tree (file, annotation, node, indent)
     
   if (dump_tree_state.nesting_depth < 0)
     {
-      init_dump_state(node);
-      table = (struct bucket **) xmalloc (HASH_SIZE * sizeof (struct bucket *));
-      memset ((char *) table, 0, HASH_SIZE * sizeof (struct bucket *));
+      /* If not called from dmp_tree3() then create hash table to record
+         which nodes we visit.  We still also do this for dmp_tree3()
+         but only the first time dmp_tree3() calls this routine.  After
+         that it's dmp_tree3() responsibility to free the hash table.  */
+      if (dump_tree_state.visit_only_once != DMP_TREE_VISIT_ONCE2)
+        {
+      	  init_dump_state(node);
+      	  table = (struct bucket **) xmalloc (HASH_SIZE * sizeof (struct bucket *));
+      	  memset ((char *) table, 0, HASH_SIZE * sizeof (struct bucket *));
+      	  if (dump_tree_state.visit_only_once == DMP_TREE_VISIT_ONCE1)
+      	    dump_tree_state.visit_only_once = DMP_TREE_VISIT_ONCE2;
+      	}
+      
       indent = 0;
       previous_node = NULL_TREE;
 #if DMP_TREE_WRAPPED_OUTPUT
@@ -3135,10 +3288,14 @@ dump_tree (file, annotation, node, indent)
 #endif /* DMP_TREE_WRAPPED_OUTPUT */
     }
   
-  if (dump_tree_state.dump_full_type && node_seen(node, FALSE))
+  if (dump_tree_state.visit_only_once != DMP_TREE_VISIT_ANY
+      && node_seen (node, TRUE))
+    return;
+  
+  if (dump_tree_state.dump_full_type && node_seen (node, FALSE))
     return;
     
-  if (dump_tree_state.doing_tree_list && node_seen(node, FALSE))
+  if (dump_tree_state.doing_tree_list && node_seen (node, FALSE))
     return;
     
   if (dump_tree_state.nesting_depth >= dump_tree_state.max_depth)
@@ -3172,13 +3329,15 @@ dump_tree (file, annotation, node, indent)
   good_node = ((int) TREE_CODE (node) < dump_tree_state.max_code);
       
   if (good_node)
-    plen += fprintf (file, "%s:"HOST_PTR_PRINTF, 
-			   tree_code_name[(int) TREE_CODE (node)],
-			   HOST_PTR_PRINTF_VALUE (node));
+    {
+      plen += fprintf (file, "%s:", tree_code_name[(int) TREE_CODE (node)]);
+      plen += fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (node));
+    }
   else
-    plen += fprintf (file, "%d (?):"HOST_PTR_PRINTF,
-			   (int) TREE_CODE (node),
-			   HOST_PTR_PRINTF_VALUE (node));
+    {
+      plen += fprintf (file, "%d (?):", (int) TREE_CODE (node));
+      plen += fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (node));
+    }
 
   if (annotation && *annotation == '(')
     plen += fprintf (file, " %s", annotation);
@@ -3197,7 +3356,8 @@ dump_tree (file, annotation, node, indent)
 	  else
 	    type = type0;
 	    
-	  fprintf (file, " t="HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (type0));
+	  fprintf (file, " t=");
+	  fprintf (file, HOST_PTR_PRINTF, HOST_PTR_PRINTF_VALUE (type0));
 	  
 	  if (TYPE_NAME (type))
 	    {
@@ -3216,10 +3376,33 @@ dump_tree (file, annotation, node, indent)
 	    }
 	  else
 	    fprintf (file, " {%s}", tree_code_name[(int) TREE_CODE (type)]);
+	   
+	  /* If doing a full program dump we also want to dump the types too.
+	     So dmp_tree3() will do it after we dump all the decls's.  All
+	     we do here is record all the decl's types in an array.  We won't
+	     worry about dups here.  That is taken care of when we process
+	     this array.  */
+	     
+	  if (dump_tree_state.visit_only_once == DMP_TREE_VISIT_ONCE2
+	      && !node_seen (type, FALSE))
+	    {
+	      if (type_array_next >= type_array_size)
+		{
+		  type_array_size += type_array_incr;
+		  type_array_incr = TYPE_ARRAY_INCR;
+		  type_array = (tree *) xrealloc (type_array,
+		  				  sizeof (tree) * type_array_size);
+		}
+  
+  		type_array[type_array_next++] = type;
+	    }
 	}
       else if (dump_tree_state.dump_full_type && TREE_TYPE (node))
-	fprintf (file, " t="HOST_PTR_PRINTF,
+	{
+	  fprintf (file, " t=");
+	  fprintf (file, HOST_PTR_PRINTF,
 		   HOST_PTR_PRINTF_VALUE (TREE_TYPE (node)));
+	}
     }
   
 #if DMP_TREE_WRAPPED_OUTPUT
@@ -3229,14 +3412,14 @@ dump_tree (file, annotation, node, indent)
 
   print_lineno (file, node);	 /* line nbr info where possible */
   
-  if (!(*lang_hooks.dump_lineno_p) (file, node))
+  if (! (*lang_dump_tree_p) (file, annotation, node, indent))
     {
       switch (TREE_CODE (node)) 
         {
-        #define DEFTREECODE(SYM, NAME, TYPE, LENGTH) \
+#         define DEFTREECODE(SYM, NAME, TYPE, LENGTH) \
         	case SYM: print_ ## SYM (file, annotation, node, indent); break;
-        #include "tree.def"
-        #undef DEFTREECODE
+#         include "tree.def"
+#         undef DEFTREECODE
         default:
           print_ERROR_MARK (file, annotation, node, indent);
           break;
@@ -3247,36 +3430,26 @@ dump_tree (file, annotation, node, indent)
     
   if (dump_tree_state.nesting_depth < 0)
     {
-      int hash;
-      struct bucket *b, *next;
-      
       newline_and_indent (file, 0);
-      
-      for (hash = 0; hash < HASH_SIZE; ++hash)
-        {
-          b = table[hash];
-          while (b)
-            {
-              next = b->next;
-              free (b);
-              b = next;
-            }
-        }
-        free (table);
+      if (dump_tree_state.visit_only_once != DMP_TREE_VISIT_ONCE2)
+      	free_hash_table ();
     }
   else
     (void)node_seen (node, TRUE);
     
 }
 
+/* Called from debugger to dump the tree for a specific node.  */
 void 
 dmp_tree (node)
      tree node;
 {
   dump_tree_state.max_depth = INT_MAX;
+  dump_tree_state.visit_only_once = DMP_TREE_VISIT_ANY;
   dump_tree (stderr, NULL, node, 0);
 }
 
+/* Same as dmp_tree() but limit the nesting to specified depth.  */
 void 
 dmp_tree1 (node, max_depth)
      tree node;
@@ -3285,7 +3458,52 @@ dmp_tree1 (node, max_depth)
   if (max_depth <= 0)
     max_depth = 1;
   dump_tree_state.max_depth = max_depth;
+  dump_tree_state.visit_only_once = DMP_TREE_VISIT_ANY;
   dump_tree (stderr, NULL, node, 0);
+}
+
+/* Same as dmp_tree() but displays never show a referenced node
+   more than once.  */
+void 
+dmp_tree2 (node)
+     tree node;
+{
+  dump_tree_state.max_depth = INT_MAX;
+  dump_tree_state.visit_only_once = DMP_TREE_VISIT_ONCE;
+  dump_tree (stderr, NULL, node, 0);
+}
+
+/* Called only from tree-dump.c to handle our dmp_tree() types of
+   displays when dumping an entire program to a file by specifying
+   -fdmp-translation-unit.  */
+void 
+dmp_tree3 (file, node, flags)
+     FILE *file;
+     tree node;
+     int flags ATTRIBUTE_UNUSED;
+{
+  int i;
+  
+  dump_tree_state.max_depth = INT_MAX;
+  dump_tree_state.visit_only_once = DMP_TREE_VISIT_ONCE1;
+  
+  while (node)
+    {
+      dump_tree (file, NULL, node, 0);
+      node = TREE_CHAIN (node);
+    }
+    
+  newline_and_indent (file, 0);
+  
+  if (type_array_next > 0)
+    {
+      for (i = 0; i < type_array_next;  ++i)
+	dump_tree (file, NULL, type_array[i], 0);
+	
+      free (type_array);
+    }
+    
+  free_hash_table ();
 }
 
 /*-------------------------------------------------------------------*/

@@ -33,6 +33,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
       DECL_PRETTY_FUNCTION_P (in VAR_DECL)
       NEW_FOR_SCOPE_P (in FOR_STMT)
       ASM_INPUT_P (in ASM_STMT)
+      STMT_EXPR_NO_SCOPE (in STMT_EXPR)
    1: C_DECLARED_LABEL_FLAG (in LABEL_DECL)
       STMT_IS_FULL_EXPR_P (in _STMT)
    2: STMT_LINENO_FOR_FN_P (in _STMT)
@@ -291,6 +292,8 @@ struct stmt_tree_s {
   /* The type of the last expression statement.  (This information is
      needed to implement the statement-expression extension.)  */
   tree x_last_expr_type;
+  /* The last filename we recorded.  */
+  const char *x_last_expr_filename;
   /* In C++, Non-zero if we should treat statements as full
      expressions.  In particular, this variable is no-zero if at the
      end of a statement we should destroy any temporaries created
@@ -329,6 +332,10 @@ struct language_function {
 /* The type of the last expression-statement we have seen.  */
 
 #define last_expr_type (current_stmt_tree ()->x_last_expr_type)
+
+/* The name of the last file we have seen.  */
+
+#define last_expr_filename (current_stmt_tree ()->x_last_expr_filename)
 
 /* LAST_TREE contains the last statement parsed.  These are chained
    together through the TREE_CHAIN field, but often need to be
@@ -498,6 +505,12 @@ extern int warn_conversion;
 
 extern int warn_long_long;
 
+/* APPLE LOCAL begin long double */
+/* Nonzero means warn about usage of long double.  */
+
+extern int warn_long_double;
+/* APPLE LOCAL end long double */
+
 /* C types are partitioned into three subsets: object, function, and
    incomplete types.  */
 #define C_TYPE_OBJECT_P(type) \
@@ -573,6 +586,7 @@ extern char *get_directive_line			PARAMS ((void));
    and, if so, perhaps change them both back to their original type.  */
 extern tree shorten_compare			PARAMS ((tree *, tree *, tree *, enum tree_code *));
 
+extern tree pointer_int_sum			PARAMS ((enum tree_code, tree, tree));
 extern unsigned int min_precision		PARAMS ((tree, int));
 
 /* Add qualifiers to a type, in the fashion for C.  */
@@ -581,6 +595,11 @@ extern tree c_build_qualified_type              PARAMS ((tree, int));
 /* Build tree nodes and builtin functions common to both C and C++ language
    frontends.  */
 extern void c_common_nodes_and_builtins		PARAMS ((void));
+
+/* APPLE LOCAL PFE */
+#ifdef PFE
+extern void pfe_c_common_nodes_and_builtins	PARAMS ((void));
+#endif
 
 extern void disable_builtin_function		PARAMS ((const char *));
 
@@ -638,10 +657,12 @@ extern tree strip_array_types                   PARAMS ((tree));
 #define FOR_EXPR(NODE)          TREE_OPERAND (FOR_STMT_CHECK (NODE), 2)
 #define FOR_BODY(NODE)          TREE_OPERAND (FOR_STMT_CHECK (NODE), 3)
 
-/* SWITCH_STMT accessors. These give access to the condition and body
+/* SWITCH_STMT accessors. These give access to the condition, body and
+   original condition type (before any compiler conversions)
    of the switch statement, respectively.  */
 #define SWITCH_COND(NODE)       TREE_OPERAND (SWITCH_STMT_CHECK (NODE), 0)
 #define SWITCH_BODY(NODE)       TREE_OPERAND (SWITCH_STMT_CHECK (NODE), 1)
+#define SWITCH_TYPE(NODE)	TREE_OPERAND (SWITCH_STMT_CHECK (NODE), 2)
 
 /* CASE_LABEL accessors. These give access to the high and low values
    of a case label, respectively.  */
@@ -677,6 +698,10 @@ extern tree strip_array_types                   PARAMS ((tree));
 
 /* STMT_EXPR accessor.  */
 #define STMT_EXPR_STMT(NODE)    TREE_OPERAND (STMT_EXPR_CHECK (NODE), 0)
+
+/* Nonzero if this statement-expression does not have an associated scope.  */
+#define STMT_EXPR_NO_SCOPE(NODE) \
+   TREE_LANG_FLAG_0 (STMT_EXPR_CHECK (NODE))
 
 /* LABEL_STMT accessor. This gives access to the label associated with
    the given label statement.  */
@@ -729,6 +754,19 @@ extern tree strip_array_types                   PARAMS ((tree));
 #define ASM_VOLATILE_P(NODE)			\
   (ASM_CV_QUAL (ASM_STMT_CHECK (NODE)) != NULL_TREE)
 
+/* The VAR_DECL to clean up in a CLEANUP_STMT.  */
+#define CLEANUP_DECL(NODE) \
+  TREE_OPERAND (CLEANUP_STMT_CHECK (NODE), 0)
+/* The cleanup to run in a CLEANUP_STMT.  */
+#define CLEANUP_EXPR(NODE) \
+  TREE_OPERAND (CLEANUP_STMT_CHECK (NODE), 1)
+
+/* The filename we are changing to as of this FILE_STMT.  */
+#define FILE_STMT_FILENAME_NODE(NODE) \
+  (TREE_OPERAND (FILE_STMT_CHECK (NODE), 0))
+#define FILE_STMT_FILENAME(NODE) \
+  (IDENTIFIER_POINTER (FILE_STMT_FILENAME_NODE (NODE)))
+
 /* The line-number at which a statement began.  But if
    STMT_LINENO_FOR_FN_P does holds, then this macro gives the
    line number for the end of the current function instead.  */
@@ -778,7 +816,7 @@ extern void genrtl_compound_stmt                PARAMS ((tree));
 extern void genrtl_asm_stmt                     PARAMS ((tree, tree,
 							 tree, tree,
 							 tree, int));
-extern void genrtl_decl_cleanup                 PARAMS ((tree, tree));
+extern void genrtl_decl_cleanup                 PARAMS ((tree));
 extern int stmts_are_full_exprs_p               PARAMS ((void));
 extern int anon_aggr_type_p                     PARAMS ((tree));
 
@@ -898,5 +936,12 @@ extern tree objc_message_selector		PARAMS ((void));
 extern int recognize_objc_keyword		PARAMS ((void));
 extern tree lookup_objc_ivar			PARAMS ((tree));
 /* APPLE LOCAL end Objective-C++  */
+
+/* APPLE LOCAL long double  */
+extern void warn_about_long_double		PARAMS ((void));
+
+/* APPLE LOCAL begin constant cfstrings */
+extern tree build_cfstring_ascii		PARAMS ((tree));
+/* APPLE LOCAL end constant cfstrings */
 
 #endif /* ! GCC_C_COMMON_H */

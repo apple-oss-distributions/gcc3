@@ -1,3 +1,4 @@
+/* APPLE LOCAL file Objective-C++ */
 /* Stub functions for Objective-C and Objective-C++ routines
    that are called from within the C and C++ front-ends,
    respectively.
@@ -82,6 +83,11 @@ lookup_objc_ivar (id)
 {
   return 0;
 }
+
+/* APPLE LOCAL begin constant strings */
+int flag_next_runtime = 0;
+const char *constant_string_class_name = 0;
+/* APPLE LOCAL end constant strings */
 
 /* APPLE LOCAL Objective-C++ */
 /* Used by cp/lex.c (do_identifier), but only for objc++.  */

@@ -40,7 +40,7 @@
 @end ifset
 
 @c Copyright (C) 1988, 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-@c 1999, 2000, 2001 Free Software Foundation, Inc.
+@c 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 @c *** Converted to texinfo by Dean Wakerley, dean@wakerley.com
 
 @c Include everything if we're not making html
@@ -60,7 +60,7 @@
 @c Part 2 Summary Description and Copyright
 @macro copyrightnotice
 Copyright @copyright{} 1988, 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-1999, 2000, 2001 Free Software Foundation, Inc.
+1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 @sp 1
 Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.1 or
@@ -231,10 +231,10 @@ Please refer to our @uref{http://gcc.gnu.org/releases.html,,releases web page}
 for information on how to obtain GCC@.
 
 The full distribution includes the C, C++, Objective-C, Fortran, Java,
-and CHILL compilers.  The full distribution also includes runtime libraries
-for C++, Objective-C, Fortran, Java and CHILL.  (GCC 3.0 does not
-include CHILL.)  In GCC 3.0 and later versions, GNU compiler testsuites
-are also included in the full distribution.
+and Ada (in case of GCC 3.1 and later) compilers.  The full distribution
+also includes runtime libraries for C++, Objective-C, Fortran, and Java.
+In GCC 3.0 and later versions, GNU compiler testsuites are also included
+in the full distribution.
 
 If you choose to download specific components, you must download the core
 GCC distribution plus any language specific distributions you wish to
@@ -446,7 +446,7 @@ before the target alias is prepended to the name - so, specifying
 resulting binary would be installed as
 @file{/usr/local/bin/i686-pc-linux-gnu-foo-gcc-3.1}.
 
-As a last shortcoming, none of the installed CHILL and Ada programs are
+As a last shortcoming, none of the installed Ada programs are
 transformed yet, which will be fixed in some time.
 
 @item --with-local-prefix=@var{dirname}
@@ -615,7 +615,7 @@ single-float, biendian, softfloat.
 
 @item powerpc*-*-*, rs6000*-*-*
 aix64, pthread, softfloat, powercpu, powerpccpu, powerpcos, biendian,
-sysv, aix. 
+sysv, aix.
 
 @end table
 
@@ -727,9 +727,7 @@ grep language= */config-lang.in
 @end example
 Currently, you can use any of the following:
 @code{ada}, @code{c}, @code{c++}, @code{f77}, @code{java}, @code{objc}.
-@code{CHILL} is not currently maintained, and will almost
-certainly fail to compile.  Building the Ada compiler has special
-requirements, see below.@*
+Building the Ada compiler has special requirements, see below.@*
 If you do not pass this flag, all languages available in the @file{gcc}
 sub-tree will be configured.  Re-defining @code{LANGUAGES} when calling
 @samp{make bootstrap} @strong{does not} work anymore, as those
@@ -806,6 +804,10 @@ ignores @code{catgets} and instead uses GCC's copy of the GNU
 @code{gettext} library.  The @option{--with-catgets} option causes the
 build procedure to use the host's @code{catgets} in this situation.
 
+@item --with-libiconv-prefix=@var{dir}
+Search for libiconv header files in @file{@var{dir}/include} and
+libiconv library files in @file{@var{dir}/lib}.
+
 @item --with-system-zlib
 Use installed zlib rather than that included with GCC@.  This option
 only applies if the Java front end is being built.
@@ -863,8 +865,9 @@ Now that GCC is configured, you are ready to build the compiler and
 runtime libraries.
 
 We @strong{highly} recommend that GCC be built using GNU make;
-other versions may work, then again they might not.  
-GNU make is required for compiling GNAT, the Ada compiler.
+other versions may work, then again they might not.
+GNU make is required for compiling GNAT (the Ada compiler) and the Java
+runtime library.
 
 (For example, many broken versions of make will fail if you use the
 recommended setup where @var{objdir} is different from @var{srcdir}.
@@ -921,7 +924,7 @@ gperf.
 @item
 Build target tools for use by the compiler such as binutils (bfd,
 binutils, gas, gprof, ld, and opcodes)
-if they have been individually linked 
+if they have been individually linked
 or moved into the top level GCC source tree before configuring.
 
 @item
@@ -1050,7 +1053,7 @@ source distribution):
 @end example
 
 At the moment, the GNAT library and several tools for GNAT are not built
-by @samp{make bootstrap}.  You have to invoke 
+by @samp{make bootstrap}.  You have to invoke
 @samp{make gnatlib_and_tools} in the @file{@var{objdir}/gcc}
 subdirectory before proceeding with the next steps.
 
@@ -1059,10 +1062,10 @@ following commands (assuming @command{make} is GNU make):
 
 @example
     cd @var{objdir}
-    @var{srcdir}/configure --enable-languages=c,ada 
+    @var{srcdir}/configure --enable-languages=c,ada
     cd @var{srcdir}/gcc/ada
     touch treeprs.ads [es]info.h nmake.ad[bs]
-    cd @var{objdir}    
+    cd @var{objdir}
     make bootstrap
     cd gcc
     make gnatlib_and_tools
@@ -1404,7 +1407,7 @@ related projects by Mumit Khan.
 @end itemize
 
 @item
-@uref{ftp://ftp.thewrittenword.com/packages/free/by-name/gcc-2.95.2/,,The
+@uref{ftp://ftp.thewrittenword.com/packages/free/by-name/,,The
 Written Word} offers binaries for Solaris 2.5.1, 2.6, 2.7/SPARC, 2.7/Intel,
 IRIX 6.2, 6.5, Digital UNIX 4.0D, HP-UX 10.20, and HP-UX 11.00.
 
@@ -1649,11 +1652,17 @@ These lists are updated as new information becomes available.
 @item
 @uref{#sparc64-*-*,,sparc64-*-*}
 @item
+@uref{#sparcv9-*-solaris2*,,sparcv9-*-solaris2*}
+@item
 @uref{#*-*-sysv*,,*-*-sysv*}
 @item
 @uref{#vax-dec-ultrix,,vax-dec-ultrix}
 @item
 @uref{#we32k-*-*,,we32k-*-*}
+@item
+@uref{#xtensa-*-elf,,xtensa-*-elf}
+@item
+@uref{#xtensa-*-linux*,,xtensa-*-linux*}
 @item
 @uref{#windows,,Microsoft Windows}
 @item
@@ -1778,9 +1787,7 @@ are supported on Tru64 UNIX, so you must not configure GCC with
 @option{--with-gnu-as} or @option{--with-gnu-ld}.
 
 The @option{--enable-threads} options isn't supported yet.  A patch is
-in preparation for a future release.  The Java runtime library has been
-reported to work on Tru64 UNIX V4.0F, V5.0, and V5.1, so you may try
-@option{--enable-libgcj} and report your results.
+in preparation for a future release.
 
 GCC writes a @samp{.verstamp} directive to the assembler output file
 unless it is built as a cross-compiler.  It gets the version to use from
@@ -1928,7 +1935,7 @@ can also be obtained from:
 @item
 @uref{http://home.overta.ru/users/denisc,,http://home.overta.ru/users/denisc}
 @item
-@uref{http://www.itnet.pl/amelektr/avr,,http://www.itnet.pl/amelektr/avr}
+@uref{http://www.amelek.gda.pl/avr,,http://www.amelek.gda.pl/avr}
 @end itemize
 
 We @emph{strongly} recommend using binutils 2.11 or newer.
@@ -2038,7 +2045,7 @@ A port to the AT&T DSP1610 family of processors.
 
 The version of binutils installed in @file{/usr/bin} is known to work unless
 otherwise specified in any per-architecture notes.  However, binutils
-2.11 is known to improve overall testsuite results.
+2.11 or greater is known to improve overall testsuite results.
 
 For FreeBSD 1, FreeBSD 2 or any mutant a.out versions of FreeBSD 3: All
 configuration support and files as shipped with GCC 2.95 are still in
@@ -2056,10 +2063,22 @@ of the configuration used in the stock FreeBSD configuration of GCC.  In
 particular, @option{--enable-threads} is now configured by default.
 However, as a general user, do not attempt to replace the system
 compiler with this release.  Known to bootstrap and check with good
-results on FreeBSD 3.0, 3.4, 4.0, 4.2, 4.3 and 5-CURRENT@.
+results on FreeBSD 3.0, 3.4, 4.0, 4.2, 4.3, 4.4, 4.5-STABLE and 5-CURRENT@.
 
-At this time, @option{--enable-threads} is not compatible with
-@option{--enable-libgcj} on FreeBSD@.
+In principle, @option{--enable-threads} is now compatible with
+@option{--enable-libgcj} on FreeBSD@.  However, it has only been built
+and tested on i386-*-freebsd4.5 and alpha-*-freebsd5.0 and important
+test suite failures remain.  Multi-threaded boehm-gc (required for
+libjava) exposes severe threaded signal-handling bugs on FreeBSD before
+4.5-RELEASE.  The alpha port may not fully bootstrap without some manual
+intervention: gcjh will crash with a floating-point exception while
+generating @file{java/lang/Double.h} (just copy the version built on
+i386-*-freebsd* and rerun the top-level gmake with no arguments and it
+should properly complete the bootstrap).  Other CPU architectures
+supported by FreeBSD will require additional configuration tuning in, at
+the very least, both boehm-gc and libffi.
+
+Shared @file{libgcc_s.so} is now built and installed by default.
 
 @html
 </p>
@@ -2161,7 +2180,13 @@ bootstrap}.
 @heading @anchor{hppa*-hp-hpux11}hppa*-hp-hpux11
 
 GCC 3.0 supports HP-UX 11.  You must use GNU binutils 2.11 or above on
-this platform.
+this platform.  Thread support is not currently implemented for this
+platform, so @option{--enable-threads} does not work.
+See @uref{http://gcc.gnu.org/ml/gcc-prs/2002-01/msg00551.html}
+and @uref{http://gcc.gnu.org/ml/gcc-bugs/2002-01/msg00663.html}.
+GCC 2.95.x is not supported under HP-UX 11 and cannot be used to
+compile GCC 3.0.  Refer to @uref{binaries.html,,binaries} for information
+about obtaining precompiled GCC binaries for HP-UX.
 
 @html
 </p>
@@ -2507,13 +2532,14 @@ does not provide a definition that will confuse @command{configure}.
 If this error occurs during stage2 or later, then the problem most likely
 is the version of Make (see above).
 
-Binutils 2.10 does not support AIX 4.3.  Binutils available from the
-@uref{http://www-1.ibm.com/servers/aix/products/aixos/linux/,,AIX
-Toolbox for Linux: GNU and Open Source tools for AIX};
-website does work.  Binutils 2.11 is expected to include AIX 4.3
-support.  The GNU Assembler is necessary for @samp{libstdc++} to build.  The
-AIX native @command{ld} still is recommended.  The native AIX tools do
+The GNU Assembler incorrectly reports that it supports WEAK symbols on
+AIX which causes GCC to try to utilize weak symbol functionality which
+is not really supported on the platform.  The native @command{as} and
+@command{ld} still are recommended.  The native AIX tools do
 interoperate with GCC@.
+
+Building @file{libstdc++.a} requires a fix for a AIX Assembler bug
+APAR IY26685 (AIX 4.3) or APAR IY25528 (AIX 5.1).
 
 Linking executables and shared libraries may produce warnings of
 duplicate symbols.  The assembly files generated by GCC for AIX always
@@ -2521,17 +2547,6 @@ have included multiple symbol definitions for certain global variable
 and function declarations in the original program.  The warnings should
 not prevent the linker from producing a correct library or runnable
 executable.
-
-GCC's exception handling implementation stores process-specific data in
-the shared library which prevents exception handling from working
-correctly on AIX in a default installation.  To work around this, the
-shared objects need to be loaded in the process private segment to
-prevent them from being shared and marked read-only.  This is
-accomplished on AIX by installing the shared libraries
-(@file{libgcc_s.a} and @file{libstdc++.a}) with file permissions
-disallowing read-other (@samp{chmod a+x,o-r}).  If the shared libraries
-have been used, the shared library segment can be cleaned using the
-@samp{/usr/sbin/slibclean} command.
 
 AIX 4.3 utilizes a ``large format'' archive to support both 32-bit and
 64-bit object modules.  The routines provided in AIX 4.3.0 and AIX 4.3.1
@@ -2775,7 +2790,7 @@ does not happen on 3.1.
 You absolutely @strong{must} use GNU sed and GNU make on this platform.
 
 
-On NeXTSTEP 3.x where x < 3 the build of GCC will abort during  
+On NeXTSTEP 3.x where x < 3 the build of GCC will abort during
 stage1 with an error message like this:
 
 @example
@@ -3080,10 +3095,10 @@ to increase its table size for switch statements with the
 optimization option, you also need to use @option{-Olimit 3000}.
 
 To enable debugging under IRIX 5, you must use GNU @command{as} 2.11.2
-or later, 
+or later,
 and use the @option{--with-gnu-as} configure option when configuring GCC.
 GNU @command{as} is distributed as part of the binutils package.
-When using release 2.11.2, you need to apply a patch 
+When using release 2.11.2, you need to apply a patch
 @uref{http://sources.redhat.com/ml/binutils/2001-07/msg00352.html,,http://sources.redhat.com/ml/binutils/2001-07/msg00352.html}
 which will be included in the next release of binutils.
 
@@ -3358,14 +3373,14 @@ can be safely ignored; the stage 3 compiler is correct.
 <hr>
 @end html
 @heading @anchor{s390-*-linux*}s390-*-linux*
-S/390 system running Linux for S/390@. 
+S/390 system running Linux for S/390@.
 
 @html
 </p>
 <hr>
 @end html
 @heading @anchor{s390x-*-linux*}s390x-*-linux*
-zSeries system (64 Bit) running Linux for zSeries@. 
+zSeries system (64 Bit) running Linux for zSeries@.
 
 @html
 </p>
@@ -3429,6 +3444,11 @@ There are patches for Solaris 2.6 (105633-56 or newer for SPARC,
 @end html
 @heading @anchor{sparc-sun-solaris2*}sparc-sun-solaris2*
 
+When GCC is configured to use binutils 2.11.2 or later the binaries
+produced are smaller than the ones produced using Sun's native tools;
+this difference is quite significant for binaries containing debugging
+information.
+
 Sun @command{as} 4.x is broken in that it cannot cope with long symbol names.
 A typical error message might look similar to the following:
 
@@ -3447,6 +3467,11 @@ the UltraSPARC CPU, you should try the @option{-mtune=ultrasparc}
 option instead, which should be safe from those bugs and produce code
 that, unlike full 64-bit code, can still run on non-UltraSPARC
 machines.
+
+When configuring on a Solaris 7 or 8 system that is running a kernel
+that supports only 32-bit binaries, one must configure with
+@option{--disable-multilib}, since we will not be able to build the
+64-bit target libraries.
 
 @html
 </p>
@@ -3486,7 +3511,7 @@ the hosts that run GCC itself.  Second, Sun says that 106950-03 is
 only a partial fix for bug 4210064, but Sun doesn't know whether the
 partial fix is adequate for GCC@.  Revision -08 or later should fix
 the bug.  The current (as of 2001-09-24) revision is -14, and is included in
-the Solaris 7 Recommended Patch Cluster. 
+the Solaris 7 Recommended Patch Cluster.
 @end itemize
 
 
@@ -3498,10 +3523,12 @@ the Solaris 7 Recommended Patch Cluster.
 
 The Solaris 8 linker fails to link some @samp{libjava} programs if
 previously-installed GCC java libraries already exist in the configured
-prefix.  For this reason, @samp{libgcj} is disabled by default on Solaris 8.
-If you use GNU @command{ld}, or if you don't have a previously-installed @samp{libgcj} in
-the same prefix, use @option{--enable-libgcj} to build and install the
-Java libraries.
+prefix.  For this reason, @command{configure} will report an error on
+Solaris 8 if an existing @samp{libgcj} is found in the appropriate
+install directory and the system linker is in use.  In this case, you
+can configure with a different prefix, or delete or rename the existing
+@samp{libgcj} library files before configuring, or configure using
+@option{--disable-libgcj}.
 
 @html
 <p>
@@ -3557,6 +3584,21 @@ can use the @code{sparc32} program to start up a new shell
 invocation with an environment that causes @command{configure} to
 recognize (via @samp{uname -a}) the system as @samp{sparc-*-*} instead.
 
+@html
+</p>
+<hr>
+@end html
+@heading @anchor{sparcv9-*-solaris2*}sparcv9-*-solaris2*
+
+The following compiler flags must be specified in the configure
+step in order to bootstrap this target with the Sun compiler:
+
+@example
+   % CC="cc -xildoff -xarch=v9" @var{srcdir}/configure [@var{options}] [@var{target}]
+@end example
+
+@option{-xildoff} turns off the incremental linker, and @option{-xarch=v9}
+specifies the v9 architecture to the Sun linker and assembler.
 
 @html
 </p>
@@ -3638,6 +3680,38 @@ make CC=stage2/xgcc CFLAGS="-Bstage2/ -g -O"
 
 You may need to raise the ULIMIT setting to build a C++ compiler,
 as the file @file{cc1plus} is larger than one megabyte.
+
+@html
+</p>
+<hr>
+@end html
+@heading @anchor{xtensa-*-elf}xtensa-*-elf
+
+This target is intended for embedded Xtensa systems using the
+@samp{newlib} C library.  It uses ELF but does not support shared
+objects.  Designed-defined instructions specified via the
+Tensilica Instruction Extension (TIE) language are only supported
+through inline assembly.
+
+The Xtensa configuration information must be specified prior to
+building GCC@.  The @file{gcc/config/xtensa/xtensa-config.h} header
+file contains the configuration information.  If you created your
+own Xtensa configuration with the Xtensa Processor Generator, the
+downloaded files include a customized copy of this header file,
+which you can use to replace the default header file.
+
+@html
+</p>
+<hr>
+@end html
+@heading @anchor{xtensa-*-linux*}xtensa-*-linux*
+
+This target is for Xtensa systems running GNU/Linux.  It supports ELF
+shared objects and the GNU C library (glibc).  It also generates
+position-independent code (PIC) regardless of whether the
+@option{-fpic} or @option{-fPIC} options are used.  In other
+respects, this target is the same as the
+@uref{#xtensa-*-elf,,@samp{xtensa-*-elf}} target.
 
 @html
 </p>

@@ -1,6 +1,6 @@
 /* Function declarations for libiberty.
 
-   Copyright 2001 Free Software Foundation, Inc.
+   Copyright 2001, 2002 Free Software Foundation, Inc.
    
    Note - certain prototypes declared in this header file are for
    functions whoes implementation copyright does not belong to the
@@ -272,10 +272,14 @@ extern int asprintf PARAMS ((char **, const char *, ...)) ATTRIBUTE_PRINTF_2;
 /* Like vsprintf but provides a pointer to malloc'd storage, which
    must be freed by the caller.  */
 
-/* APPLE LOCAL  Make vasprintf prototype agree with <stdio.h>  */
-#include <machine/ansi.h>
-extern int vasprintf PARAMS ((char **, const char *, _BSD_VA_LIST_))
+/* APPLE LOCAL begin remove vasprintf prototype */
+/* This prototype has a reference to va_list, which causes heartburn
+   vs the stdio.h prototype on some Darwin versions.  */
+#if 0
+extern int vasprintf PARAMS ((char **, const char *, va_list))
   ATTRIBUTE_PRINTF(2,0);
+#endif
+/* APPLE LOCAL end remove vasprintf prototype */
 
 #define ARRAY_SIZE(a) (sizeof (a) / sizeof ((a)[0]))
 
@@ -285,7 +289,7 @@ extern int vasprintf PARAMS ((char **, const char *, _BSD_VA_LIST_))
    USE_C_ALLOCA yourself.  The canonical autoconf macro C_ALLOCA is
    also set/unset as it is often used to indicate whether code needs
    to call alloca(0).  */
-extern PTR C_alloca PARAMS((size_t));
+extern PTR C_alloca PARAMS ((size_t)) ATTRIBUTE_MALLOC;
 #undef alloca
 #if GCC_VERSION >= 2000 && !defined USE_C_ALLOCA
 # define alloca(x) __builtin_alloca(x)

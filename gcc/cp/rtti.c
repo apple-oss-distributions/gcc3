@@ -702,6 +702,12 @@ tinfo_base_init (desc, target)
     DECL_EXTERNAL (name_decl) = 0;
     TREE_PUBLIC (name_decl) = 1;
     comdat_linkage (name_decl);
+    /* APPLE LOCAL begin coalesce typeinfo */
+#ifdef MAKE_DECL_COALESCED
+    MAKE_DECL_COALESCED (name_decl);
+#endif /* MAKE_DECL_COALESCED */
+    /* APPLE LOCAL end coalesce typeinfo */
+
     /* External name of the string containing the type's name has a
        special name.  */
     SET_DECL_ASSEMBLER_NAME (name_decl,
@@ -1075,7 +1081,7 @@ synthesize_tinfo_var (target_type, real_name)
 	  var_init = generic_initializer (var_type, target_type);
 	  break;
 	}
-      my_friendly_abort (20000117);
+      abort ();
     }
   
   return create_real_tinfo_var (target_type,
@@ -1117,6 +1123,12 @@ create_real_tinfo_var (target_type, name, type, init, non_public)
       TREE_PUBLIC (decl) = 1;
       if (flag_weak || !typeinfo_in_lib_p (target_type))
 	comdat_linkage (decl);
+      /* APPLE LOCAL begin coalesce typeinfo */
+#ifdef MAKE_DECL_COALESCED
+      if (!typeinfo_in_lib_p (target_type))
+	MAKE_DECL_COALESCED (decl);
+#endif /* MAKE_DECL_COALESCED */
+      /* APPLE LOCAL end coalesce typeinfo */
     }
   SET_DECL_ASSEMBLER_NAME (decl, name);
   DECL_INITIAL (decl) = init;

@@ -1,6 +1,6 @@
 /* Control flow optimization code for GNU compiler.
    Copyright (C) 1987, 1988, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001 Free Software Foundation, Inc.
+   1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -44,6 +44,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "toplev.h"
 #include "cselib.h"
 #include "tm_p.h"
+#include "target.h"
 
 #include "obstack.h"
 
@@ -177,6 +178,7 @@ try_simplify_condjump (cbranch_block)
 						    jump_dest_block);
   cbranch_jump_edge->flags |= EDGE_FALLTHRU;
   cbranch_fallthru_edge->flags &= ~EDGE_FALLTHRU;
+  update_br_prob_note (cbranch_block);
 
   /* Delete the block with the unconditional jump, and clean up the mess.  */
   flow_delete_block (jump_block);
@@ -524,17 +526,54 @@ try_forward_edges (mode, b)
 	      edge t;
 
 	      first->count -= edge_count;
-	      first->succ->count -= edge_count;
+	      if (first->count < 0)
+		first->count = 0;
 	      first->frequency -= edge_frequency;
+	      if (first->frequency < 0)
+		first->frequency = 0;
 	      if (first->succ->succ_next)
 		{
+		  edge e;
+		  int prob;
 		  if (n >= nthreaded_edges)
 		    abort ();
 		  t = threaded_edges [n++];
+		  if (t->src != first)
+		    abort ();
+		  if (first->frequency)
+		    prob = edge_frequency * REG_BR_PROB_BASE / first->frequency;
+		  else
+		    prob = 0;
+		  if (prob > t->probability)
+		    prob = t->probability;
+		  t->probability -= prob;
+		  prob = REG_BR_PROB_BASE - prob;
+		  if (prob <= 0)
+		    {
+		      first->succ->probability = REG_BR_PROB_BASE;
+		      first->succ->succ_next->probability = 0;
+		    }
+		  else
+		    for (e = first->succ; e; e = e->succ_next)
+		      e->probability = ((e->probability * REG_BR_PROB_BASE)
+					/ (double) prob);
+		  update_br_prob_note (first);
 		}
 	      else
-		t = first->succ;
+		{
+		  /* It is possible that as the result of
+		     threading we've removed edge as it is
+		     threaded to the fallthru edge.  Avoid
+		     getting out of sync.  */
+		  if (n < nthreaded_edges
+		      && first == threaded_edges [n]->src)
+		    n++;
+		  t = first->succ;
+		 }
 
+	      t->count -= edge_count;
+	      if (t->count < 0)
+		t->count = 0;
 	      first = t->dest;
 	    }
 	  while (first != target);
@@ -720,6 +759,7 @@ merge_blocks (e, b, c, mode)
   /* If B has a fallthru edge to C, no need to move anything.  */
   if (e->flags & EDGE_FALLTHRU)
     {
+      int b_index = b->index, c_index = c->index;
       /* We need to update liveness in case C already has broken liveness
 	 or B ends by conditional jump to next instructions that will be
 	 removed.  */
@@ -731,7 +771,7 @@ merge_blocks (e, b, c, mode)
 
       if (rtl_dump_file)
 	fprintf (rtl_dump_file, "Merged %d and %d without moving.\n",
-		 b->index, c->index);
+                 b_index, c_index);
 
       return true;
     }
@@ -1057,9 +1097,20 @@ outgoing_edges_match (mode, bb1, bb2)
 
       if (!bb2->succ
           || !bb2->succ->succ_next
-	  || bb1->succ->succ_next->succ_next
+	  || bb2->succ->succ_next->succ_next
 	  || !any_condjump_p (bb2->end)
-	  || !onlyjump_p (bb1->end))
+	  || !onlyjump_p (bb2->end))
+	return false;
+
+      /* Do not crossjump across loop boundaries.  This is a temporary
+	 workaround for the common scenario in which crossjumping results
+	 in killing the duplicated loop condition, making bb-reorder rotate
+	 the loop incorectly, leaving an extra unconditional jump inside
+	 the loop.
+
+	 This check should go away once bb-reorder knows how to duplicate
+	 code in this case or rotate the loops to avoid this scenario.  */
+      if (bb1->loop_depth != bb2->loop_depth)
 	return false;
 
       b1 = BRANCH_EDGE (bb1);
@@ -1122,32 +1173,31 @@ outgoing_edges_match (mode, bb1, bb2)
 	 we will only have one branch prediction bit to work with.  Thus
 	 we require the existing branches to have probabilities that are
 	 roughly similar.  */
-      /* ??? We should use bb->frequency to allow merging in infrequently
-	 executed blocks, but at the moment it is not available when
-	 cleanup_cfg is run.  */
-      if (match && !optimize_size)
+      if (match
+	  && !optimize_size
+	  && bb1->frequency > BB_FREQ_MAX / 1000
+	  && bb2->frequency > BB_FREQ_MAX / 1000)
 	{
-	  rtx note1, note2;
-	  int prob1, prob2;
+	  int prob2;
 
-	  note1 = find_reg_note (bb1->end, REG_BR_PROB, 0);
-	  note2 = find_reg_note (bb2->end, REG_BR_PROB, 0);
+	  if (b1->dest == b2->dest)
+	    prob2 = b2->probability;
+	  else
+	    /* Do not use f2 probability as f2 may be forwarded.  */
+	    prob2 = REG_BR_PROB_BASE - b2->probability;
 
-	  if (note1 && note2)
+	  /* Fail if the difference in probabilities is greater than 50%.
+	     This rules out two well-predicted branches with opposite
+	     outcomes.  */
+	  if (abs (b1->probability - prob2) > REG_BR_PROB_BASE / 2)
 	    {
-	      prob1 = INTVAL (XEXP (note1, 0));
-	      prob2 = INTVAL (XEXP (note2, 0));
-	      if (reverse)
-		prob2 = REG_BR_PROB_BASE - prob2;
+	      if (rtl_dump_file)
+		fprintf (rtl_dump_file,
+			 "Outcomes of branch in bb %i and %i differs to much (%i %i)\n",
+			 bb1->index, bb2->index, b1->probability, prob2);
 
-	      /* Fail if the difference in probabilities is
-		 greater than 5%.  */
-	      if (abs (prob1 - prob2) > REG_BR_PROB_BASE / 20)
-		return false;
+	      return false;
 	    }
-
-	  else if (note1 || note2)
-	    return false;
 	}
 
       if (rtl_dump_file && match)
@@ -1234,19 +1284,16 @@ try_crossjump_to_edge (mode, e1, e2)
   edge s;
   rtx last;
   rtx label;
-  rtx note;
 
   /* Search backward through forwarder blocks.  We don't need to worry
      about multiple entry or chained forwarders, as they will be optimized
      away.  We do this to look past the unconditional jump following a
      conditional jump that is required due to the current CFG shape.  */
   if (src1->pred
-      && !src1->pred->pred_next
       && FORWARDER_BLOCK_P (src1))
     e1 = src1->pred, src1 = e1->src;
 
   if (src2->pred
-      && !src2->pred->pred_next
       && FORWARDER_BLOCK_P (src2))
     e2 = src2->pred, src2 = e2->src;
 
@@ -1331,8 +1378,14 @@ try_crossjump_to_edge (mode, e1, e2)
       if (FORWARDER_BLOCK_P (s2->dest))
 	{
 	  s2->dest->succ->count -= s2->count;
+	  if (s2->dest->succ->count < 0)
+	    s2->dest->succ->count = 0;
 	  s2->dest->count -= s2->count;
 	  s2->dest->frequency -= EDGE_FREQUENCY (s);
+	  if (s2->dest->frequency < 0)
+	    s2->dest->frequency = 0;
+	  if (s2->dest->count < 0)
+	    s2->dest->count = 0;
 	}
 
       if (!redirect_to->frequency && !src1->frequency)
@@ -1344,9 +1397,7 @@ try_crossjump_to_edge (mode, e1, e2)
 	     / (redirect_to->frequency + src1->frequency));
     }
 
-  note = find_reg_note (redirect_to->end, REG_BR_PROB, 0);
-  if (note)
-    XEXP (note, 0) = GEN_INT (BRANCH_EDGE (redirect_to)->probability);
+  update_br_prob_note (redirect_to);
 
   /* Edit SRC1 to go to REDIRECT_TO at NEWPOS1.  */
 
@@ -1491,149 +1542,158 @@ try_optimize_cfg (mode)
   for (i = 0; i < n_basic_blocks; i++)
     update_forwarder_flag (BASIC_BLOCK (i));
 
-  /* Attempt to merge blocks as made possible by edge removal.  If a block
-     has only one successor, and the successor has only one predecessor,
-     they may be combined.  */
-  do
+  if (! (* targetm.cannot_modify_jumps_p) ())
     {
-      changed = false;
-      iterations++;
-
-      if (rtl_dump_file)
-	fprintf (rtl_dump_file, "\n\ntry_optimize_cfg iteration %i\n\n",
-		 iterations);
-
-      for (i = 0; i < n_basic_blocks;)
+      /* Attempt to merge blocks as made possible by edge removal.  If
+	 a block has only one successor, and the successor has only
+	 one predecessor, they may be combined.  */
+      do
 	{
-	  basic_block c, b = BASIC_BLOCK (i);
-	  edge s;
-	  bool changed_here = false;
+	  changed = false;
+	  iterations++;
 
-	  /* Delete trivially dead basic blocks.  */
-	  while (b->pred == NULL)
+	  if (rtl_dump_file)
+	    fprintf (rtl_dump_file,
+		     "\n\ntry_optimize_cfg iteration %i\n\n",
+		     iterations);
+
+	  for (i = 0; i < n_basic_blocks;)
 	    {
-	      c = BASIC_BLOCK (b->index - 1);
-	      if (rtl_dump_file)
-		fprintf (rtl_dump_file, "Deleting block %i.\n", b->index);
+	      basic_block c, b = BASIC_BLOCK (i);
+	      edge s;
+	      bool changed_here = false;
 
-	      flow_delete_block (b);
-	      changed = true;
-	      b = c;
+	      /* Delete trivially dead basic blocks.  */
+	      while (b->pred == NULL)
+		{
+		  c = BASIC_BLOCK (b->index - 1);
+		  if (rtl_dump_file)
+		    fprintf (rtl_dump_file, "Deleting block %i.\n",
+			     b->index);
+
+		  flow_delete_block (b);
+		  changed = true;
+		  b = c;
+		}
+
+	      /* Remove code labels no longer used.  Don't do this
+		 before CALL_PLACEHOLDER is removed, as some branches
+		 may be hidden within.  */
+	      if (b->pred->pred_next == NULL
+		  && (b->pred->flags & EDGE_FALLTHRU)
+		  && !(b->pred->flags & EDGE_COMPLEX)
+		  && GET_CODE (b->head) == CODE_LABEL
+		  && (!(mode & CLEANUP_PRE_SIBCALL)
+		      || !tail_recursion_label_p (b->head))
+		  /* If the previous block ends with a branch to this
+		     block, we can't delete the label.  Normally this
+		     is a condjump that is yet to be simplified, but
+		     if CASE_DROPS_THRU, this can be a tablejump with
+		     some element going to the same place as the
+		     default (fallthru).  */
+		  && (b->pred->src == ENTRY_BLOCK_PTR
+		      || GET_CODE (b->pred->src->end) != JUMP_INSN
+		      || ! label_is_jump_target_p (b->head,
+						   b->pred->src->end)))
+		{
+		  rtx label = b->head;
+
+		  b->head = NEXT_INSN (b->head);
+		  delete_insn_chain (label, label);
+		  if (rtl_dump_file)
+		    fprintf (rtl_dump_file, "Deleted label in block %i.\n",
+			     b->index);
+		}
+
+	      /* If we fall through an empty block, we can remove it.  */
+	      if (b->pred->pred_next == NULL
+		  && (b->pred->flags & EDGE_FALLTHRU)
+		  && GET_CODE (b->head) != CODE_LABEL
+		  && FORWARDER_BLOCK_P (b)
+		  /* Note that forwarder_block_p true ensures that
+		     there is a successor for this block.  */
+		  && (b->succ->flags & EDGE_FALLTHRU)
+		  && n_basic_blocks > 1)
+		{
+		  if (rtl_dump_file)
+		    fprintf (rtl_dump_file,
+			     "Deleting fallthru block %i.\n",
+			     b->index);
+
+		  c = BASIC_BLOCK (b->index ? b->index - 1 : 1);
+		  redirect_edge_succ_nodup (b->pred, b->succ->dest);
+		  flow_delete_block (b);
+		  changed = true;
+		  b = c;
+		}
+
+	      /* Merge blocks.  Loop because chains of blocks might be
+		 combineable.  */
+	      while ((s = b->succ) != NULL
+		     && s->succ_next == NULL
+		     && !(s->flags & EDGE_COMPLEX)
+		     && (c = s->dest) != EXIT_BLOCK_PTR
+		     && c->pred->pred_next == NULL
+		     /* If the jump insn has side effects,
+			we can't kill the edge.  */
+		     && (GET_CODE (b->end) != JUMP_INSN
+			 || onlyjump_p (b->end))
+		     && merge_blocks (s, b, c, mode))
+		changed_here = true;
+
+	      /* Simplify branch over branch.  */
+	      if ((mode & CLEANUP_EXPENSIVE) && try_simplify_condjump (b))
+		{
+		  BB_SET_FLAG (b, BB_UPDATE_LIFE);
+		  changed_here = true;
+		}
+
+	      /* If B has a single outgoing edge, but uses a
+		 non-trivial jump instruction without side-effects, we
+		 can either delete the jump entirely, or replace it
+		 with a simple unconditional jump.  Use
+		 redirect_edge_and_branch to do the dirty work.  */
+	      if (b->succ
+		  && ! b->succ->succ_next
+		  && b->succ->dest != EXIT_BLOCK_PTR
+		  && onlyjump_p (b->end)
+		  && redirect_edge_and_branch (b->succ, b->succ->dest))
+		{
+		  BB_SET_FLAG (b, BB_UPDATE_LIFE);
+		  update_forwarder_flag (b);
+		  changed_here = true;
+		}
+
+	      /* Simplify branch to branch.  */
+	      if (try_forward_edges (mode, b))
+		changed_here = true;
+
+	      /* Look for shared code between blocks.  */
+	      if ((mode & CLEANUP_CROSSJUMP)
+		  && try_crossjump_bb (mode, b))
+		changed_here = true;
+
+	      /* Don't get confused by the index shift caused by
+		 deleting blocks.  */
+	      if (!changed_here)
+		i = b->index + 1;
+	      else
+		changed = true;
 	    }
 
-	  /* Remove code labels no longer used.  Don't do this before
-	     CALL_PLACEHOLDER is removed, as some branches may be hidden
-	     within.  */
-	  if (b->pred->pred_next == NULL
-	      && (b->pred->flags & EDGE_FALLTHRU)
-	      && !(b->pred->flags & EDGE_COMPLEX)
-	      && GET_CODE (b->head) == CODE_LABEL
-	      && (!(mode & CLEANUP_PRE_SIBCALL)
-		  || !tail_recursion_label_p (b->head))
-	      /* If the previous block ends with a branch to this block,
-		 we can't delete the label.  Normally this is a condjump
-		 that is yet to be simplified, but if CASE_DROPS_THRU,
-		 this can be a tablejump with some element going to the
-		 same place as the default (fallthru).  */
-	      && (b->pred->src == ENTRY_BLOCK_PTR
-		  || GET_CODE (b->pred->src->end) != JUMP_INSN
-		  || ! label_is_jump_target_p (b->head, b->pred->src->end)))
-	    {
-	      rtx label = b->head;
-
-	      b->head = NEXT_INSN (b->head);
-	      delete_insn_chain (label, label);
-	      if (rtl_dump_file)
-		fprintf (rtl_dump_file, "Deleted label in block %i.\n",
-			 b->index);
-	    }
-
-	  /* If we fall through an empty block, we can remove it.  */
-	  if (b->pred->pred_next == NULL
-	      && (b->pred->flags & EDGE_FALLTHRU)
-	      && GET_CODE (b->head) != CODE_LABEL
-	      && FORWARDER_BLOCK_P (b)
-	      /* Note that forwarder_block_p true ensures that there
-		 is a successor for this block.  */
-	      && (b->succ->flags & EDGE_FALLTHRU)
-	      && n_basic_blocks > 1)
-	    {
-	      if (rtl_dump_file)
-		fprintf (rtl_dump_file, "Deleting fallthru block %i.\n",
-			 b->index);
-
-	      c = BASIC_BLOCK (b->index ? b->index - 1 : 1);
-	      redirect_edge_succ_nodup (b->pred, b->succ->dest);
-	      flow_delete_block (b);
-	      changed = true;
-	      b = c;
-	    }
-
-	  /* Merge blocks.  Loop because chains of blocks might be
-	     combineable.  */
-	  while ((s = b->succ) != NULL
-		 && s->succ_next == NULL
-	         && !(s->flags & EDGE_COMPLEX)
-		 && (c = s->dest) != EXIT_BLOCK_PTR
-		 && c->pred->pred_next == NULL
-		 /* If the jump insn has side effects,
-		    we can't kill the edge.  */
-		 && (GET_CODE (b->end) != JUMP_INSN
-		     || onlyjump_p (b->end))
-		 && merge_blocks (s, b, c, mode))
-	    changed_here = true;
-
-	  /* Simplify branch over branch.  */
-	  if ((mode & CLEANUP_EXPENSIVE) && try_simplify_condjump (b))
-	    {
-	      BB_SET_FLAG (b, BB_UPDATE_LIFE);
-	      changed_here = true;
-	    }
-
-	  /* If B has a single outgoing edge, but uses a non-trivial jump
-	     instruction without side-effects, we can either delete the
-	     jump entirely, or replace it with a simple unconditional jump.
-	     Use redirect_edge_and_branch to do the dirty work.  */
-	  if (b->succ
-	      && ! b->succ->succ_next
-	      && b->succ->dest != EXIT_BLOCK_PTR
-	      && onlyjump_p (b->end)
-	      && redirect_edge_and_branch (b->succ, b->succ->dest))
-	    {
-	      BB_SET_FLAG (b, BB_UPDATE_LIFE);
-	      update_forwarder_flag (b);
-	      changed_here = true;
-	    }
-
-	  /* Simplify branch to branch.  */
-	  if (try_forward_edges (mode, b))
-	    changed_here = true;
-
-	  /* Look for shared code between blocks.  */
 	  if ((mode & CLEANUP_CROSSJUMP)
-	      && try_crossjump_bb (mode, b))
-	    changed_here = true;
-
-	  /* Don't get confused by the index shift caused by deleting
-	     blocks.  */
-	  if (!changed_here)
-	    i = b->index + 1;
-	  else
+	      && try_crossjump_bb (mode, EXIT_BLOCK_PTR))
 	    changed = true;
-	}
-
-      if ((mode & CLEANUP_CROSSJUMP)
-	  && try_crossjump_bb (mode, EXIT_BLOCK_PTR))
-	changed = true;
 
 #ifdef ENABLE_CHECKING
-      if (changed)
-	verify_flow_info ();
+	  if (changed)
+	    verify_flow_info ();
 #endif
 
-      changed_overall |= changed;
+	  changed_overall |= changed;
+	}
+      while (changed);
     }
-  while (changed);
 
   if (mode & CLEANUP_CROSSJUMP)
     remove_fake_edges ();
@@ -1669,22 +1729,33 @@ try_optimize_cfg (mode)
 static bool
 delete_unreachable_blocks ()
 {
-  int i;
+  int i, j;
   bool changed = false;
 
   find_unreachable_blocks ();
 
-  /* Delete all unreachable basic blocks.  Count down so that we
-     don't interfere with the block renumbering that happens in
-     flow_delete_block.  */
+  /* Delete all unreachable basic blocks.  Do compaction concurrently,
+     as otherwise we can wind up with O(N^2) behaviour here when we 
+     have oodles of dead code.  */
 
-  for (i = n_basic_blocks - 1; i >= 0; --i)
+  for (i = j = 0; i < n_basic_blocks; ++i)
     {
       basic_block b = BASIC_BLOCK (i);
 
       if (!(b->flags & BB_REACHABLE))
-	flow_delete_block (b), changed = true;
+	{
+	  flow_delete_block_noexpunge (b);
+	  expunge_block_nocompact (b);
+	  changed = true;
+	}
+      else
+	{
+	  BASIC_BLOCK (j) = b;
+	  b->index = j++;
+	}
     }
+  n_basic_blocks = j;
+  basic_block_info->num_elements = j;
 
   if (changed)
     tidy_fallthru_edges ();

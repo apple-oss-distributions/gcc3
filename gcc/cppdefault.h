@@ -34,7 +34,7 @@ Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 #define STANDARD_INCLUDE_COMPONENT 0
 #endif
 
-/* APPLE LOCAL PHAT builds  */
+/* APPLE LOCAL fat builds  */
 #if defined (CROSS_COMPILE) && !defined (PHAT)
 #undef LOCAL_INCLUDE_DIR
 #undef SYSTEM_INCLUDE_DIR

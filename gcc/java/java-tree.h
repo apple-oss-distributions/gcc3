@@ -213,6 +213,9 @@ extern int flag_optimize_sci;
    in order to improve binary compatibility. */
 extern int flag_indirect_dispatch;
 
+/* When zero, don't generate runtime array store checks. */
+extern int flag_store_check;
+
 /* Encoding used for source files.  */
 extern const char *current_encoding;
 
@@ -394,6 +397,8 @@ enum java_tree_index
   JTI_OTABLE_METHODS,
   JTI_OTABLE_DECL,
   JTI_OTABLE_SYMS_DECL,
+
+  JTI_PREDEF_FILENAMES,
 
   JTI_MAX
 };
@@ -656,8 +661,8 @@ extern tree java_global_trees[JTI_MAX];
 #define nativecode_ptr_array_type_node \
   java_global_trees[JTI_NATIVECODE_PTR_ARRAY_TYPE_NODE]
 
-#define PREDEF_FILENAMES_SIZE 10
-extern tree predef_filenames[PREDEF_FILENAMES_SIZE];
+#define predef_filenames \
+  java_global_trees[JTI_PREDEF_FILENAMES]
 
 #define nativecode_ptr_type_node ptr_type_node
 
@@ -940,6 +945,7 @@ struct lang_decl
   unsigned int init_final : 1;	/* Nonzero all finals are initialized */
   unsigned int fixed_ctor : 1;
   unsigned int init_calls_this : 1;
+  unsigned int strictfp : 1;
 };
 
 /* init_test_table hash table entry structure.  */
@@ -988,6 +994,7 @@ struct lang_decl_var
 #define TYPE_IMPORT_DEMAND_LIST(T) (TYPE_LANG_SPECIFIC(T)->import_demand_list)
 #define TYPE_PRIVATE_INNER_CLASS(T) (TYPE_LANG_SPECIFIC(T)->pic)
 #define TYPE_PROTECTED_INNER_CLASS(T) (TYPE_LANG_SPECIFIC(T)->poic)
+#define TYPE_STRICTFP(T) (TYPE_LANG_SPECIFIC(T)->strictfp)
 
 struct lang_type
 {
@@ -1007,6 +1014,7 @@ struct lang_type
   tree import_demand_list;	/* Imported types, in the CU of this class */
   unsigned pic:1;		/* Private Inner Class. */
   unsigned poic:1;		/* Protected Inner Class. */
+  unsigned strictfp:1;		/* `strictfp' class.  */
 };
 
 #ifdef JAVA_USE_HANDLES
@@ -1085,6 +1093,9 @@ extern HOST_WIDE_INT java_array_type_length PARAMS ((tree));
 extern int read_class PARAMS ((tree));
 extern void load_class PARAMS ((tree, int));
 
+extern tree check_for_builtin PARAMS ((tree, tree));
+extern void initialize_builtins PARAMS ((void));
+
 extern tree lookup_name PARAMS ((tree));
 extern tree build_known_method_ref PARAMS ((tree, tree, tree, tree, tree));
 extern tree build_class_init PARAMS ((tree, tree));
@@ -1098,6 +1109,7 @@ extern tree build_java_binop PARAMS ((enum tree_code, tree, tree, tree));
 extern tree build_java_soft_divmod PARAMS ((enum tree_code, tree, tree, tree));
 extern tree binary_numeric_promotion PARAMS ((tree, tree, tree *, tree *));
 extern tree build_java_arrayaccess PARAMS ((tree, tree, tree));
+extern tree build_java_arraystore_check PARAMS ((tree, tree));
 extern tree build_newarray PARAMS ((int, tree));
 extern tree build_anewarray PARAMS ((tree, tree));
 extern tree build_new_array PARAMS ((tree, tree));
@@ -1111,7 +1123,6 @@ extern tree create_label_decl PARAMS ((tree));
 extern void push_labeled_block PARAMS ((tree));
 extern tree prepare_eh_table_type PARAMS ((tree));
 extern tree build_exception_object_ref PARAMS ((tree));
-extern void java_set_exception_lang_code PARAMS ((void));
 extern tree generate_name PARAMS ((void));
 extern void pop_labeled_block PARAMS ((void));
 extern const char *lang_printable_name PARAMS ((tree, int));
@@ -1222,6 +1233,9 @@ extern tree java_mangle_vtable PARAMS ((struct obstack *, tree));
 extern const char *lang_printable_name_wls PARAMS ((tree, int));
 extern void append_gpp_mangled_name PARAMS ((const char *, int));
 
+extern void add_predefined_file PARAMS ((tree));
+extern int predefined_filename_p PARAMS ((tree));
+
 /* We use ARGS_SIZE_RTX to indicate that gcc/expr.h has been included
    to declare `enum expand_modifier'. */
 #if defined (TREE_CODE) && defined(RTX_CODE) && defined (HAVE_MACHINE_MODES) && defined (ARGS_SIZE_RTX)
@@ -1242,6 +1256,7 @@ struct rtx_def * java_lang_expand_expr PARAMS ((tree, rtx, enum machine_mode,
 #define METHOD_NATIVE(DECL) (DECL_LANG_SPECIFIC(DECL)->native)
 #define METHOD_ABSTRACT(DECL) DECL_LANG_FLAG_5 (DECL)
 #define METHOD_TRANSIENT(DECL) DECL_LANG_FLAG_6 (DECL)
+#define METHOD_STRICTFP(DECL) (DECL_LANG_SPECIFIC (DECL)->strictfp)
 
 #define JAVA_FILE_P(NODE) TREE_LANG_FLAG_2 (NODE)
 #define CLASS_FILE_P(NODE) TREE_LANG_FLAG_3 (NODE)
@@ -1284,6 +1299,7 @@ struct rtx_def * java_lang_expand_expr PARAMS ((tree, rtx, enum machine_mode,
 #define CLASS_STATIC(DECL) DECL_LANG_FLAG_7 (DECL)
 #define CLASS_PRIVATE(DECL) (TYPE_PRIVATE_INNER_CLASS (TREE_TYPE (DECL)))
 #define CLASS_PROTECTED(DECL) (TYPE_PROTECTED_INNER_CLASS (TREE_TYPE (DECL)))
+#define CLASS_STRICTFP(DECL) (TYPE_STRICTFP (TREE_TYPE (DECL)))
 
 /* @deprecated marker flag on methods, fields and classes */
 

@@ -57,6 +57,10 @@
 #      FLEX:    Gnu flex works.
 #      Other miscellaneous tools for obscure targets.
 
+# Tell GNU make 3.79 not to run this directory in parallel.
+# Not all of the required dependencies are present.
+.NOTPARALLEL:
+
 # Suppress smart makes who think they know how to automake Yacc files
 .y.c:
 
@@ -1996,7 +2000,8 @@ ADA_INCLUDE_SRCS =\
 BC_OBJS = ../bc-emit.o ../bc-optab.o
 
 # Language-independent object files.
-BACKEND = ../main.o ../attribs.o ../libbackend.a
+# APPLE LOCAL constant cfstrings
+BACKEND = ../main.o ../attribs.o ../libbackend.a ../stub-genindex.o
 
 Makefile: $(srcdir)/Makefile.in $(srcdir)/../configure
 	cd ..; $(SHELL) config.status

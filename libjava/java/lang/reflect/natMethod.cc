@@ -1,6 +1,6 @@
 // natMethod.cc - Native code for Method class.
 
-/* Copyright (C) 1998, 1999, 2000, 2001  Free Software Foundation
+/* Copyright (C) 1998, 1999, 2000, 2001 , 2002 Free Software Foundation
 
    This file is part of libgcj.
 
@@ -9,10 +9,6 @@ Libgcj License.  Please consult the file "LIBGCJ_LICENSE" for
 details.  */
 
 #include <config.h>
-
-#if HAVE_ALLOCA_H
-#include <alloca.h>
-#endif
 
 #include <gcj/cni.h>
 #include <jvm.h>
@@ -348,8 +344,8 @@ _Jv_CallAnyMethodA (jobject obj,
     rtype = &ffi_type_void;
   else
     rtype = get_ffi_type (return_type);
-  ffi_type **argtypes = (ffi_type **) alloca (param_count
-					      * sizeof (ffi_type *));
+  ffi_type **argtypes = (ffi_type **) __builtin_alloca (param_count
+							* sizeof (ffi_type *));
 
   jclass *paramelts = elements (parameter_types);
 
@@ -392,8 +388,8 @@ _Jv_CallAnyMethodA (jobject obj,
       // FIXME: throw some kind of VirtualMachineError here.
     }
 
-  char *p = (char *) alloca (size);
-  void **values = (void **) alloca (param_count * sizeof (void *));
+  char *p = (char *) __builtin_alloca (size);
+  void **values = (void **) __builtin_alloca (param_count * sizeof (void *));
 
   i = 0;
   if (needs_this)
@@ -427,9 +423,18 @@ _Jv_CallAnyMethodA (jobject obj,
 
   Throwable *ex = NULL;
 
+  union
+  {
+    ffi_arg i;
+    jobject o;
+    jlong l;
+    jfloat f;
+    jdouble d;
+  } ffi_result;
+
   try
     {
-      ffi_call (&cif, (void (*)()) meth->ncode, result, values);
+      ffi_call (&cif, (void (*)()) meth->ncode, &ffi_result, values);
     }
   catch (Throwable *ex2)
     {
@@ -440,8 +445,47 @@ _Jv_CallAnyMethodA (jobject obj,
       ex = new InvocationTargetException (ex2);
     }
 
+  // Since ffi_call returns integer values promoted to a word, use
+  // a narrowing conversion for jbyte, jchar, etc. results.
+  // Note that boolean is handled either by the FFI_TYPE_SINT8 or
+  // FFI_TYPE_SINT32 case.
   if (is_constructor)
     result->l = obj;
+  else
+    {
+      switch (rtype->type)
+	{
+	case FFI_TYPE_VOID:
+	  break;
+	case FFI_TYPE_SINT8:
+	  result->b = (jbyte)ffi_result.i;
+	  break;
+	case FFI_TYPE_SINT16:
+	  result->s = (jshort)ffi_result.i;
+	  break;
+	case FFI_TYPE_UINT16:
+	  result->c = (jchar)ffi_result.i;
+	  break;
+	case FFI_TYPE_SINT32:
+	  result->i = (jint)ffi_result.i;
+	  break;
+	case FFI_TYPE_SINT64:
+	  result->j = (jlong)ffi_result.l;
+	  break;
+	case FFI_TYPE_FLOAT:
+	  result->f = (jfloat)ffi_result.f;
+	  break;
+	case FFI_TYPE_DOUBLE:
+	  result->d = (jdouble)ffi_result.d;
+	  break;
+	case FFI_TYPE_POINTER:
+	  result->l = (jobject)ffi_result.o;
+	  break;
+	default:
+	  JvFail ("Unknown ffi_call return type");
+	  break;
+	}
+    }
 
   return ex;
 #else

@@ -126,6 +126,44 @@ dw2_asm_output_delta VPARAMS ((int size, const char *lab1, const char *lab2,
   VA_CLOSE (ap);
 }
 
+/* APPLE LOCAL begin C++ eh */
+
+/* Output the difference between two symbols in a given size.
+   Force a relocatable reference, i.e. a reference that will
+   remain correct even if the linker moves around code in 
+   such a way that it affects the offset between the symbols. */
+
+void
+dw2_asm_output_reloc_delta VPARAMS ((int size, const char *lab1, const char *lab2,
+				     const char *comment, ...))
+{
+  VA_OPEN (ap, comment);
+  VA_FIXEDARG (ap, int, size);
+  VA_FIXEDARG (ap, const char *, lab1);
+  VA_FIXEDARG (ap, const char *, lab2);
+  VA_FIXEDARG (ap, const char *, comment);
+
+#ifdef ASM_OUTPUT_RELOC_DWARF_DELTA
+  ASM_OUTPUT_RELOC_DWARF_DELTA (asm_out_file, size, lab1, lab2);
+#else
+  dw2_assemble_integer (size,
+			gen_rtx_MINUS (Pmode,
+				       gen_rtx_SYMBOL_REF (Pmode, lab1),
+				       gen_rtx_SYMBOL_REF (Pmode, lab2)));
+#endif
+
+  if (flag_debug_asm && comment)
+    {
+      fprintf (asm_out_file, "\t%s ", ASM_COMMENT_START);
+      vfprintf (asm_out_file, comment, ap);
+    }
+  fputc ('\n', asm_out_file);
+
+  VA_CLOSE (ap);
+}
+
+/* APPLE LOCAL end C++ eh */
+
 /* Output a section-relative reference to a label.  In general this
    can only be done for debugging symbols.  E.g. on most targets with
    the GNU linker, this is accomplished with a direct reference and

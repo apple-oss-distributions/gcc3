@@ -1,5 +1,5 @@
 /* Virtual array support.
-   Copyright (C) 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
    This file is part of GCC.
@@ -83,16 +83,14 @@ varray_grow (va, n)
       size_t data_size = n * element_size;
 
 /* APPLE LOCAL PFE */
-#ifndef PFE
-      va = (varray_type) xrealloc ((char *)va, VARRAY_HDR_SIZE + data_size);
-#else
+#ifdef PFE
       if (va->name && USE_PFE_MEMORY (va->name))
         va = (varray_type) PFE_REALLOC ((char *)va, 
         				VARRAY_HDR_SIZE + data_size,
         				PFE_ALLOC_VARRAY);
       else
-        va = (varray_type) xrealloc ((char *)va, VARRAY_HDR_SIZE + data_size);
 #endif /* PFE */
+      va = (varray_type) xrealloc ((char *) va, VARRAY_HDR_SIZE + data_size);
       va->num_elements = n;
       if (n > old_elements)
 	memset (&va->data.c[old_data_size], 0, data_size - old_data_size);

@@ -1,4 +1,4 @@
-# Top level makefile fragment for GNU Objective-C
+# Top level -*- makefile -*- fragment for GNU Objective-C
 #   Copyright (C) 1997, 1998, 2000, 2001 Free Software Foundation, Inc.
 
 #This file is part of GNU CC.
@@ -47,7 +47,7 @@ OBJECTIVE-C objective-c: cc1obj$(exeext)
 # Use maximal warnings for this front end.
 objc-warn = $(STRICT_WARN)
 
-# APPLE LOCAL PFE
+# APPLE LOCAL begin PFE
 ifeq ($(PFE),yes)
 PFE_OBJC_OBJS      = pfe/objc-freeze-thaw.o 
 OBJC_FREEZE_THAW_H = $(PFE_DIR)/objc-freeze-thaw.h
@@ -55,6 +55,16 @@ else
 PFE_OBJC_OBJS      =
 OBJC_FREEZE_THAW_H =
 endif
+# APPLE LOCAL end PFE
+
+# APPLE LOCAL begin order files  ilr
+ifeq ($(ORDER_FILES),yes)
+CC1OBJ_ORDER_FLAGS = `if [ -f $(srcdir)/../order-files/cc1obj.order ]; then \
+		        echo -sectorder __TEXT __text $(srcdir)/../order-files/cc1obj.order -e start ; fi`
+else
+CC1OBJ_ORDER_FLAGS =
+endif
+# APPLE LOCAL end order files  ilr
 
 # Language-specific object files for Objective C.
 # APPLE LOCAL new tree dump
@@ -64,8 +74,10 @@ endif
 OBJC_OBJS = objc/objc-lang.o objc/objc-parse.o objc/objc-act.o $(C_AND_OBJC_OBJS) \
  objc/objc-idebug.o objc/objc-dmp-tree.o $(PFE_OBJC_OBJS)
 
+# APPLE LOCAL order files  ilr
 cc1obj$(exeext): $(OBJC_OBJS) $(BACKEND) $(LIBDEPS)
-	$(CC) $(ALL_CFLAGS) $(LDFLAGS) -o $@ $(OBJC_OBJS) $(BACKEND) $(LIBS)
+	$(CC) $(ALL_CFLAGS) $(LDFLAGS) -o $@ $(OBJC_OBJS) $(BACKEND) $(LIBS) \
+	$(CC1OBJ_ORDER_FLAGS)
 
 # Objective C language specific files.
 
@@ -93,8 +105,13 @@ po-generated: $(parsedir)/objc/objc-parse.c
 # APPLE LOCAL parsedir
 $(parsedir)/objc/objc-parse.c : $(parsedir)/objc/objc-parse.y
 	cd $(parsedir)/objc; \
-	$(BISON) $(BISONFLAGS) -v -o op$$$$.c objc-parse.y ; \
-	mv -f op$$$$.c objc-parse.c
+	if $(BISON) $(BISONFLAGS) -o op$$$$.c objc-parse.y ; then \
+	  test -f op$$$$.output && mv -f op$$$$.output objc-parse.output ; \
+	  mv -f op$$$$.c objc-parse.c ; \
+	else \
+	  rm -f op$$$$.* ; \
+	  false ; \
+	fi
 
 # APPLE LOCAL parsedir
 $(parsedir)/objc/objc-parse.y: c-parse.in

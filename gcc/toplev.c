@@ -102,33 +102,6 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "halfpic.h"
 #endif
 
-#ifdef VMS
-/* The extra parameters substantially improve the I/O performance.  */
-
-static FILE *
-vms_fopen (fname, type)
-     char *fname;
-     char *type;
-{
-  /* The <stdio.h> in the gcc-vms-1.42 distribution prototypes fopen with two
-     fixed arguments, which matches ANSI's specification but not VAXCRTL's
-     pre-ANSI implementation.  This hack circumvents the mismatch problem.  */
-  FILE *(*vmslib_fopen)() = (FILE *(*)()) fopen;
-
-  if (*type == 'w')
-    return (*vmslib_fopen) (fname, type, "mbc=32",
-			    "deq=64", "fop=tef", "shr=nil");
-  else
-    return (*vmslib_fopen) (fname, type, "mbc=32");
-}
-
-#define fopen vms_fopen
-#endif	/* VMS  */
-
-#if defined (HAVE_DECL_ENVIRON) && !HAVE_DECL_ENVIRON
-extern char **environ;
-#endif
-
 /* Carry information from ASM_DECLARE_OBJECT_NAME
    to ASM_FINISH_DECLARE_OBJECT.  */
 
@@ -149,6 +122,8 @@ static const char *decl_name PARAMS ((tree, int));
 
 static void float_signal PARAMS ((int)) ATTRIBUTE_NORETURN;
 static void crash_signal PARAMS ((int)) ATTRIBUTE_NORETURN;
+/* APPLE LOCAL interrupt signal handler (radar 2941633)  ilr */
+static void interrupt_signal PARAMS ((int)) ATTRIBUTE_NORETURN;
 static void set_float_handler PARAMS ((jmp_buf));
 static void compile_file PARAMS ((void));
 static void display_help PARAMS ((void));
@@ -189,9 +164,9 @@ const char *input_filename;
 
 const char *main_input_filename;
 
-/* APPLE LOCAL begin fat build (radar 2865464)  ilr */
+/* APPLE LOCAL begin fat builds (radar 2865464)  ilr */
 static int arch_specified = 0;
-/* APPLE LOCAL end fat build */
+/* APPLE LOCAL end fat builds */
 
 /* Current line number in real source file.  */
 
@@ -488,6 +463,19 @@ int flag_signed_char;
 
 int flag_short_enums;
 
+/* APPLE LOCAL AltiVec */
+/* Nonzero means enable AltiVec extensions.  */
+int flag_altivec;
+
+/* APPLE LOCAL begin constant cfstrings */
+/* Nonzero means that: (1) the __CONSTANT_CFSTRINGS__ manifest constant
+   is defined, possibly allowing for conditional use of the
+   __builtin__CFStringMakeConstantString function (the latter is always
+   available, regardless of the setting of this flag), and (2) use
+   the CFString layout to create @"..." strings in ObjC/ObjC++.  */
+int flag_constant_cfstrings;
+/* APPLE LOCAL end constant cfstrings */
+   
 /* Nonzero for -fcaller-saves: allocate values in regs that need to
    be saved across function calls, if that produces overall better code.
    Optional now, so people can test it.  */
@@ -704,6 +692,11 @@ int flag_rerun_loop_opt;
 
 int flag_inline_functions;
 
+/* Nonzero for -fobey-inline: 'inline' keyword must be obeyed, regardless
+   of codesize.  */
+
+int flag_obey_inline;
+
 /* Nonzero for -fkeep-inline-functions: even if we make a function
    go inline everywhere, keep its definition around for debugging
    purposes.  */
@@ -712,7 +705,12 @@ int flag_keep_inline_functions;
 
 /* Nonzero means that functions will not be inlined.  */
 
-int flag_no_inline;
+int flag_no_inline = 2;
+
+/* Nonzero means that we don't want inlining by virtue of -fno-inline,
+   not just because the tree inliner turned us off.  */
+
+int flag_really_no_inline = 2;
 
 /* Nonzero means that we should emit static const variables
    regardless of whether or not optimization is turned on.  */
@@ -970,6 +968,9 @@ debug_args[] =
 #ifdef SDB_DEBUGGING_INFO
   { "coff", SDB_DEBUG, 0, N_("Generate COFF format debug info") },
 #endif
+#ifdef VMS_DEBUGGING_INFO
+  { "vms", VMS_DEBUG, 0, N_("Generate VMS format debug info") },
+#endif
   { 0, 0, 0, 0 }
 };
 
@@ -997,10 +998,23 @@ int flag_pascal_strings;
 
 /* APPLE LOCAL end Pascal Strings 2001-07-12 sts */
 
-/* APPLE LOCAL -fcoalesce  turly  */
-/* Nonzero means use MAKE_DECL_ONE_ONLY and DECL_WEAK to "coalesce"
-   multiple copies of data and code (a la COMDAT.)  */
-int flag_coalesce = 0;
+/* APPLE LOCAL begin coalescing turly 20020319 */
+/* Nonzero means that certain data and code items can be marked as
+   coalesced, which is a lesser form of ELF weak symbols.  */
+int flag_coalescing_enabled = 1;
+
+/* Nonzero means mark template instantiations as coalesced.  */
+int flag_coalesce_templates = 1; 
+
+/* Nonzero means use the OS X 10.2 "weak_definitions" section attribute. 
+   If this is set, then explicit template instantiations DO NOT get
+   coalesced, but are plain old text or data instead.  */
+int flag_weak_coalesced_definitions = 1;
+
+/* Coalesced symbols are private export by default.  This EXPERIMENTAL
+   flag will make them global instead. */
+int flag_export_coalesced = 0;
+/* APPLE LOCAL end coalescing turly 20020319 */
 
 /* The user symbol prefix after having resolved same.  */
 const char *user_label_prefix;
@@ -1078,6 +1092,8 @@ static const lang_independent_options f_options[] =
    N_("Generate code for funcs even if they are fully inlined") },
   {"inline", &flag_no_inline, 0,
    N_("Pay attention to the 'inline' keyword") },
+  {"obey-inline", &flag_obey_inline, 1,
+   N_("Obey 'inline' keyword and always inline, regardless of size") },
   {"keep-static-consts", &flag_keep_static_consts, 1,
    N_("Emit static const variables even if they are not used") },
   {"syntax-only", &flag_syntax_only, 1,
@@ -1223,9 +1239,16 @@ static const lang_independent_options f_options[] =
   { "fppc", &flag_fppc, 1,
    N_("Perform floating-point precision-control pass") },
   /* APPLE LOCAL end -ffppc 2001-08-01 sts */
-  /* APPLE LOCAL -fcoalesce  turly  */
-  { "coalesce", &flag_coalesce, 1,
+  /* APPLE LOCAL begin coalescing  turly  */
+  { "coalesce", &flag_coalescing_enabled, 1,
    N_("Coalesce duplicate C++ functions and data") },
+  { "weak-coalesced", &flag_weak_coalesced_definitions, 1,
+   N_("Use the OS X 10.2 'weak_definitions' attribute when coalescing") },
+  { "coalesce-templates", &flag_coalesce_templates, 1,
+   N_("Coalesce duplicate C++ templates") },
+  { "export-coalesced", &flag_export_coalesced, 1,
+   N_("EXPERIMENTAL: Export coalesced symbols from dylibs") },
+  /* APPLE LOCAL end coalescing  turly  */
   /* APPLE LOCAL begin Pascal Strings 2001-07-05 zll */
   { "pascal-strings", &flag_pascal_strings, 1,
    N_("Allow Pascal-style string literals") }
@@ -1305,6 +1328,7 @@ documented_lang_options[] =
 #ifdef PFE
   { "-fload=<file>", "Load precompiled header <file>"},
   { "-fdump=<file>", "Dump precompiled header <file>"},
+  { "-fvalidate", "Validate precompiled header during load"},
 #endif
 
   { "-Wall", 
@@ -1418,9 +1442,10 @@ documented_lang_options[] =
   { "-Wwrite-strings", 
     N_("Mark strings as 'const char *'") },
   { "-Wno-write-strings", "" },
-/* APPLE LOCAL begin AltiVec */
+  /* APPLE LOCAL begin AltiVec */
   { "-Wno-altivec-long-deprecated",
-    N_("Do not warning about using deprecated 'long' AltiVec types") },
+    N_("Do not warn about using deprecated 'long' AltiVec types") },
+  /* APPLE LOCAL end AltiVec */
 
 #define DEFINE_LANG_NAME(NAME) { NULL, NAME },
 
@@ -1539,17 +1564,16 @@ int warn_disabled_optimization;
 
 int warn_missing_noreturn;
 
-/* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
 /* Nonzero means warn about uses of __attribute__((deprecated)) 
    declarations.  */
 
 int warn_deprecated_decl = 1;
-/* APPLE LOCAL end deprecated ilr */
 
-/* APPLE LOCAL -Wno-#warnings  Radar 2796309 ilr */
+/* APPLE LOCAL begin -Wno-#warnings  Radar 2796309 ilr */
 /* Nonzero means suppress all #warning messages.  */
 
 int no_pound_warnings = 0;
+/* APPLE LOCAL end -Wno-#warnings  Radar 2796309 ilr */
 
 /* Likewise for -W.  */
 
@@ -1592,10 +1616,8 @@ static const lang_independent_options W_options[] =
    N_("Warn when padding is required to align struct members") },
   {"disabled-optimization", &warn_disabled_optimization, 1,
    N_("Warn when an optimization pass is disabled") },
-  /* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
   {"deprecated-declarations", &warn_deprecated_decl, 1,
    N_("Warn about uses of __attribute__((deprecated)) declarations") },
-  /* APPLE LOCAL end deprecated ilr */
   {"missing-noreturn", &warn_missing_noreturn, 1,
    N_("Warn about functions which might be candidates for attribute noreturn") }
 };
@@ -1643,6 +1665,27 @@ set_no_fast_math_flags ()
 FILE *asm_out_file;
 FILE *aux_info_file;
 FILE *rtl_dump_file = NULL;
+
+/* APPLE LOCAL begin radar 2866081: Env. variable override  ilr */
+struct env_overrides {
+  char *option;
+  unsigned short flags;
+};
+#define env_ovr_used    1
+#define env_ovr_has_arg 2
+#define env_ovr_add_arg 4
+#define env_over_no_msg 8
+static struct env_overrides *env_override_options;
+static int n_overrides = 0;
+static int env_override_options_max = 0;
+static int have_added_opts = 0;
+static int add_env_opts = 0;
+static int env_ovr_confirm = 1;
+static char *extract_override_options PARAMS ((void));
+static void override_O_option PARAMS ((void));
+static int override_option PARAMS ((int, int, char **));
+static int add_env_options PARAMS ((int *, char ***));
+/* APPLE LOCAL end radar 2866081: Env. variable override  ilr */
 
 /* Decode the string P as an integral parameter.
    If the string is indeed an integer return its numeric value else
@@ -1788,8 +1831,8 @@ set_float_handler (handler)
 
 int
 do_float_handler (fn, data)
-  void (*fn) PARAMS ((PTR));
-  PTR data;
+     void (*fn) PARAMS ((PTR));
+     PTR data;
 {
   jmp_buf buf;
 
@@ -1816,6 +1859,37 @@ crash_signal (signo)
 {
   internal_error ("internal error: %s", strsignal (signo));
 }
+
+/* APPLE LOCAL begin interrupt signal handler (radar 2941633)  ilr */
+/* If the compilation is interrupted do some cleanup. Any files created
+   by the compilation are deleted.  The compilation is terminated from
+   here.  */
+static void
+interrupt_signal (signo)
+     int signo ATTRIBUTE_UNUSED;
+{
+  /* Close the dump files.  */
+  if (flag_gen_aux_info)
+    {
+      fclose (aux_info_file);
+      unlink (aux_info_file_name);
+    }
+
+  if (asm_out_file)
+    {
+      fclose (asm_out_file);
+      if (asm_file_name && *asm_file_name)
+      	unlink (asm_file_name);
+    }
+
+/* APPLE LOCAL PFE */
+#ifdef PFE
+  pfe_close_pfe_file (pfe_operation == PFE_DUMP);
+#endif
+
+  exit (FATAL_EXIT_CODE);
+}
+/* APPLE LOCAL end interrupt signal handler */
 
 /* Strip off a legitimate source ending from the input string NAME of
    length LEN.  Rather than having to know the names used by all of
@@ -1853,9 +1927,14 @@ output_quoted_string (asm_file, string)
   putc ('\"', asm_file);
   while ((c = *string++) != 0)
     {
-      if (c == '\"' || c == '\\')
-	putc ('\\', asm_file);
-      putc (c, asm_file);
+      if (ISPRINT (c))
+	{
+	  if (c == '\"' || c == '\\')
+	    putc ('\\', asm_file);
+	  putc (c, asm_file);
+	}
+      else
+	fprintf (asm_file, "\\%03o", c);
     }
   putc ('\"', asm_file);
 #endif
@@ -2045,16 +2124,24 @@ wrapup_global_declarations (vec, len)
 	     to force a constant to be written if and only if it is
 	     defined in a main file, as opposed to an include file.  */
 
-	  if (TREE_CODE (decl) == VAR_DECL && TREE_STATIC (decl)
-	      && (((! TREE_READONLY (decl) || TREE_PUBLIC (decl))
-		   && !DECL_COMDAT (decl))
-		  || (!optimize
-		      && flag_keep_static_consts
-		      && !DECL_ARTIFICIAL (decl))
-		  || TREE_SYMBOL_REFERENCED (DECL_ASSEMBLER_NAME (decl))))
+	  if (TREE_CODE (decl) == VAR_DECL && TREE_STATIC (decl))
 	    {
-	      reconsider = 1;
-	      rest_of_decl_compilation (decl, NULL, 1, 1);
+	      bool needed = 1;
+
+	      if (TREE_SYMBOL_REFERENCED (DECL_ASSEMBLER_NAME (decl)))
+		/* needed */;
+	      else if (DECL_COMDAT (decl))
+		needed = 0;
+	      else if (TREE_READONLY (decl) && !TREE_PUBLIC (decl)
+		       && (optimize || !flag_keep_static_consts
+			   || DECL_ARTIFICIAL (decl)))
+		needed = 0;
+
+	      if (needed)
+		{
+		  reconsider = 1;
+		  rest_of_decl_compilation (decl, NULL, 1, 1);
+		}
 	    }
 
 	  if (TREE_CODE (decl) == FUNCTION_DECL
@@ -2209,7 +2296,7 @@ compile_file ()
 /* APPLE LOCAL PFE */
 #ifdef PFE
   if (pfe_operation == PFE_LOAD)
-    ;//pfe_setdecls (getdecls ());
+    /*pfe_setdecls (getdecls ())*/ ;
   else
     pfe_predefined_global_names = getdecls ();
 #endif
@@ -2449,6 +2536,7 @@ rest_of_compilation (decl)
   int failure = 0;
   int rebuild_label_notes_after_reload;
   int register_life_up_to_date;
+  int cleanup_crossjump;
 
   timevar_push (TV_REST_OF_COMPILATION);
 
@@ -2549,6 +2637,7 @@ rest_of_compilation (decl)
       if (inlinable
 	  || (DECL_INLINE (decl)
 	      && ((! TREE_PUBLIC (decl) && ! TREE_ADDRESSABLE (decl)
+		   && ! TREE_SYMBOL_REFERENCED (DECL_ASSEMBLER_NAME (decl))
 		   && ! flag_keep_inline_functions)
 		  || DECL_EXTERNAL (decl))))
 	DECL_DEFER_OUTPUT (decl) = 1;
@@ -2641,10 +2730,12 @@ rest_of_compilation (decl)
      carry magic hard reg data throughout the function.  */
   rtx_equal_function_value_matters = 0;
   purge_hard_subreg_sets (get_insns ());
-  emit_initial_value_sets ();
 
-  /* Don't return yet if -Wreturn-type; we need to do cleanup_cfg.  */
-  if ((rtl_dump_and_exit || flag_syntax_only) && !warn_return_type)
+  /* Early return if there were errors.  We can run afoul of our
+     consistency checks, and there's not really much point in fixing them.
+     Don't return yet if -Wreturn-type; we need to do cleanup_cfg.  */
+  if (((rtl_dump_and_exit || flag_syntax_only) && !warn_return_type)
+      || errorcount || sorrycount)
     goto exit_rest_of_compilation;
 
   /* We may have potential sibling or tail recursion sites.  Select one
@@ -2672,6 +2763,10 @@ rest_of_compilation (decl)
       close_dump_file (DFI_eh, print_rtl, get_insns ());
       timevar_pop (TV_JUMP);
     }
+
+  /* Delay emitting hard_reg_initial_value sets until after EH landing pad
+     generation, which might create new sets.  */
+  emit_initial_value_sets ();
 
 #ifdef FINALIZE_PIC
   /* If we are doing position-independent code generation, now
@@ -2909,6 +3004,7 @@ rest_of_compilation (decl)
       find_basic_blocks (insns, max_reg_num (), rtl_dump_file);
       cleanup_cfg (CLEANUP_EXPENSIVE | CLEANUP_PRE_LOOP);
       tem = gcse_main (insns, rtl_dump_file);
+      rebuild_jump_labels (insns);
 
       save_csb = flag_cse_skip_blocks;
       save_cfj = flag_cse_follow_jumps;
@@ -2956,7 +3052,7 @@ rest_of_compilation (decl)
       ggc_collect ();
       flag_cse_skip_blocks = save_csb;
       flag_cse_follow_jumps = save_cfj;
-     }
+    }
 
   /* Move constant computations out of loops.  */
 
@@ -2971,6 +3067,7 @@ rest_of_compilation (decl)
 	  cleanup_barriers ();
 
 	  /* We only want to perform unrolling once.  */
+	  loop_optimize (insns, rtl_dump_file, LOOP_FIRST_PASS);
 
 	  loop_optimize (insns, rtl_dump_file, 0);
 
@@ -3122,7 +3219,7 @@ rest_of_compilation (decl)
       if (initialize_uninitialized_subregs ())
 	{
 	  /* Insns were inserted, so things might look a bit different.  */
-	  insns = get_insns();
+	  insns = get_insns ();
 	  life_analysis (insns, rtl_dump_file, 
 			 (PROP_LOG_LINKS | PROP_REG_INFO | PROP_DEATH_NOTES));
 	}
@@ -3363,9 +3460,21 @@ rest_of_compilation (decl)
      scheduling to operate in the epilogue.  */
   thread_prologue_and_epilogue_insns (insns);
 
+  /* Cross-jumping is O(N^3) on the number of edges, thus trying to
+     perform cross-jumping on flow graphs which have a high connectivity
+     will take a long time.  This is similar to the test to disable GCSE.  */
+  cleanup_crossjump = CLEANUP_CROSSJUMP;
+  if (n_basic_blocks > 1000 && n_edges / n_basic_blocks >= 20)
+    {
+      if (optimize && warn_disabled_optimization)
+	warning ("crossjump disabled: %d > 1000 basic blocks and %d >= 20 edges/basic block",
+                 n_basic_blocks, n_edges / n_basic_blocks);
+      cleanup_crossjump = 0;
+    }
+
   if (optimize)
     {
-      cleanup_cfg (CLEANUP_EXPENSIVE | CLEANUP_CROSSJUMP);
+      cleanup_cfg (CLEANUP_EXPENSIVE | cleanup_crossjump);
       life_analysis (insns, rtl_dump_file, PROP_FINAL);
 
       /* This is kind of a heuristic.  We need to run combine_stack_adjustments
@@ -3471,7 +3580,7 @@ rest_of_compilation (decl)
       /* Last attempt to optimize CFG, as life analyzis possibly removed
 	 some instructions.  */
       cleanup_cfg (CLEANUP_EXPENSIVE | CLEANUP_POST_REGSTACK
-		   | CLEANUP_CROSSJUMP);
+		   | cleanup_crossjump);
       if (flag_reorder_blocks)
 	{
 	  reorder_basic_blocks ();
@@ -3755,8 +3864,9 @@ display_help ()
   printf (_("  -dumpbase <file>        Base name to be used for dumps from specific passes\n"));
 /* APPLE LOCAL PFE */
 #ifdef PFE
-  printf (_("  --load-pch <file>       Load precompiled header <file>\n"));
-  printf (_("  --dump-pch <file>       Dump precompiled header <file>\n"));
+  printf (_("  --load-pch <file>       Load pre-compiled header <file>\n"));
+  printf (_("  --dump-pch <file>       Dump pre-compiled header <file>\n"));
+  printf (_("  --validate-pch          Validate pre-compiled header during load\n"));
 #endif
 #if defined INSN_SCHEDULING
   printf (_("  -fsched-verbose=<number> Set the verbosity level of the scheduler\n"));
@@ -3819,7 +3929,7 @@ display_help ()
 static void
 display_target_options ()
 {
-  int undoc,i;
+  int undoc, i;
   static bool displayed = false;
 
   /* Avoid double printing for --help --target-help.  */
@@ -3968,9 +4078,9 @@ decode_f_option (arg)
     }
 
   if (!strcmp (arg, "fast-math"))
-    set_fast_math_flags();
+    set_fast_math_flags ();
   else if (!strcmp (arg, "no-fast-math"))
-    set_no_fast_math_flags();
+    set_no_fast_math_flags ();
   else if ((option_value = skip_leading_substring (arg, "inline-limit-"))
 	   || (option_value = skip_leading_substring (arg, "inline-limit=")))
     {
@@ -4050,6 +4160,11 @@ decode_f_option (arg)
       ; /* Nothing more to do - it's all done in toplev_main().  */
     }
   else if ((option_value
+            = skip_leading_substring (arg, "arch=")))
+    {
+      ; /* Nothing more to do - it's all done in toplev_main().  */
+    }
+  else if ((option_value
             = skip_leading_substring (arg, "dbgpfe="))
             || (option_value
                  = skip_leading_substring (arg, "pfedbg=")))
@@ -4063,12 +4178,6 @@ decode_f_option (arg)
     {
       flag_debug_gen_index = 1;
     }
-  /* APPLE LOCAL begin cpp-precomp dpatel */
-  else if (!strcmp (arg, "cpp-precomp"))
-    { /* ignore */ }
-  else if (!strcmp (arg, "precomp"))
-    { /* ignore */ }
-  /* APPLE LOCAL end cpp-precomp dpatel */
   else
     return 0;
 
@@ -4124,6 +4233,13 @@ decode_W_option (arg)
     {
       set_Wunused (0);
     }
+  /* APPLE LOCAL begin cpp-precomp */
+  /* One fine day, we should teach the driver not to pass '-Wno-precomp'
+     down here, since only cpp-precomp actually understands it.  */
+  else if (!strcmp (arg, "no-precomp"))
+    return 1;
+  /* APPLE LOCAL end cpp-precomp */
+    
   else
     return 0;
 
@@ -4222,7 +4338,7 @@ ignoring option `%s' due to invalid debug level specification",
 
 	      if (da_len > 1 && strncmp (arg, "gdb", da_len) == 0)
 		{
-#if defined (DWARF2_DEBUGGING_INFO) && !defined (LINKER_DOES_NOT_WORK_WITH_DWARF2)
+#ifdef DWARF2_DEBUGGING_INFO
 		  type = DWARF2_DEBUG;
 #else
 #ifdef DBX_DEBUGGING_INFO
@@ -4488,7 +4604,7 @@ independent_decode_option (argc, argv)
 	  else
 	    return 0;
 	}
-      /* APPLE LOCAL begin fat build */
+      /* APPLE LOCAL begin fat builds */
       else if (!strcmp (arg, "arch"))
 	{
 	  if (argc == 1)
@@ -4496,7 +4612,7 @@ independent_decode_option (argc, argv)
 	  arch_specified = 1;  /* radar 2865464  ilr */
 	  return 2;
 	}
-      /* APPLE LOCAL end fat build */
+      /* APPLE LOCAL end fat builds */
       else
 	return 0;
       break;
@@ -4579,7 +4695,7 @@ set_target_switch (name)
       }
 #endif
 
-  /* APPLE LOCAL fat build (radar 2865464)  ilr */
+  /* APPLE LOCAL fat builds (radar 2865464)  ilr */
   /* Note, the driver guarantees that -arch will precede the -m options
      so that arch_specified will be known by the time we get here.  */
   if (!valid_target_option && !arch_specified)
@@ -4726,6 +4842,16 @@ static void
 init_asm_output (name)
      const char *name;
 {
+/* APPLE LOCAL PFE */
+#ifdef PFE
+  /* A PFE dump implies that no .o should be created.  */
+  if (pfe_operation == PFE_DUMP)
+    {
+      asm_out_file = stdout;
+      return;
+    }
+#endif
+
   if (name == NULL && asm_file_name == 0)
     asm_out_file = stdout;
   else
@@ -4811,6 +4937,15 @@ general_init (argv0)
 #if defined SIGIOT && (!defined SIGABRT || SIGABRT != SIGIOT)
   signal (SIGIOT, crash_signal);
 #endif
+  /* APPLE LOCAL begin interrupt signal handler (radar 2941633)  ilr */
+  /* Handle compilation interrupts.  */
+  if (signal (SIGINT, SIG_IGN) != SIG_IGN)
+    signal (SIGINT, interrupt_signal);
+  if (signal (SIGKILL, SIG_IGN) != SIG_IGN)
+    signal (SIGINT, interrupt_signal);
+  if (signal (SIGTERM, SIG_IGN) != SIG_IGN)
+    signal (SIGTERM, interrupt_signal);
+  /* APPLE LOCAL end interrupt signal handler */
 
   /* Initialize the diagnostics reporting machinery, so option parsing
      can give warnings and errors.  */
@@ -4842,7 +4977,12 @@ parse_options_and_default_flags (argc, argv)
      char **argv;
 {
   int i;
-
+/* APPLE LOCAL PFE */
+#ifdef PFE
+  int flag_pfe_validate = 0;
+  char *arch = (char *) "unkn";
+#endif
+  
   /* Save in case md file wants to emit args as a comment.  */
   save_argc = argc;
   save_argv = argv;
@@ -4852,7 +4992,6 @@ parse_options_and_default_flags (argc, argv)
 
   /* Register the language-independent parameters.  */
   add_params (lang_independent_params, LAST_PARAM);
-
 
   /* APPLE LOCAL PFE */
   /* Assume PFE file is not being used and delay language
@@ -4882,14 +5021,7 @@ parse_options_and_default_flags (argc, argv)
 	      else if (pfe_operation == PFE_DUMP)
 		error ("Cannot specify both -fload and -fdump - which is it?");
 	      else
-		{
-		  pfe_term (); /* turns off PFE_NOP mode */
-		  pfe_init (PFE_LOAD);
-		  pfe_name = &argv[i][7];
-	          pfe_file = fopen (pfe_name, "r");
-	          if (pfe_file == NULL)
-		    error ("Cannot open load file: %s (%s)", &argv[i][7], xstrerror (errno));
-		}
+		pfe_open_pfe_file (&argv[i][7], arch, 0);
 	    }
 	  else if (strncmp (argv[i], "-fdump=", 7) == 0)
 	    {
@@ -4898,15 +5030,14 @@ parse_options_and_default_flags (argc, argv)
 	      else if (pfe_operation == PFE_LOAD)
 		error ("Cannot specify both -fdump and -fload - which is it?");
 	      else
-		{
-		  pfe_term (); /* turns off PFE_NOP mode */
-		  pfe_init (PFE_DUMP);
-		  pfe_name = &argv[i][7];
-	          pfe_file = fopen (pfe_name, "w");
-		  if (pfe_file == NULL)
-		    error ("Cannot open dump file: %s (%s)", &argv[i][7], xstrerror (errno));
-		}
+		pfe_open_pfe_file (&argv[i][7], arch, 1);
 	    }
+	  else if (strcmp (argv[i], "-farch=ppc") == 0)
+	    arch = (char *) "ppc";
+	  else if (strcmp (argv[i], "-farch=i386") == 0)
+	    arch = (char *) "i386";
+	  else if (strcmp (argv[i], "-fvalidate") == 0)
+	    flag_pfe_validate = 1;
 	}
       
       if (strcmp (argv[i], "-ftime-report") == 0)
@@ -4944,50 +5075,16 @@ parse_options_and_default_flags (argc, argv)
 	}
     }
 
-    /* APPLE LOCAL begin radar 2866081: Env. variable -O override  ilr */
-    {
-      char *overide_opt = getenv ("QA_OVERRIDE_GCC3_OPT");
-      
-      if (overide_opt && *overide_opt)
-        {
-          optimize = -1;
-	  if (!strcmp (overide_opt, "-O") || !strcmp (overide_opt, "O"))
-	    {
-	      optimize = 1;
-	      optimize_size = 0;
-	    }
-	  else if (overide_opt[0] == 'O' ||
-	           (overide_opt[0] == '-' && overide_opt[1] == 'O'))
-	    {
-	      /* Handle -Os, -O2, -O3, -O69, ...  */
-	      char *p = overide_opt + (overide_opt[0] == '-') + 1;
-    
-	      if ((p[0] == 's') && (p[1] == 0))
-		{
-		  optimize_size = 1;
-    
-		  /* Optimizing for size forces optimize to be 2.  */
-		  optimize = 2;
-		}
-	      else
-		{
-		  const int optimize_val = read_integral_parameter (p, p - 2, -1);
-		  if (optimize_val != -1)
-		    {
-		      optimize = optimize_val;
-		      optimize_size = 0;
-		    }
-		}
-	    }
-        
-	  if (optimize < 0)
-	    fatal_error ("QA_OVERRIDE_GCC3_OPT set with an invalid O option (%s).",
-	    		 overide_opt);
-          fprintf (stderr, "Optimization explicitly set to %s%s from QA_OVERRIDE_GCC3_OPT env. variable.\n",
-          	   (overide_opt[0] == '-') ? "" : "-", overide_opt);
-        }
-    }
-    /* APPLE LOCAL end radar 2866081 */
+/* APPLE LOCAL begin PFE dpatel */
+#ifdef PFE
+   /* Turn on macro validation during pfe load */
+   if (pfe_operation == PFE_LOAD && flag_pfe_validate)
+     pfe_macro_validation = 1;
+#endif
+/* APPLE LOCAL end PFE dpatel */
+
+    /* APPLE LOCAL radar 2866081: Env. variable -O override  ilr */
+    override_O_option ();
 
 /* APPLE LOCAL PFE */
 #ifdef PFE
@@ -5036,7 +5133,7 @@ parse_options_and_default_flags (argc, argv)
       flag_omit_frame_pointer = 1;
 #endif
       flag_guess_branch_prob = 1;
-      /* flag_cprop_registers = 1; */
+      flag_cprop_registers = 1;
     }
 
   if (optimize >= 2)
@@ -5099,11 +5196,23 @@ parse_options_and_default_flags (argc, argv)
   OPTIMIZATION_OPTIONS (optimize, optimize_size);
 #endif
 
+  /* APPLE LOCAL radar 2866081: Env. variable override  ilr */
+  do {
+  
   /* Perform normal command line switch decoding.  */
   for (i = 1; i < argc;)
     {
       int lang_processed;
       int indep_processed;
+
+      /* APPLE LOCAL begin radar 2866081: Env. variable override  ilr */
+      if (!override_option (i, argc, argv))
+        {
+          ++i;
+      	  continue;
+        }
+      /*fprintf(stderr, "%c%2d: %s\n", add_env_opts ? '+' : ' ', i, argv[i]);*/
+      /* APPLE LOCAL end radar 2866081: Env. variable override  ilr */
 
       /* Give the language a chance to decode the option for itself.  */
       lang_processed = (*lang_hooks.decode_option) (argc - i, argv + i);
@@ -5163,6 +5272,14 @@ parse_options_and_default_flags (argc, argv)
 	  i++;
 	}
     }
+  
+  /* APPLE LOCAL radar 2866081: Env. variable override  ilr */
+  } while (add_env_options (&argc, &argv));
+
+  if (flag_no_inline == 2)
+    flag_no_inline = 0;
+  else
+    flag_really_no_inline = flag_no_inline;
 
   /* Set flag_no_inline before the post_options () hook.  The C front
      ends use it to determine tree inlining defaults.  FIXME: such
@@ -5183,6 +5300,9 @@ parse_options_and_default_flags (argc, argv)
 	warning ("-Wuninitialized is not supported without -O");
     }
 
+  if (flag_really_no_inline == 2)
+    flag_really_no_inline = flag_no_inline;
+
   /* All command line options have been parsed; allow the front end to
      perform consistency checks, etc.  */
   (*lang_hooks.post_options) ();
@@ -5196,7 +5316,6 @@ parse_options_and_default_flags (argc, argv)
   if (pfe_operation == PFE_LOAD)
     pfe_check_compiler ();
 #endif
-
 }
 
 /* Process the options that have been parsed.  */
@@ -5368,6 +5487,14 @@ process_options ()
     }
 #endif
 
+  /* This combination of options isn't handled for i386 targets and doesn't
+     make much sense anyway, so don't allow it.  */
+  if (flag_prefetch_loop_arrays && optimize_size)
+    {
+      warning ("-fprefetch-loop-arrays is not supported with -Os");
+      flag_prefetch_loop_arrays = 0;
+    }
+
 #ifndef OBJECT_FORMAT_ELF
   if (flag_function_sections && write_symbols != NO_DEBUG)
     warning ("-ffunction-sections may affect debugging on some targets");
@@ -5384,8 +5511,8 @@ lang_independent_init ()
 
   /* Set the language-dependent identifier size.  */
   tree_code_length[(int) IDENTIFIER_NODE]
-    = ((lang_hooks.identifier_size - sizeof (struct tree_common))
-       / sizeof (tree));
+    = ((lang_hooks.identifier_size - sizeof (struct tree_common)
+	+ sizeof (tree) - 1) / sizeof (tree));
 
   /* Initialize the garbage-collector, and string pools.  */
   init_ggc ();
@@ -5561,28 +5688,6 @@ finalize ()
   /* Language-specific end of compilation actions.  */
   (*lang_hooks.finish) ();
 
-/* APPLE LOCAL PFE */
-#ifdef PFE
-  /* If we're generating a dump file, now's the time to do it.
-     But we don't do it if there were any compilation errors.  */
-  if (pfe_operation == PFE_DUMP)
-    {
-      if (errorcount == 0)
-        pfe_dump_compiler_state (pfe_file);
-      else
-        {
-          pfe_term ();
-	  if (pfe_file)
-	    fclose (pfe_file);
-	  pfe_file = NULL;
-	  pfe_init (PFE_NOP);
-	  if (pfe_name && *pfe_name)
-	    remove (pfe_name);
-	  warning ("dump file not written due to compilation errors");
-        }
-    }
-#endif
-
   /* APPLE LOCAL begin indexing dpatel */
   if (flag_gen_index_original)
     {
@@ -5632,13 +5737,24 @@ do_compile ()
 
 /* APPLE LOCAL PFE */
 #ifdef PFE
-  /* Gracefully terminate the pfe memory usage and close the dump file.  */
-  if (pfe_operation == PFE_DUMP || pfe_operation == PFE_LOAD)
+  /* If dumping pfe file this is when we actually do it.  But only
+     if there are no errors.  For dumping or loginding this is also
+     when we gracefully terminate the pfe memory usage and close
+     the pfe file.  Note that if there were errors during the
+     compilition for a dump file we will delete that dump file.*/
+  if (pfe_operation == PFE_DUMP)
+    {
+      if (errorcount == 0)
+        pfe_dump_compiler_state (pfe_file);
+      else
+	warning ("dump file not written due to compilation errors");
+      pfe_term ();
+      pfe_close_pfe_file (errorcount != 0);
+    }
+  else if (pfe_operation == PFE_LOAD)
     {
       pfe_term ();
-      if (pfe_file)
-        fclose (pfe_file);
-      pfe_file = NULL;
+      pfe_close_pfe_file (0);
     }
 #endif
 }
@@ -5673,3 +5789,494 @@ toplev_main (argc, argv)
 
   return (SUCCESS_EXIT_CODE);
 }
+
+/* APPLE LOCAL begin radar 2866081: Env. variable override  ilr */
+/*--------------------------------------------------------------------*/
+
+/* The QA_OVERRIDE_GCC3_OPTIONS environment variable, if it exists,
+   contains a list of options which override their counterparts on
+   the compiler command line.  This routine collects the options from
+   that environment variable and creates an array (env_override_options)
+   of n_overrides string pointers to then.  Each command line option
+   is passed through override_option() to check to see if it has an
+   override in the env_override_options[] array.
+
+   The general form for QA_OVERRIDE_GCC3_OPTIONS is as follows:
+
+   -opt ... --opt arg s/pattern/replacement/ + -opt --opt arg ...
+
+   In other words a set of override options or option replacements in
+   the forms described below.  The '+' means all options that the
+   following options are to be added to the command line if they don't
+   otherwise replace options.
+
+   The syntax of the options in QA_OVERRIDE_GCC3_OPTIONS can be any
+   of the following forms:
+
+     -f[no-]option, -m[no-]option, -W[no-]option
+        Override corresponding (ignoring the 'no-' prefix) options
+        on the command line.
+
+     --option arg
+        Indicates that the -option has an argument and that the
+        argument is to be replaced for that -option if it is
+        present on the command line.
+
+     +
+       Adds the options that follow to the command line.  Any of above
+       option forms specified.  They are added to the command line if
+       not otherwise used to override an existing command line
+       option.
+
+     s/-option/replacement-option/, 
+     s/-option/replacement-option replacement-arg/,
+     s/--option/replacement-option/,
+     s/--option/replacement-option replacement-arg/
+        Replaces the -option and/or its argument.  If there is nothing
+        between the second two /'s (which can be any character) the
+        option (and its arg for --option) are deleted.  The --option
+        cases indicate that the option and its argument are to
+        be replaced either with an option that has no argument or
+        another (possibly the same option) that itself has an
+        argument.
+      
+        Note, there should be only one space between the
+        replacement-option and replacement-arg.
+
+   Normally whenever a command line option is affected by the
+   options in QA_OVERRIDE_GCC3_OPTIONS are displayed confirming
+   what was done (to stderr).  For example,
+
+     ### QA_OVERRIDE_GCC3_OPTIONS: -O2 -fno-inline
+     ### QA_OVERRIDE_GCC3_OPTIONS: Optimization set to -O2
+
+   This may be suppressed by placing a '#' as the first character
+   in the QA_OVERRIDE_GCC3_OPTIONS string.
+*/
+   
+static char * 
+extract_override_options ()
+{
+  int has_arg = 0, scnt = 0, added_flag;
+  char *override_O = NULL, s = 0;
+  char *opts = getenv ("QA_OVERRIDE_GCC3_OPTIONS");
+
+  if (opts && *opts)
+    {
+      char c, *p, quote;
+      static char *override_options_line;
+
+      override_options_line = xstrdup (opts);
+
+      if (override_options_line[0] == '#')
+        {
+          env_ovr_confirm = 0;
+          p = override_options_line;
+        }
+      else
+        {
+          env_ovr_confirm = 1;
+          p = override_options_line - 1;
+	}
+      
+      if (env_ovr_confirm)
+	fprintf (stderr, "### QA_OVERRIDE_GCC3_OPTIONS: %s\n",
+		 override_options_line);
+
+      n_overrides = 0;
+
+      while (1)
+	{
+	  while (*++p == ' ') ;
+	  if ((c = *p) == '\0')
+	    break;
+
+	  if (p[0] == '-' && p[1] == 'O')
+	    override_O = p;
+	  else
+	    {
+	      if (p[0] == '+')
+	        {
+	          have_added_opts = env_ovr_add_arg;
+	          continue;
+	        }
+
+	      if (p[0] == 's')
+		{
+		  s = p[1];
+		  scnt = 0;
+		  added_flag = 0;
+		}
+	      else
+	        {
+	          s = scnt = 0;
+	      	  added_flag = have_added_opts;
+		}
+
+	      if (n_overrides >= env_override_options_max)
+		{
+		  env_override_options_max += 6;
+		  env_override_options = (struct env_overrides *) 
+					 xrealloc (env_override_options,
+						   sizeof (struct env_overrides) 
+						   * env_override_options_max);
+		  if (n_overrides == 0) /* match argv[] counting */
+		    ++n_overrides;
+		}
+
+	      if (!has_arg && p[0] == '-' && p[1] == '-')
+		{
+		  env_override_options[n_overrides].flags = env_ovr_has_arg | added_flag;
+		  env_override_options[n_overrides].option = p + 1;
+		  has_arg = 1;
+		}
+	      else
+		{
+		  env_override_options[n_overrides].flags = added_flag;
+		  env_override_options[n_overrides].option = p--;
+		  has_arg = 0;
+		}
+
+	      ++n_overrides;
+	    }
+
+	  quote = 0;
+	  while (*++p && (*p != ' ' || quote || s))
+	    if (*p == '"' || *p == '\'')
+	      quote = (quote && *p == quote) ? 0 : *p;
+	    else if (*p == '\\')
+	      ++p;
+	    else if (*p == s && ++scnt == 3)
+	      s = 0;
+
+	  if (!*p)
+	    break;
+	    
+	  *p = '\0';
+	}
+    }
+
+    if (has_arg)
+      fatal_error ("QA_OVERRIDE_GCC3_OPTIONS invalid - last option should have an argument");
+
+    return override_O;
+}
+
+/* Called to handle -O overrides prior to main argument processing.
+   A -O option can be overridded from the QA_OVERRIDE_GCC3_OPTIONS
+   environment variable.  Note that since this is prior to argument
+   processing we call extract_override_options() from here to build
+   the option overrides from  QA_OVERRIDE_GCC3_OPTIONS.  During
+   main line option processing we then call override_option() to
+   see if a specific option is overridden.  */
+
+static void
+override_O_option ()
+{
+  char *overide_opt = extract_override_options ();
+  int optimize0 = optimize, optimize_size0 = optimize_size;
+
+  if (!overide_opt)
+    return;
+
+  optimize = -1;
+  if (!strcmp (overide_opt, "-O"))
+    {
+      optimize = 1;
+      optimize_size = 0;
+    }
+  else if (overide_opt[0] == '-' && overide_opt[1] == 'O')
+    {
+      /* Handle -Os, -O2, -O3, -O69, ...  */
+      char *p = overide_opt + 2;
+
+      if ((p[0] == 's') && (p[1] == 0))
+	{
+	  optimize_size = 1;
+
+	  /* Optimizing for size forces optimize to be 2.  */
+	  optimize = 2;
+	}
+      else
+	{
+	  const int optimize_val = read_integral_parameter (p, p - 2, -1);
+	  if (optimize_val != -1)
+	    {
+	      optimize = optimize_val;
+	      optimize_size = 0;
+	    }
+	}
+    }
+
+  if (optimize < 0)
+    fatal_error ("QA_OVERRIDE_GCC3_OPTIONS set with an invalid O option (%s).",
+		 overide_opt);
+  if (env_ovr_confirm 
+      && (optimize != optimize0 || optimize_size != optimize_size0))
+    fprintf (stderr, "### QA_OVERRIDE_GCC3_OPTIONS: Optimization set to %s\n", overide_opt);
+}
+
+/* Check to see if the specified command line option is overridden
+   by an option in the QA_OVERRIDE_GCC3_OPTIONS environment variable
+   string.  If is isn't, return the original command line option.  If
+   it is, return the override and display a message that the option
+   was overridden.
+   
+   If add_env_opts is set then we only add options that are flagged to
+   be added.  This is initiated when add_env_options() is called after
+   processing the command line options.
+*/
+ 
+static int
+override_option (i, argc, argv)
+     int  i, argc;
+     char **argv;
+{
+  int  j, len, parg;
+  char *p, *opt, letter_opt1, letter_opt2, s = 0, *repopt, *reparg, *repend;
+  static char rep_option[256], rep_arg[256];
+  
+  if (n_overrides == 0)
+    return 1;
+
+  if (add_env_opts)
+    {
+      if ((env_override_options[i].flags & env_ovr_add_arg) == 0
+          || (env_override_options[i].flags & env_ovr_used) != 0
+          || env_override_options[i].option == NULL)
+        return 0;
+      argv[i] = env_override_options[i].option;
+      if (env_override_options[i].flags & env_ovr_has_arg)
+        {
+	  argv[i+1] = env_override_options[i+1].option;
+	  if (env_ovr_confirm
+	      && (env_override_options[i].flags & env_over_no_msg) == 0)
+	    fprintf (stderr, 
+		     "### QA_OVERRIDE_GCC3_OPTIONS: Adding command line option '%s %s'\n",
+		     argv[i], argv[i+1]);
+	}
+      else if (env_ovr_confirm
+               && (env_override_options[i].flags & env_over_no_msg) == 0)
+	fprintf (stderr, "### QA_OVERRIDE_GCC3_OPTIONS: Adding command line option '%s'\n",
+	  	 argv[i]);
+      return 1;
+    }
+
+  if (!argv[i])
+    return 0;
+
+  opt = argv[i];
+  letter_opt1 = 0;
+
+  if (opt[0] == '-')
+    {
+      if (opt[1] == 'f' || opt[1] == 'm' || opt[1] == 'W')
+	{
+	  letter_opt1 = opt[1];
+	  opt += 2;
+	}
+      if (opt[0] == 'n' && opt[1] == 'o' && opt[2] == '-')
+	opt += 3;
+    }
+
+  for (j = 1; j < n_overrides; ++j)
+    {
+      p = env_override_options[j].option;
+      letter_opt2 = 0;
+      s = 0;
+      parg = 0;
+      
+      if (p[0] == 's')
+        {
+	  s = p[1];
+	  p += 2;
+	  repopt = strchr (p, s);
+	  if (!repopt)
+	    return 1;
+	  *repopt++ = '\0';
+	  if (p[0] == '-' && p[1] == '-')
+	    {
+	      parg = 1;
+	      ++p;
+	    }
+        }
+
+      if (p[0] == '-')
+        {
+	  if (p[1] == 'f' || p[1] == 'm' || p[1] == 'W')
+	    {
+	      letter_opt2 = p[1];
+	      p += 2;
+	    }
+	  if (p[0] == 'n' && p[1] == 'o' && p[2] == '-')
+	    p += 3;
+	}
+
+      if (strcmp (p, opt) == 0 && letter_opt1 == letter_opt2)
+        {
+          if (i < argc - 1 
+              && (env_override_options[j].flags & env_ovr_has_arg))
+            argv[i + 1] = env_override_options[j + 1].option;
+
+	  if (s)
+	    {
+	      repend = strchr (repopt, s);
+	      reparg = NULL;
+	      if (repend)
+		{
+		  reparg = strchr(repopt, ' ');
+		  if (reparg)
+		    {
+		      strncpy (rep_option, repopt, len = reparg - repopt);
+		      rep_option[len] = '\0';
+		      ++reparg;
+		      strncpy (rep_arg, reparg, len = repend - reparg);
+		      rep_arg[len] = '\0';
+		    }
+		  else
+		    {
+		      strncpy (rep_option, repopt, len = repend - repopt);
+		      rep_option[len] = rep_arg[0] = '\0';
+		    }
+		    
+		  if (len)
+		    {
+		      if (parg)
+		        {
+		          if (reparg)  			/* s/--opt/rep_option rep_arg/  	*/
+		            {
+		              if (strcmp (argv[i], rep_option) != 0
+		                  || strcmp (argv[i+1], rep_arg) == 0)
+		                {
+		                  if (env_ovr_confirm
+		                      && (env_override_options[j].flags & env_ovr_used) == 0)
+				    fprintf (stderr, 
+					     "### QA_OVERRIDE_GCC3_OPTIONS: Replacing command line option '%s %s' with '%s %s'\n",
+					      argv[i], argv[i + 1], rep_option, rep_arg);
+				  argv[i]     = rep_option;
+				  argv[i + 1] = rep_arg;
+				}
+		            }
+		          else				/* s/--opt/rep_option/       		*/
+		            {
+		              if (env_ovr_confirm
+		                  && (env_override_options[j].flags & env_ovr_used) == 0)
+				fprintf (stderr, 
+					 "### QA_OVERRIDE_GCC3_OPTIONS: Replacing command line option '%s %s' with '%s'\n",
+					  argv[i], argv[i + 1], rep_option);
+		              argv[i] = rep_option;
+		              argv[i+1] = NULL;
+		            }
+		        }
+		      else if (reparg)			/* s/-opt/rep_option rep_arg/		*/
+		        {
+		          if (env_ovr_confirm
+		              && (env_override_options[j].flags & env_ovr_used) == 0)
+			    fprintf (stderr, 
+				     "### QA_OVERRIDE_GCC3_OPTIONS: Replacing command line option '%s' with '%s %s'\n",
+				     argv[i], rep_option, rep_arg);
+			  if (n_overrides+1 >= env_override_options_max)
+			    {
+			      env_override_options_max += 6;
+			      env_override_options = (struct env_overrides *) 
+						     xrealloc (env_override_options,
+							       sizeof (struct env_overrides) 
+							       * env_override_options_max);
+			      if (n_overrides == 0) /* match argv[] counting */
+				++n_overrides;
+			    }
+			    env_override_options[n_overrides  ].option = rep_option;
+			    env_override_options[n_overrides++].flags  = env_ovr_has_arg | env_ovr_add_arg | env_over_no_msg;
+			    env_override_options[n_overrides  ].option = rep_arg;
+			    env_override_options[n_overrides++].flags  = env_ovr_add_arg | env_over_no_msg;
+			    argv[i] = NULL;
+			    have_added_opts = 1;
+		        }
+		      else if (strcmp (argv[i], rep_option) != 0) /* s/-opt/rep_option/		*/
+		        {
+		          if (env_ovr_confirm
+		              && (env_override_options[j].flags & env_ovr_used) == 0)
+			    fprintf (stderr, 
+				     "### QA_OVERRIDE_GCC3_OPTIONS: Replacing command line option '%s' with '%s'\n",
+				     argv[i], rep_option);
+		          argv[i] = rep_option;
+		        }
+		    }
+		  else
+		    {
+	      	      if (env_ovr_confirm
+	      	          && (env_override_options[j].flags & env_ovr_used) == 0)
+			fprintf (stderr, "### QA_OVERRIDE_GCC3_OPTIONS: Deleting command line option '%s", argv[i]);
+		      if (parg)
+		        {
+			  if (env_ovr_confirm
+			      && (env_override_options[j].flags & env_ovr_used) == 0)
+		      	    fprintf (stderr, " %s", argv[i + 1]);
+		      	  argv[i + 1] = NULL;
+		      	}
+		      if (env_ovr_confirm
+			  && (env_override_options[j].flags & env_ovr_used) == 0)
+		        fputs ("'\n", stderr);
+		      argv[i] = NULL;
+		    }
+		}
+	      *(repopt-1) = s;
+	      env_override_options[j].flags |= env_ovr_used;
+	      return argv[i] != NULL;
+	    }
+	  else if (strcmp (argv[i], env_override_options[j].option) != 0)
+	    {
+	      if (env_ovr_confirm
+	          && (env_override_options[j].flags & env_ovr_used) == 0)
+		fprintf (stderr, 
+			 "### QA_OVERRIDE_GCC3_OPTIONS: Overriding command line option '%s' with '%s'\n",
+			 argv[i], env_override_options[j].option);
+	      argv[i] = env_override_options[j].option;
+	      env_override_options[j].flags |= env_ovr_used;
+	      return 1;
+	    }
+	}
+      else if (s)
+      	*(repopt-1) = s;
+    }
+
+  return 1;
+}
+
+/* Once all command line options are processed this routine is called
+   to see if QA_OVERRIDE_GCC3_OPTIONS specified any options to be
+   added.  If there are we will return 1 to cause another option
+   processing pass.  But this time argc and argv will be set to use
+   the env_override_options[] array and then only to select the added
+   options.  */
+   
+static int
+add_env_options (argc, argv)
+     int *argc;
+     char ***argv;
+{
+  static int save_argc;
+  static char **save_argv;
+  
+  if (have_added_opts)
+    {
+      if (!add_env_opts)
+	{
+	  save_argv = *argv;
+	  save_argc = *argc;
+	  *argc = n_overrides;
+	  *argv = (char **)xmalloc(n_overrides * sizeof (char *));
+	  add_env_opts = 1;
+	  return 1;
+	}
+
+      free (*argv);
+      *argc = save_argc;
+      *argv = save_argv;
+      add_env_opts = 0;
+    }
+
+  return 0;
+}
+/* APPLE LOCAL end radar 2866081: Env. variable override  ilr */
+

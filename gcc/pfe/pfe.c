@@ -27,6 +27,24 @@ Boston, MA 02111-1307, USA.  */
 #define USE_APPLE_SCALABLE_MALLOC 0
 #endif
 
+/* The GENERATOR_FILE is used to suppress some includes in config.h
+   such as insn-flags.h and insn-flags.h which we don't want nor 
+   need for the files that use pfe-header.h.  Unfortunately this
+   macro also controls an additional enum value in machmode.def
+   which is used by machmode.h.  That enum determines the value
+   of MAX_MACHINE_MODE which we reference in the pfe_compiler_state.
+   Since most everything is built using the default build rules
+   determined by the Makefile, and since those default rules do
+   NOT define GENERATOR_FILE, then we need to keep machmode.h
+   from generating that additional enum value and thus making
+   MAX_MACHINE_MODE inconsistant.
+   
+   By undefining GENERATOR_FILE before we do our includes we
+   suppress the extra enum value.  The machmode.h header is
+   included by tree.h, rtl.h, and varray.h.  */
+   
+#undef GENERATOR_FILE
+
 /* The scalable_malloc.h header must be included BEFORE any gcc headers.
    This is necessary because system.h "poisons" the use of malloc, calloc,
    and realloc when building the compiler itself with a 3.x version or
@@ -49,6 +67,7 @@ Boston, MA 02111-1307, USA.  */
 
 #include <stdio.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 
 #if !USE_APPLE_SCALABLE_MALLOC
 #include "pfe-mem.h"
@@ -91,25 +110,6 @@ pfe_compiler_state *pfe_compiler_state_ptr = 0;
 pfe_freeze_thaw_ptr_t pfe_freeze_thaw_ptr_fp = NULL;
 
 /*-------------------------------------------------------------------*/
-
-/* The following definitions are for stand-alone tests of the low-level
-   PFE routines.  */
-#ifdef PFE_LOW_LEVEL_TEST
-#define PFE_DEBUG_MEMMGR_RANGES 1
-#define fatal_error(x) do {fprintf(stderr, x); exit (1);} while (0)
-#define fatal_io_error(x) fatal_error (x)
-#define internal_error(x) fatal_error (x)
-#define xmalloc(s) malloc(s)
-#define xcalloc(n, s) calloc(n, s)
-void
-pfe_freeze_compiler_state (the_hdr)
-     void *the_hdr;
-{}
-void
-pfe_thaw_compiler_state (hdr)
-     pfe_compiler_state *hdr;
-{}
-#endif
 
 /* Control debugging output related to the PFE's handling of memory 
    ranges: identifying them, using them to freeze pointers, and
@@ -237,6 +237,10 @@ static int pfe_extra_checking = 1;
    strings going into PFE memory via pfe_savestring.  */
 static struct ht *pfe_str_hash_table;
 
+/* Flag to indicate if command macro line processing is in progress
+   or not.  */
+static int pfe_cmd_ln_processing = 0;
+
 #if PFE_MALLOC_STATS
 /* Set the intial size of the table used to keep track of malloc
    allocations by kind and size.  */
@@ -272,6 +276,12 @@ char *pfe_alloc_object_kinds_names[PFE_ALLOC_NBR_OF_KINDS] = {
 #undef DEF_PFE_ALLOC
 #endif /* PFE_MALLOC_STATS */
 
+/* Switch to turn On/Off macro validation.  
+   Command line option --validate-pch enables macro validation,
+   if it is disabled by default.  */
+int pfe_macro_validation = 0;
+int pfe_cmd_ln_macro_count = 0;
+int pfe_macro_status = PFE_MACRO_NOT_FOUND;
 /* Prototypes for static functions.  */
 
 static void pfe_assign_dump_range_offsets   PARAMS ((int));
@@ -283,6 +293,17 @@ static hashnode pfe_alloc_include_hash_node PARAMS ((hash_table *));
 #if PFE_MALLOC_STATS
 static void pfe_s_display_malloc_stats	    PARAMS ((void));
 #endif
+
+/* To insure that the dir containing the pfe file does not
+   have its mod date changed unless we have a successfull pfe
+   file created we need to remember its mod date at the time
+   the pfe file is opened.  So we stat the dir at that at
+   that time then use it's mod date info to restore the dir's
+   times if need be.  */
+static struct stat pfe_file_stat;
+static char *pfe_dirname;
+static int pfe_dir_was_empty;
+static int pfe_was_opened_for_dump;
 
 /*-------------------------------------------------------------------*/
 
@@ -343,9 +364,17 @@ pfe_init (action)
       			   xmalloc (sizeof (pfe_s_malloc_entry) 
                                     * pfe_s_malloc_table_size);
 #endif
-      
-      /* Initialize language specific compiler state.  */
-      (*lang_hooks.pfe_lang_init) ();
+  
+      pfe_cmd_ln_macro_count = 0;
+      /* Init language specific compiler state (and set language).
+         Note there is an asymetry of when we call pfe_lang_init
+         between loading and dumping.  We do it here for dumping
+         since language specific stuff is defined using the just
+         created pfe_compiler_state_ptr.  But for loading we don't
+         have a pfe_compiler_state_ptr until after we read the PFE
+         file.  So we must wait until that happens before calling
+         pfe_lang_init for the load side.  */
+      (*lang_hooks.pfe_lang_init) (0);
       
       /* Initialize the space for the target specific additions.
          At this point pfe_target_additions is NULL which tells
@@ -386,7 +415,6 @@ pfe_init (action)
       /* FIXME: Provide portable implementation for FSF someday.  */
 #endif
       pfe_freeze_thaw_ptr_fp = pfe_thaw_ptr;
-      (*lang_hooks.pfe_lang_init) ();
     }
   else if (pfe_operation == PFE_NOP)
     {
@@ -499,6 +527,129 @@ pfe_term ()
 
   pfe_operation = PFE_NOT_INITIALIZED;
   pfe_freeze_thaw_ptr_fp = (pfe_freeze_thaw_ptr_t)NULL;
+}
+
+/* When an -fload=pfe_dir or -fdump=pfe_dir option is detected
+   this routine is called to open a PFE file in the specified
+   directory.  For fdump=1 the pfe_dir is created if necessary.
+   The PFE file opened is then pfe_dir/<lang>_<arch>.pfe,
+   where arch is "ppc" or "i386" (passed to this routine) and
+   lang is the language (c, c++, objc, or objc++) determined
+   from lang_hooks.name.
+   
+   The function sets the globals pfe_name and pfe_file to the
+   resulting PFE file pathname and the opened FILE stream
+   respectively.  For dumping pfe_file_stat is also set with
+   the stat info of the containing directory (pfe_dir).  */
+void
+pfe_open_pfe_file (pfe_dir, arch, fdump)
+     char *pfe_dir, *arch;
+     int fdump;
+{
+  int len = strlen (pfe_dir);
+  char *pfe_basename, *pathname;
+  
+  pfe_term (); /* turns off PFE_NOP mode */
+  pfe_init (fdump ? PFE_DUMP : PFE_LOAD);
+  
+  pfe_dirname = strcpy (xmalloc (len + 2), pfe_dir);
+  if (pfe_dirname[len-1] == DIR_SEPARATOR)
+    pfe_dirname[--len] = '\0';
+  
+  /* Create the PFE directory if it doesn't already exist.  Remember
+     whether we are creating it now so that we may delete it if
+     we need to delete the pfe file we create in it.  */
+     
+  if (fdump) /* mkdir -p */
+    {
+      int mk_status = mkdir (pfe_dirname, 0777);
+      
+      pfe_dir_was_empty = (mk_status == 0);
+      pfe_was_opened_for_dump = 1;
+      
+      if (mk_status != 0 && errno != EEXIST)
+        fatal_error ("Cannot create pre-compiled header directory: \"%s\" (%s)",
+          	     pfe_dirname, xstrerror (errno));
+    }
+  else
+    pfe_dir_was_empty = pfe_was_opened_for_dump = 0;
+    
+  pfe_dirname[len]   = DIR_SEPARATOR;
+  pfe_dirname[len+1] = '\0';
+  
+  if (fdump && stat (pfe_dirname, &pfe_file_stat) != 0)
+    fatal_error ("Cannot get mod time for pre-compiled header directory: \"%s\" (%s)",
+		 pfe_dirname, xstrerror (errno));
+  
+  pfe_basename = xmalloc (11 + 4 + 4 + 1);
+  if (strcmp (lang_hooks.name, "GNU C") == 0)
+    strcat (strcpy (pfe_basename, "cc1_"), arch);
+  else if (strcmp (lang_hooks.name, "GNU C++") == 0) 
+    strcat (strcpy (pfe_basename, "cc1plus_"), arch);
+  else if (strcmp (lang_hooks.name, "GNU Objective-C") == 0) 
+    strcat (strcpy (pfe_basename, "cc1obj_"), arch);
+  else if (strcmp (lang_hooks.name, "GNU Objective-C++") == 0) 
+    strcat (strcpy (pfe_basename, "cc1objplus_"), arch);
+                              /*   12345678901   */
+  strcat (pfe_basename, ".pfe");
+  pathname = strcat (strcpy (xmalloc (strlen (pfe_dirname) + strlen (pfe_basename) + 1),
+                             pfe_dirname), pfe_basename);
+  
+  pfe_file = fopen (pathname, fdump ? "w" : "r");
+    
+  free (pfe_basename);
+  
+  pfe_name = pathname;
+}
+
+/* Close a currently opened pfe file and optionally delete it.
+   The only time it would get deleted is for a incomplete compilation
+   (e.g., the compilation is interrupted) when doing a dump.   We
+   don't want partially created dump file lying around.  */
+void
+pfe_close_pfe_file (int delete_it)
+{
+  if (pfe_file)
+    {
+      fclose (pfe_file);
+      pfe_file = NULL;
+      
+      /* If we just closed a pfe dump file that we just created then
+         we want to update the containing directory's mod date unless
+         we terminated abnormally (e.g., errors or an interrupt), in
+         which case delete_it is set.  For the abnormal terminations
+         we either set the containing directory mod date back to its
+         original value or delete the directory if we created it
+         because this is the first dump file in that directory.  
+         
+         Note we use pfe_was_opened_for_dump to determine whether
+         we're dumping rather than pfe_operation since pfe_term() is
+         usually called prior to calling pfe_close_pfe_file().  */
+
+      if (pfe_was_opened_for_dump && pfe_name && *pfe_name)
+        {
+	  if (delete_it)
+	    {
+	      struct timeval tval[2];
+
+	      unlink (pfe_name);
+	      
+	      if (pfe_dir_was_empty)
+	        rmdir (pfe_dirname);
+	      else
+	        {
+		  TIMESPEC_TO_TIMEVAL (&tval[0], &pfe_file_stat.st_atimespec);
+		  TIMESPEC_TO_TIMEVAL (&tval[1], &pfe_file_stat.st_mtimespec);
+		  if (utimes (pfe_dirname, tval) != 0)
+		    fatal_error ("Cannot reset mod time for pre-compiled header directory: \"%s\" (%s)",
+				 pfe_dirname, xstrerror (errno));
+	      }
+	    }
+	  else if (utimes (pfe_dirname, NULL) != 0)
+	    fatal_error ("Cannot set mod time for pre-compiled header directory: \"%s\" (%s)",
+			 pfe_dirname, xstrerror (errno));
+	}
+    }
 }
 
 /* Write out a precompiled header file for the current compiler state
@@ -750,12 +901,8 @@ pfe_load (the_file)
   pfe_load_buffer_ptr = (char *) xmalloc (pfe_load_buffer_size);
 #endif
   if (pfe_load_buffer_ptr == 0)
-    {
-      char msg[100];
-      sprintf (msg, "PFE: unable to allocate memory (%d bytes) for load file", 
-             	     pfe_load_buffer_size);
-      fatal_error (msg);
-    }
+    fatal_error ("PFE: unable to allocate memory (%d bytes) for load file", 
+             	   pfe_load_buffer_size);
 #if PFE_NO_THAW_LOAD
 #if PFE_NO_THAW_LOAD_USING_MMAP
 #else
@@ -1414,10 +1561,10 @@ pfe_s_track_mallocs (size, kind)
         middle_idx++;
       
       if (middle_idx < pfe_s_malloc_table_nitems)
-	memcpy (&pfe_s_malloc_table[middle_idx + 1], 
-		&pfe_s_malloc_table[middle_idx], 
-		sizeof (pfe_s_malloc_entry)
-		* (pfe_s_malloc_table_nitems - middle_idx));
+	memmove (&pfe_s_malloc_table[middle_idx + 1], 
+		 &pfe_s_malloc_table[middle_idx], 
+		 sizeof (pfe_s_malloc_entry)
+		 * (pfe_s_malloc_table_nitems - middle_idx));
     }
 
   /* Add a new entry to the table.  */
@@ -1509,12 +1656,23 @@ pfe_savestring (s)
 {
   if (!s)
     return NULL;
-  
+
   if (pfe_operation == PFE_DUMP)
     {
-      hashnode ht_node = ht_lookup (pfe_str_hash_table,
-				    (const unsigned char *) s,
-				    strlen (s), HT_ALLOC);
+      hashnode ht_node;
+
+      /* PFE_TARGET_MAYBE_SAVESTRING, if defined, is an additional
+	 target-specific condition we may impose on whether to have
+	 pfe_savestring() allocate the PFE memory space for the string
+	 or not.  */
+#ifdef PFE_TARGET_MAYBE_SAVESTRING
+     if (! PFE_TARGET_MAYBE_SAVESTRING (s))
+       return s;
+#endif
+  
+      ht_node = ht_lookup (pfe_str_hash_table,
+			   (const unsigned char *) s,
+			   strlen (s), HT_ALLOC);
 #if PFE_MEMORY_STATS
       pfe_savestrings++;
 #endif
@@ -1554,10 +1712,10 @@ pfe_add_dump_range (start_addr, end_addr)
   for (range_idx = 0; range_idx < pfe_dump_range_table_nitems; range_idx++)
     if (start_addr < pfe_dump_range_table[range_idx].start_addr)
       {
-        memcpy (&pfe_dump_range_table[range_idx + 1], 
-                &pfe_dump_range_table[range_idx], 
-                sizeof (pfe_dump_memory_range) 
-                * (pfe_dump_range_table_nitems - range_idx));
+        memmove (&pfe_dump_range_table[range_idx + 1], 
+                 &pfe_dump_range_table[range_idx], 
+                 sizeof (pfe_dump_memory_range) 
+                 * (pfe_dump_range_table_nitems - range_idx));
         break;
       }
   pfe_dump_range_table[range_idx].start_addr = start_addr;
@@ -1592,4 +1750,26 @@ pfe_assign_dump_range_offsets (int header_size)
 #endif
 }
 
+/* Set the flag to indicate that command line macro processing is
+   in progress.  */
+void
+pfe_set_cmd_ln_processing ()
+{
+  pfe_cmd_ln_processing = 1;
+}
+
+/* Reset the flag to indicate that command line macro processing is
+   in progress.  */
+void
+pfe_reset_cmd_ln_processing ()
+{
+  pfe_cmd_ln_processing = 0;
+}
+
+/* Return 1 if command line macro processing is in progress.  */
+int
+pfe_is_cmd_ln_processing ()
+{
+  return (pfe_cmd_ln_processing == 1);
+}
 

@@ -1,3 +1,4 @@
+# APPLE LOCAL file darwin host
 # The spiffy cpp-precomp chokes on some legitimate constructs in GCC
 # sources; use -no-cpp-precomp to get to GNU cpp. (This is another
 # peculiarity of Apple's GCC that we hope to get rid of.)
@@ -8,3 +9,7 @@ CC = cc -no-cpp-precomp
 # Do not modify $(srcdir).
 parsedir = .
 # APPLE LOCAL end parsedir
+# APPLE LOCAL begin tradcifdir
+# Do not modify $(srcdir).
+tradcifdir = .
+# APPLE LOCAL end tradcifdir

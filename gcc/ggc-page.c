@@ -1774,13 +1774,14 @@ freeze_thaw_page_table2 (tablepp)
 
 static void 
 ggc_debugging(p)
+     int p;
 {
   int L1, L2;
   
   L1 = LOOKUP_L1 (p);
   L2 = LOOKUP_L2 (p);
   
-  fprintf (stderr, "L1=%d, L2=%2\n", L1, L2);
+  fprintf (stderr, "L1=%d, L2=%d\n", L1, L2);
 }
 
 /*-------------------------------------------------------------------*/

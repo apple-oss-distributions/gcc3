@@ -129,13 +129,17 @@ static void freeze_thaw_trace_tree (node, chain_start)
     fprintf (stderr, "%*c", MIN (tree_nesting_level, 41), ' ');
   else
     fputc ('\n', stderr);
-  fprintf (stderr, "%s:"HOST_PTR_PRINTF" ('%c') [depth=%d", 
-			   tree_code_name[(int) TREE_CODE (node)],
-			   node,
+  fprintf (stderr, "%s:", tree_code_name[(int) TREE_CODE (node)]);
+  fprintf (stderr, HOST_PTR_PRINTF, node);
+  fprintf (stderr, " (\'%c\') [depth=%d", 
 			   TREE_CODE_CLASS (TREE_CODE (node)),
 			   tree_nesting_level);
   if (chain_start)
-    fprintf (stderr, ", on "HOST_PTR_PRINTF" chain]", chain_start);
+    {
+      fprintf (stderr, ", on ");
+      fprintf (stderr, HOST_PTR_PRINTF, chain_start);
+      fprintf (stderr, " chain]");
+    }  
   else
     fputc (']', stderr);
   
@@ -159,7 +163,8 @@ static void freeze_thaw_trace_tree (node, chain_start)
       && TREE_CODE_CLASS (TREE_CODE (node)) != 't'
       && TREE_CODE_CLASS (TREE_CODE (type0)) == 't')
     {
-      fprintf (stderr, " t="HOST_PTR_PRINTF, type0);
+      fprintf (stderr, " t=");
+      fprintf (stderr, HOST_PTR_PRINTF, type0);
       
       if ((tname = RP (TYPE_NAME (type0))))
 	{
@@ -179,7 +184,10 @@ static void freeze_thaw_trace_tree (node, chain_start)
 	fprintf (stderr, " {%s}", tree_code_name[(int) TREE_CODE (type0)]);
     }
   else if (type0)
-    fprintf (stderr, " t="HOST_PTR_PRINTF, type0);
+    {
+      fprintf (stderr, " t=");
+      fprintf (stderr, HOST_PTR_PRINTF, type0);
+    }  
   if (TREE_CODE (node) == IDENTIFIER_NODE
       && (s = RP ((char *)IDENTIFIER_POINTER (node)))
       && *s)
@@ -312,8 +320,15 @@ pfe_freeze_thaw_tree_walk (void)
       
       if (debug_pfe_walk)
 	freeze_thaw_trace_tree (node, NULL);
-  
-      freeze_thaw_tree_common (node);
+      
+      /* For thawing, we need to thaw the common tree portion first
+	 because there may be need to use the TREE_TYPE in places like
+	 freeze_thaw_tree_decl(), freeze_thaw_tree_type(), etc.  For
+	 example, the lang specific c++ code for type decls needs
+	 TREE_TYPE.  */
+    
+      if (PFE_THAWING)
+	freeze_thaw_tree_common (node);
       
       switch (TREE_CODE_CLASS (TREE_CODE (node)))
 	{
@@ -354,6 +369,15 @@ pfe_freeze_thaw_tree_walk (void)
 	default:
 	  break;
 	}
+      
+      /* For freezing, we need to delay the common portion until here
+         because there may be need to use the TREE_TYPE in places like
+         freeze_thaw_tree_decl(), freeze_thaw_tree_type(), etc.  For
+         example, the lang specific c++ code for type decls needs
+         TREE_TYPE.  */
+      
+      if (PFE_FREEZING)
+      	freeze_thaw_tree_common (node);
     }
     
   free (pfe_tree_stack);
@@ -444,8 +468,15 @@ pfe_freeze_thaw_tree_walk (nodep)
   
   do {
     TREE_LANG_FLAG_7 (node) = PFE_FREEZING;
+
+    /* For thawing, we need to thaw the common tree portion first
+       because there may be need to use the TREE_TYPE in places like
+       freeze_thaw_tree_decl(), freeze_thaw_tree_type(), etc.  For
+       example, the lang specific c++ code for type decls needs
+       TREE_TYPE.  */
     
-    freeze_thaw_tree_common (node);
+    if (PFE_THAWING)
+      freeze_thaw_tree_common (node);
     
     switch (TREE_CODE_CLASS (TREE_CODE (node)))
       {
@@ -487,6 +518,15 @@ pfe_freeze_thaw_tree_walk (nodep)
       default:
 	follow_chain = 0;
       }
+
+    /* For freezing, we need to delay the common portion until here
+       because there may be need to use the TREE_TYPE in places like
+       freeze_thaw_tree_decl(), freeze_thaw_tree_type(), etc.  For
+       example, the lang specific c++ code for type decls needs
+       TREE_TYPE.  */
+    
+    if (PFE_FREEZING)
+      freeze_thaw_tree_common (node);
     
     if (follow_chain)
       {
@@ -525,7 +565,6 @@ freeze_thaw_tree_decl (node)
   PFE_FREEZE_THAW_WALK (DECL_SIZE (node));
   PFE_FREEZE_THAW_WALK (DECL_SIZE_UNIT (node));
   PFE_FREEZE_THAW_WALK (DECL_NAME (node));
-  PFE_FREEZE_THAW_WALK (DECL_CONTEXT (node));
   PFE_FREEZE_THAW_WALK (DECL_ARGUMENTS (node));
   PFE_FREEZE_THAW_WALK (DECL_INITIAL (node));
   PFE_FREEZE_THAW_WALK (DECL_ABSTRACT_ORIGIN (node));
@@ -536,9 +575,17 @@ freeze_thaw_tree_decl (node)
   PFE_FREEZE_THAW_RTX (node->decl.rtl);
   PFE_FREEZE_THAW_RTX (DECL_LIVE_RANGE_RTL (node));	/* FIXME: needed? */
   
+  /* Some fields of the decl node are used to access the language
+     specific portions of the node.  Thus we cannot freeeze them
+     until that portion is done.  Similarly we need to thaw them
+     before we use them.  */
+     
   if (PFE_THAWING)
-    pfe_thaw_ptr (&DECL_LANG_SPECIFIC (node));
-  
+    {
+      pfe_thaw_ptr (&DECL_LANG_SPECIFIC (node)); /* do this first */
+      PFE_FREEZE_THAW_WALK (DECL_CONTEXT (node));
+    }
+    
   if (!(*lang_hooks.pfe_freeze_thaw_decl) (node))
     {
       switch (TREE_CODE (node))
@@ -576,7 +623,10 @@ freeze_thaw_tree_decl (node)
     }
     
   if (PFE_FREEZING)
-    pfe_freeze_ptr (&DECL_LANG_SPECIFIC (node));
+    {
+      PFE_FREEZE_THAW_WALK (DECL_CONTEXT (node));
+      pfe_freeze_ptr (&DECL_LANG_SPECIFIC (node)); /* do this last */
+    }
 }
 
 /* Freeze/thaw a 't' node's TYPE_MAIN_VARIANT and all the nodes
@@ -769,7 +819,8 @@ freeze_thaw_tree_special (node)
 	  PFE_FREEZE_THAW_WALK (TREE_REALPART (node));
 	  PFE_FREEZE_THAW_WALK (TREE_IMAGPART (node));
 	  break;
-	
+
+#if 0 /* APPLE MERGE generalize this if necessary */	
 	/* APPLE LOCAL: AltiVec */
 	case VECTOR_CST:
 	  PFE_FREEZE_THAW_RTX (TREE_CST_RTL(node)); /* FIXME: needed? */
@@ -778,7 +829,8 @@ freeze_thaw_tree_special (node)
 	  PFE_FREEZE_THAW_WALK (TREE_VECTOR_CST_2 (node));
 	  PFE_FREEZE_THAW_WALK (TREE_VECTOR_CST_3 (node));
 	  break;
-	
+#endif
+
 	case STRING_CST:
 	  PFE_FREEZE_THAW_RTX (TREE_CST_RTL(node)); /* FIXME: needed? */
 	  pfe_freeze_thaw_ptr_fp (&TREE_STRING_POINTER (node));
@@ -822,9 +874,9 @@ static void freeze_thaw_trace_rtx (x)
   if (rtx_nesting_level > 0)
     fprintf (stderr, "%*c", MIN (tree_nesting_level + rtx_nesting_level, 60), ' ');
     
-  fprintf (stderr, "%s:"HOST_PTR_PRINTF" [depth=%d] codes=\"%s\"", 
-			   GET_RTX_NAME (GET_CODE (x)),
-			   x,
+  fprintf (stderr, "%s:", GET_RTX_NAME (GET_CODE (x)));
+  fprintf (stderr, HOST_PTR_PRINTF, x);
+  fprintf (stderr, " [depth=%d] codes=\"%s\"", 
 			   rtx_nesting_level,
 			   (char *)GET_RTX_FORMAT (GET_CODE (x)));
   #if 0
@@ -981,13 +1033,13 @@ void
 pfe_freeze_thaw_rtvec (rtvecp)
      struct rtvec_def **rtvecp;
 {
-  struct rtvec_def *rtvec = PFE_FREEZE_THAW_PTR (rtvecp);
+  struct rtvec_def *v = PFE_FREEZE_THAW_PTR (rtvecp);
   int i;
   
-  if (!rtvec)
+  if (!v)
     return;
     
-  for (i = 0; i < GET_NUM_ELEM (rtvec); ++i)
+  for (i = 0; i < GET_NUM_ELEM (v); ++i)
     {
       if (debug_rtx_walk)
         {
@@ -996,7 +1048,7 @@ pfe_freeze_thaw_rtvec (rtvecp)
                    MIN (tree_nesting_level + rtx_nesting_level, 61), ' ', i);
         }
         
-      PFE_FREEZE_THAW_RTX (RTVEC_ELT (rtvec, i));
+      PFE_FREEZE_THAW_RTX (RTVEC_ELT (v, i));
       
       if (debug_rtx_walk)
         --rtx_nesting_level;

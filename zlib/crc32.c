@@ -1,9 +1,9 @@
 /* crc32.c -- compute the CRC-32 of a data stream
- * Copyright (C) 1995-1998 Mark Adler
+ * Copyright (C) 1995-2002 Mark Adler
  * For conditions of distribution and use, see copyright notice in zlib.h 
  */
 
-/* @(#) $Id: crc32.c,v 1.3 2001/09/17 20:38:35 zlaski Exp $ */
+/* @(#) $Id: crc32.c,v 1.4 2002/03/14 07:38:16 shebs Exp $ */
 
 #include "zlib.h"
 

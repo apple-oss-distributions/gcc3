@@ -74,6 +74,11 @@ Boston, MA 02111-1307, USA.  */
 #ifdef PFE
 #include "pfe/pfe.h"
 #include "pfe/objc-freeze-thaw.h"
+static int selector_ref_idx = 0;
+static int class_names_idx = 0;
+static int meth_var_names_idx = 0;
+static int meth_var_types_idx = 0;
+static int class_ref_idx = 0;
 #endif
 
 /* APPLE LOCAL begin Objective-C++ */
@@ -410,11 +415,13 @@ static void ggc_mark_hash_table			PARAMS ((void *));
 
 /* Note that the string object global name is only needed for the
    NeXT runtime.  */
-#define STRING_OBJECT_GLOBAL_NAME "_NSConstantStringClassReference"
+/* APPLE LOCAL constant strings */   
+#define STRING_OBJECT_GLOBAL_FORMAT "_%sClassReference"
 
 #define PROTOCOL_OBJECT_CLASS_NAME "Protocol"
 
-static const char *constant_string_class_name = NULL;
+/* APPLE LOCAL constant strings */   
+const char *constant_string_class_name = NULL;
 
 static const char *TAG_GETCLASS;
 static const char *TAG_GETMETACLASS;
@@ -432,7 +439,8 @@ static const char *default_constant_string_class_name;
 /* The OCTI_... enumeration itself is in objc/objc-act.h.  */
 tree objc_global_trees[OCTI_MAX];
 
-int objc_receiver_context;
+/* APPLE LOCAL designated initializers */
+/* 'int objc_receiver_context' is no more.  */
 
 static void handle_impent			PARAMS ((struct imp_entry *));
 
@@ -647,6 +655,16 @@ objc_finish_file ()
   /* APPLE LOCAL Objective-C++  */
   /* 'objc_finish_file' is now a LANG_HOOK.  */
 
+  /* APPLE LOCAL begin PFE */
+#ifdef PFE
+  /* Skip during the dump, we'll finish the job during load.  */
+  if (pfe_operation != PFE_DUMP)
+#endif
+  /* APPLE LOCAL end PFE */
+    /* APPLE LOCAL begin 2963038 */
+    /* Skip if doing syntax check only */
+    if (!flag_syntax_only)
+    /* APPLE LOCAL end 2963038 */
   finish_objc ();		/* Objective-C finalization */
 
   if (gen_declaration_file)
@@ -873,14 +891,18 @@ objc_comptypes (lhs, rhs, reflexive)
 		      tree cat;
 
 		      rproto_list = CLASS_PROTOCOL_LIST (rinter);
-		      /* If the underlying ObjC class does not have
-			 protocols attached to it, perhaps there are
-			 "one-off" protocols attached to the rhs?
-			 E.g., 'id<MyProt> foo;'.  */
-		      if (!rproto_list)
-			rproto_list = TYPE_PROTOCOL_LIST (TREE_TYPE (rhs));
+		      /* APPLE LOCAL begin protocol qual */
 		      rproto = lookup_protocol_in_reflist (rproto_list, p);
-
+		      /* If the underlying ObjC class does not have
+			 the protocol we're looking for, check for "one-off"
+			 protocols (e.g., `NSObject<MyProt> foo;') attached
+			 to the rhs.  */
+		      if (!rproto)
+			{
+			  rproto_list = TYPE_PROTOCOL_LIST (TREE_TYPE (rhs));
+			  rproto = lookup_protocol_in_reflist (rproto_list, p);
+			}
+		      /* APPLE LOCAL end protocol qual */
 		      /* Check for protocols adopted by categories.  */
 		      cat = CLASS_CATEGORY_LIST (rinter);
 		      while (cat && !rproto)
@@ -1160,8 +1182,20 @@ setup_string_decl ()
 {
   if (!string_class_decl)
     {
+     /* APPLE LOCAL begin constant strings */
       if (!constant_string_global_id)
-	constant_string_global_id = get_identifier (STRING_OBJECT_GLOBAL_NAME);
+	{
+	  char *name;
+	  size_t length;
+	  /* %s in format will provide room for terminating null */
+	  length = strlen(STRING_OBJECT_GLOBAL_FORMAT) 
+			+ strlen(constant_string_class_name);
+	  name = xmalloc(length);
+	  sprintf(name, STRING_OBJECT_GLOBAL_FORMAT, 
+		  constant_string_class_name);
+	  constant_string_global_id = get_identifier (name);
+	}
+      /* APPLE LOCAL end constant strings */
       string_class_decl = lookup_name (constant_string_global_id);
     }
 }
@@ -1374,9 +1408,10 @@ synth_module_prologue ()
   /* APPLE LOCAL end Objective-C++ */
 }
 
-/* APPLE LOCAL begin Objective-C++ */
+/* APPLE LOCAL begin constant strings */
 /* Ensure that the ivar list for NSConstantString/NXConstantString
-   begins with the following three fields:
+   (or whatever was specified via -fconstant-string-class)
+   contains the following three fields:
 
    struct STRING_OBJECT_CLASS_NAME 
    {
@@ -1401,11 +1436,18 @@ check_string_class_template ()
     return 0;
   
   field_decl = TREE_CHAIN (field_decl);
-  return IS_FIELD_OF_TYPE (field_decl, INTEGER_TYPE);
+  if (!IS_FIELD_OF_TYPE (field_decl, INTEGER_TYPE)
+      || (TREE_INT_CST_LOW (DECL_SIZE (field_decl)) 
+	  != TREE_INT_CST_LOW (TYPE_SIZE (unsigned_type_node))))
+    return 0;
+  
+  /* No more fields after this.  */
+  field_decl = TREE_CHAIN (field_decl);
+  return (!field_decl || TREE_CODE (field_decl) != FIELD_DECL);
   
 #undef IS_FIELD_OF_TYPE
 }  
-/* APPLE LOCAL end Objective-C++ */
+/* APPLE LOCAL end constant strings */
 
 /* Custom build_string which sets TREE_TYPE!  */
 
@@ -1442,13 +1484,21 @@ tree
 build_objc_string_object (strings)
      tree strings;
 {
-  tree string, initlist, constructor;
+  tree string, initlist, constructor, constant_string_class;
   int length;
-  /* APPLE LOCAL begin Objective-C++ */
-  tree constant_string_class = lookup_interface (constant_string_id);
 
+  /* APPLE LOCAL begin constant cfstrings */
+  string = combine_strings (strings);
+  /* The '-fconstant-cfstrings' switch trumps any '-fconstant-string-class'
+     setting.  We must, however, cast the CFStringRef to id.  */
+  if (flag_constant_cfstrings)
+    return build_c_cast (id_type, build_cfstring_ascii (string));
+  /* APPLE LOCAL end constant cfstrings */  
+    
+  /* APPLE LOCAL begin constant strings */
+  constant_string_class = lookup_interface (constant_string_id);
   if (constant_string_class == NULL_TREE)
-  /* APPLE LOCAL end Objective-C++ */
+  /* APPLE LOCAL end constant strings */
     {
       error ("cannot find interface declaration for `%s'",
 	     IDENTIFIER_POINTER (constant_string_id));
@@ -1457,11 +1507,12 @@ build_objc_string_object (strings)
 
   add_class_reference (constant_string_id);
 
-  string = combine_strings (strings);
+  /* APPLE LOCAL constant cfstrings */
+  /* Call to 'combine_strings' has been moved above.  */
   TREE_SET_CODE (string, STRING_CST);
   length = TREE_STRING_LENGTH (string) - 1;
 
-  /* APPLE LOCAL begin Objective-C++ */
+  /* APPLE LOCAL begin constant strings */
   /* The NSConstantString/NXConstantString ivar layout is now
      known.  */
   if (!constant_string_type)
@@ -1475,7 +1526,7 @@ build_objc_string_object (strings)
 	  return error_mark_node;
 	}
     }  	
-  /* APPLE LOCAL end Objective-C++ */
+  /* APPLE LOCAL end constant strings */
 
   /* & ((NXConstantString) { NULL, string, length })  */
 
@@ -1817,8 +1868,16 @@ generate_objc_symtab_decl ()
   if (!objc_symtab_template)
     build_objc_symtab_template ();
 
+  /* APPLE LOCAL begin PFE */
+  if (UOBJC_SYMBOLS_decl)
+    return;
+  /* APPLE LOCAL end PFE */  
+  
   sc_spec = build_tree_list (NULL_TREE, ridpointers[(int) RID_STATIC]);
 
+  /* APPLE LOCAL indexing */
+  flag_suppress_builtin_indexing = 1;
+  
   UOBJC_SYMBOLS_decl = start_decl (get_identifier ("_OBJC_SYMBOLS"),
 				   tree_cons (NULL_TREE,
 					      objc_symtab_template, sc_spec),
@@ -1831,6 +1890,9 @@ generate_objc_symtab_decl ()
   finish_decl (UOBJC_SYMBOLS_decl,
 	       init_objc_symtab (TREE_TYPE (UOBJC_SYMBOLS_decl)),
 	       NULL_TREE);
+
+  /* APPLE LOCAL indexing */
+  flag_suppress_builtin_indexing = 0;
 }
 
 static tree
@@ -1926,6 +1988,9 @@ build_module_descriptor ()
 			  build_tree_list (NULL_TREE,
 					   ridpointers[(int) RID_STATIC]));
 
+  /* APPLE LOCAL indexing */
+  flag_suppress_builtin_indexing = 1;
+  
   UOBJC_MODULES_decl = start_decl (get_identifier ("_OBJC_MODULES"),
 				   decl_specs, 1, NULL_TREE);
 
@@ -1940,6 +2005,9 @@ build_module_descriptor ()
   /* Mark the decl to avoid "defined but not used" warning.  */
   DECL_IN_SYSTEM_HEADER (UOBJC_MODULES_decl) = 1;
 
+  /* APPLE LOCAL indexing */
+  flag_suppress_builtin_indexing = 0;
+  
   /* Generate a constructor call for the module descriptor.
      This code was generated by reading the grammar rules
      of c-parse.in;  Therefore, it may not be the most efficient
@@ -1995,12 +2063,17 @@ build_module_descriptor ()
 
     c_expand_expr_stmt (decelerator);
 
+    /* APPLE LOCAL begin Objective-C++  */
+    /* The C dialect form of finish_function now takes two args.  */
+#ifdef OBJCPLUS
     finish_function (0);
-
-    /* APPLE LOCAL Objective-C++  */
+#else
+    finish_function (0, 0);
+#endif
 #ifdef OBJCPLUS
     pop_lang_context ();
 #endif
+    /* APPLE LOCAL end Objective-C++  */
     
     return XEXP (DECL_RTL (init_function_decl), 0);
   }
@@ -2185,9 +2258,12 @@ build_selector_reference_decl ()
 {
   tree decl, ident;
   char buf[256];
-  static int idx = 0;
+  /* APPLE LOCAL begin PFE dpatel */
+  /* Hoisted outside the function and renamed as selector_ref_idx.  */
+  /* static int idx = 0; */
+  /* APPLE LOCAL end PFE dpatel */
 
-  sprintf (buf, "_OBJC_SELECTOR_REFERENCES_%d", idx++);
+  sprintf (buf, "_OBJC_SELECTOR_REFERENCES_%d", selector_ref_idx++);
 
   ident = get_identifier (buf);
 
@@ -2375,9 +2451,14 @@ build_class_reference_decl ()
 {
   tree decl, ident;
   char buf[256];
-  static int idx = 0;
+  /* APPLE LOCAL begin PFE dpatel */
+  /* Hoisted outside the function and renamed as class_ref_idx */
+  /* static int idx = 0; */
+  /* APPLE LOCAL end PFE dpatel */
 
-  sprintf (buf, "_OBJC_CLASS_REFERENCES_%d", idx++);
+  /* APPLE LOCAL PFE */
+  /* Use class_ref_idx instead of idx */
+  sprintf (buf, "_OBJC_CLASS_REFERENCES_%d", class_ref_idx++);
 
   ident = get_identifier (buf);
 
@@ -2517,9 +2598,12 @@ build_objc_string_decl (section)
 {
   tree decl, ident;
   char buf[256];
-  static int class_names_idx = 0;
-  static int meth_var_names_idx = 0;
-  static int meth_var_types_idx = 0;
+  /* APPLE LOCAL begin PFE dpatel */
+  /* Hoisted outside the function */
+  /* static int class_names_idx = 0; */
+  /* static int meth_var_names_idx = 0; */
+  /* static int meth_var_types_idx = 0; */
+  /* APPLE LOCAL end PFE dpatel */
 
   /* APPLE LOCAL indexing dpatel */
   flag_suppress_builtin_indexing = 1;
@@ -5542,7 +5626,8 @@ build_protocol_reference (p)
     {
       decl = build_decl (VAR_DECL, ident, ptype);
       DECL_EXTERNAL (decl) = 1;
-      TREE_PUBLIC (decl) = 1;
+      /* APPLE LOCAL Objective-C++ */
+      TREE_PUBLIC (decl) = 0;
       TREE_USED (decl) = 1;
       DECL_ARTIFICIAL (decl) = 1;
 
@@ -5914,7 +5999,8 @@ add_class_method (class, method)
   /* APPLE LOCAL begin indexing dpatel */
   if (flag_gen_index 
       && (TREE_CODE (class) == CLASS_INTERFACE_TYPE 
-          || TREE_CODE (class) == PROTOCOL_INTERFACE_TYPE))
+	  || TREE_CODE (class) == CATEGORY_INTERFACE_TYPE
+	  || TREE_CODE (class) == PROTOCOL_INTERFACE_TYPE))
     gen_indexing_info (INDEX_CLASS_METHOD_DECL,
 		       IDENTIFIER_POINTER (DECL_NAME (method)),
 		       DECL_SOURCE_LINE (method) /*lineno*/ );
@@ -5964,7 +6050,8 @@ add_instance_method (class, method)
   /* APPLE LOCAL begin indexing dpatel */
   if (flag_gen_index 
       && (TREE_CODE (class) == CLASS_INTERFACE_TYPE 
-          || TREE_CODE (class) == PROTOCOL_INTERFACE_TYPE))
+	  || TREE_CODE (class) == CATEGORY_INTERFACE_TYPE
+	  || TREE_CODE (class) == PROTOCOL_INTERFACE_TYPE))
     gen_indexing_info (INDEX_INSTANCE_METHOD_DECL,
 		       IDENTIFIER_POINTER (DECL_NAME (method)),
 		       lineno);
@@ -6461,6 +6548,11 @@ start_class (code, class_name, super_name, protocol_list)
 
   /* APPLE LOCAL Objective-C++ */
 #ifdef OBJCPLUS
+  /* APPLE LOCAL begin indexing */
+  /* Now processing Objective-C construct.  */
+  set_index_lang (PB_INDEX_LANG_OBJC);
+  /* APPLE LOCAL end indexing */
+
   if (current_namespace != global_namespace) {
     error ("Objective-C declarations may only appear in global scope");
   }
@@ -6638,13 +6730,24 @@ start_class (code, class_name, super_name, protocol_list)
 	    info_tag = INDEX_ERROR;
 	    break;
 	}
-      gen_indexing_info (info_tag, IDENTIFIER_POINTER(class_name),
-			 lineno);
-      /* Add inherited classes, if applicable.  */
-      if (super_name != NULL)
-        gen_indexing_info (INDEX_CLASS_INHERITANCE, 
-			   IDENTIFIER_POINTER(super_name),
-			   lineno);
+      if (info_tag == INDEX_CATEGORY_DECL || info_tag == INDEX_CATEGORY_BEGIN)
+	{
+	  /* In case of categories, super_name is the category name.  */
+          gen_indexing_info (info_tag, IDENTIFIER_POINTER(super_name),
+			     lineno);
+          gen_indexing_info (INDEX_CLASS_INHERITANCE, IDENTIFIER_POINTER(class_name),
+			     lineno);
+	}
+      else
+	{
+          gen_indexing_info (info_tag, IDENTIFIER_POINTER(class_name),
+			     lineno);
+          /* Add inherited classes, if applicable.  */
+          if (super_name != NULL)
+            gen_indexing_info (INDEX_CLASS_INHERITANCE, 
+			       IDENTIFIER_POINTER(super_name),
+			       lineno);
+	}
       /* Add adopted protocols.  */
       if (protocol_list)
 	{
@@ -7068,8 +7171,17 @@ encode_pointer (type, curtype, format)
   else if (TREE_CODE (pointer_to) == INTEGER_TYPE
 	   && TYPE_MODE (pointer_to) == QImode)
     {
-      obstack_1grow (&util_obstack, '*');
-      return;
+      /* APPLE LOCAL begin bool encoding */
+      tree pname = TREE_CODE (TYPE_NAME (pointer_to)) == IDENTIFIER_NODE
+	          ? TYPE_NAME (pointer_to) 
+	          : DECL_NAME (TYPE_NAME (pointer_to));
+      
+      if (!!strcmp (IDENTIFIER_POINTER (pname), "BOOL"))
+	{
+	  obstack_1grow (&util_obstack, '*');
+	  return;
+	}
+      /* APPLE LOCAL end bool encoding */
     }
 
   /* We have a type that does not get special treatment.  */
@@ -7800,31 +7912,8 @@ continue_method_def ()
   store_parm_decls ();
 }
 
-/* Called by the parser, from the `pushlevel' production.  */
-
-void
-add_objc_decls ()
-{
-  /* APPLE LOCAL indexing dpatel */
-  flag_suppress_builtin_indexing = 1;
-
-  if (!UOBJC_SUPER_decl)
-    {
-      UOBJC_SUPER_decl = start_decl (get_identifier (UTAG_SUPER),
-				     build_tree_list (NULL_TREE,
-						      objc_super_template),
-				     0, NULL_TREE);
-
-      finish_decl (UOBJC_SUPER_decl, NULL_TREE, NULL_TREE);
-
-      /* This prevents `unused variable' warnings when compiling with -Wall.  */
-      TREE_USED (UOBJC_SUPER_decl) = 1;
-      DECL_ARTIFICIAL (UOBJC_SUPER_decl) = 1;
-    }
-
-  /* APPLE LOCAL indexing dpatel */
-  flag_suppress_builtin_indexing = 0;
-}
+/* APPLE LOCAL msg send super  */
+/* The 'add_objc_decls' routine is no more.  */
 
 /* _n_Method (id self, SEL sel, ...)
      {
@@ -7838,6 +7927,28 @@ get_super_receiver ()
   if (objc_method_context)
     {
       tree super_expr, super_expr_list;
+
+      /* APPLE LOCAL begin msg send super */
+      if (!UOBJC_SUPER_decl)
+      {
+	/* APPLE LOCAL indexing dpatel */
+	flag_suppress_builtin_indexing = 1;
+	
+	UOBJC_SUPER_decl = start_decl (get_identifier (UTAG_SUPER),
+				       build_tree_list (NULL_TREE,
+				       objc_super_template),
+				       0, NULL_TREE);
+
+	finish_decl (UOBJC_SUPER_decl, NULL_TREE, NULL_TREE);
+
+	/* This prevents `unused variable' warnings when compiling with -Wall.  */
+	TREE_USED (UOBJC_SUPER_decl) = 1;
+	DECL_ARTIFICIAL (UOBJC_SUPER_decl) = 1;
+
+	/* APPLE LOCAL indexing dpatel */
+	flag_suppress_builtin_indexing = 0;
+      }
+      /* APPLE LOCAL end msg send super */
 
       /* Set receiver to self.  */
       super_expr = build_component_ref (UOBJC_SUPER_decl, self_id);
@@ -7922,6 +8033,15 @@ get_super_receiver ()
 static void
 objc_expand_function_end ()
 {
+  /* APPLE LOCAL begin method encoding */
+  /* This routine may also get called for C functions, including those
+     nested within ObjC methods.  In such cases, method encoding is
+     meaningless.  */
+  if (objc_method_context == NULL_TREE
+      || DECL_INITIAL (objc_method_context) != current_function_decl)
+    return;
+  /* APPLE LOCAL end method encoding */
+    
   METHOD_ENCODING (objc_method_context) 
     /* APPLE LOCAL method encoding */
     = encode_method_prototype (objc_method_context, current_function_decl);
@@ -7945,7 +8065,14 @@ finish_method_def ()
   current_function_cannot_inline = "methods cannot be inlined";
   /* APPLE LOCAL end suppress method inlining */
 
+  /* APPLE LOCAL begin Objective-C++  */
+  /* The C dialect form of finish_function now takes two args.  */
+#ifdef OBJCPLUS
   finish_function (0);
+#else
+  finish_function (0, 1);
+#endif
+  /* APPLE LOCAL end Objective-C++  */
   lang_expand_function_end = NULL;
 
   /* Required to implement _msgSuper. This must be done AFTER finish_function,
@@ -8963,6 +9090,7 @@ handle_class_ref (chain)
   decl = build_decl (VAR_DECL, get_identifier (string), string_type_node);
   DECL_INITIAL (decl) = exp;
   TREE_STATIC (decl) = 1;
+  TREE_USED (decl) = 1;
 
   pushdecl (decl);
   rest_of_decl_compilation (decl, 0, 0, 0);
@@ -8984,7 +9112,7 @@ handle_impent (impent)
 
       string = (char *) alloca (strlen (class_name) + 30);
 
-      sprintf (string, "*%sobjc_class_name_%s",
+      sprintf (string, "%sobjc_class_name_%s",
                (flag_next_runtime ? "." : "__"), class_name);
     }
   else if (TREE_CODE (impent->imp_context) == CATEGORY_IMPLEMENTATION_TYPE)
@@ -9012,14 +9140,23 @@ handle_impent (impent)
       ASM_DECLARE_CLASS_REFERENCE (asm_out_file, string);
       return;
     }
+  else
 #endif
+    {
+      tree decl, init;
 
-  /* (Should this be a routine in varasm.c?) */
-  readonly_data_section ();
-  assemble_global (string);
-  assemble_align (UNITS_PER_WORD);
-  assemble_label (string);
-  assemble_zeros (UNITS_PER_WORD);
+      init = build_int_2 (0, 0);
+      TREE_TYPE (init) = type_for_size (BITS_PER_WORD, 1);
+      decl = build_decl (VAR_DECL, get_identifier (string), TREE_TYPE (init));
+      TREE_PUBLIC (decl) = 1;
+      TREE_READONLY (decl) = 1;
+      TREE_USED (decl) = 1;
+      TREE_CONSTANT (decl) = 1;
+      DECL_CONTEXT (decl) = 0;
+      DECL_ARTIFICIAL (decl) = 1;
+      DECL_INITIAL (decl) = init;
+      assemble_variable (decl, 1, 0, 0);
+    }
 }
 
 static void
@@ -9074,7 +9211,8 @@ lookup_objc_ivar (id)
 {
   tree decl;
 
-  if (objc_receiver_context && !strcmp (IDENTIFIER_POINTER (id), "super"))
+  /* APPLE LOCAL designated initializers */
+  if (objc_method_context && !strcmp (IDENTIFIER_POINTER (id), "super"))
     /* we have a message to super */
     return get_super_receiver ();
   else if (objc_method_context && (decl = is_ivar (objc_ivar_chain, id)))
@@ -9087,4 +9225,30 @@ lookup_objc_ivar (id)
   else
     return 0;
 }
+
+/* APPLE LOCAL PFE */
+/*-------------------------------------------------------------------*/
+#ifdef PFE
+void
+pfe_freeze_thaw_objc_act_globals (hdr)
+     struct pfe_lang_compiler_state *hdr;   
+{
+  PFE_GLOBAL_TO_HDR_IF_FREEZING (selector_ref_idx);
+  PFE_HDR_TO_GLOBAL_IF_THAWING (selector_ref_idx);
+
+  PFE_GLOBAL_TO_HDR_IF_FREEZING (class_names_idx);
+  PFE_HDR_TO_GLOBAL_IF_THAWING (class_names_idx);
+
+  PFE_GLOBAL_TO_HDR_IF_FREEZING (meth_var_names_idx);
+  PFE_HDR_TO_GLOBAL_IF_THAWING (meth_var_names_idx);
+
+  PFE_GLOBAL_TO_HDR_IF_FREEZING (meth_var_types_idx);
+  PFE_HDR_TO_GLOBAL_IF_THAWING (meth_var_types_idx);
+
+  PFE_GLOBAL_TO_HDR_IF_FREEZING (class_ref_idx);
+  PFE_HDR_TO_GLOBAL_IF_THAWING (class_ref_idx);
+
+}
+#endif
+
 

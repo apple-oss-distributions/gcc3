@@ -133,12 +133,12 @@ connect_to_socket (hostname, port_number)
   socket_fd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (socket_fd < 0)
     {
-       warning("Can not create socket: %s", strerror (errno));
+       warning("cannot create socket: %s", strerror (errno));
        return -1;
     }
   if (connect (socket_fd, (struct sockaddr *)&addr, sizeof (addr)) < 0)
     {
-       warning("Can not connect to socket: %s", strerror (errno));
+       warning("cannot connect to socket: %s", strerror (errno));
        return -1;
     }
   return socket_fd;
@@ -209,7 +209,7 @@ finish_gen_indexing ()
 {
   if (!flag_debug_gen_index)
     if (close (index_socket_fd) < 0)
-      warning ("Can not close the indexing data socket");
+      warning ("cannot close the indexing data socket");
 }
 
 char *index_buffer = NULL;
@@ -286,6 +286,9 @@ gen_indexing_info (info_tag, name, number)
         strcpy (info, "<Fm ");
       else
         strcpy (info, "+Fm ");
+      break;
+    case INDEX_FILE_INCLUDE:
+      strcpy (info, "+Fi ");
       break;
     case INDEX_FILE_END:
       strcpy (info, "-Fm ");
@@ -507,7 +510,7 @@ read_indexed_header_list ()
   struct indexed_header *cursor;
   FILE *file;
   char *name = NULL;
-  time_t timestamp;
+  time_t timestamp = 0;
   int i, length = 0;
 
   file = fopen (index_header_list_filename, "r");
@@ -699,6 +702,7 @@ update_header_status (header, when, found)
                     header->status = PB_INDEX_SEEN;
                     flag_gen_index = 1;
                     //fprintf (stderr, "BEGIN Index generation :%s\n", header->name);
+                    gen_indexing_info (INDEX_FILE_INCLUDE, header->name, -1);
                     gen_indexing_info (INDEX_FILE_BEGIN, header->name, -1);
                   }
                 else
@@ -944,37 +948,6 @@ process_header_indexing (input_name, when)
     }
 
   update_header_status (cursor, when, found);
-#if 0
-  if (flag_gen_index)
-    {       
-      /* Append current pwd. We need absolute path.  */
-      char *apath; 
-      int alen = MAXPATHLEN + strlen (name) + 2;
-      apath = (char *) xmalloc (sizeof (char) * alen);
-      if (name[0] != '/')
-        {
-          apath = getcwd(apath, alen);
-          strcat (apath, "/");
-          strcat (apath, name);
-        }
-      else
-        strcpy (apath, name);
-
-      if (when == PB_INDEX_BEGIN)
-        {
-          push_begin_header_stack (name);
-          gen_indexing_info (INDEX_FILE_BEGIN, apath, -1);
-        }
-      else if (when == PB_INDEX_END)
-        gen_indexing_info (INDEX_FILE_END, apath, -1);
-      free (apath);
-    }       
-  else
-    {       
-      if (when == PB_INDEX_END)
-        push_begin_header_stack (name);
-    }       
-#endif
   if (flag_cpp_precomp && when == PB_INDEX_END)
     free (name);
   return found;

@@ -33,6 +33,7 @@ Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #include "pfe/pfe.h"
 #include "pfe/pfe-header.h"
 #undef abort
+extern void pfe_find_macro               PARAMS ((const  char *));
 #endif
 
 /* APPLE LOCAL indexing dpatel */
@@ -52,6 +53,12 @@ struct cpp_macro
   unsigned int fun_like : 1;	/* If a function-like macro.  */
   unsigned int variadic : 1;	/* If a variadic macro.  */
   unsigned int syshdr   : 1;	/* If macro defined in system header.  */
+  /* APPLE LOCAL begin PFE validation dpatel */
+#ifdef PFE
+  unsigned int pfe_entry: 1;    /* If a command line macro.  */
+  unsigned int pfe_redef: 1;    /* If a cmd line macro is redefined.  */
+#endif
+  /* APPLE LOCAL end PFE validation dpatel */
 };
 
 typedef struct macro_arg macro_arg;
@@ -78,9 +85,6 @@ static cpp_context *next_context PARAMS ((cpp_reader *));
 static const cpp_token *padding_token
   PARAMS ((cpp_reader *, const cpp_token *));
 static void expand_arg PARAMS ((cpp_reader *, macro_arg *));
-static unsigned char *quote_string PARAMS ((unsigned char *,
-					    const unsigned char *,
-					    unsigned int));
 static const cpp_token *new_string_token PARAMS ((cpp_reader *, U_CHAR *,
 						  unsigned int));
 static const cpp_token *new_number_token PARAMS ((cpp_reader *, unsigned int));
@@ -177,7 +181,7 @@ builtin_macro (pfile, node)
 	name = map->to_file;
 	len = strlen (name);
 	buf = _cpp_unaligned_alloc (pfile, len * 4 + 1);
-	len = quote_string (buf, (const unsigned char *) name, len) - buf;
+	len = cpp_quote_string (buf, (const unsigned char *) name, len) - buf;
 
 	result = new_string_token (pfile, buf, len);
       }
@@ -257,9 +261,10 @@ builtin_macro (pfile, node)
 
 /* Copies SRC, of length LEN, to DEST, adding backslashes before all
    backslashes and double quotes.  Non-printable characters are
-   converted to octal.  DEST must be of sufficient size.  */
-static U_CHAR *
-quote_string (dest, src, len)
+   converted to octal.  DEST must be of sufficient size.  Returns
+   a pointer to the end of the string.  */
+U_CHAR *
+cpp_quote_string (dest, src, len)
      U_CHAR *dest;
      const U_CHAR *src;
      unsigned int len;
@@ -344,7 +349,7 @@ stringify_arg (pfile, arg)
 	  _cpp_buff *buff = _cpp_get_buff (pfile, len);
 	  unsigned char *buf = BUFF_FRONT (buff);
 	  len = cpp_spell_token (pfile, token, buf) - buf;
-	  dest = quote_string (dest, buf, len);
+	  dest = cpp_quote_string (dest, buf, len);
 	  _cpp_release_buff (pfile, buff);
 	}
       else
@@ -1158,7 +1163,7 @@ warn_of_redefinition (node, macro2)
   /* Redefinition of a macro is allowed if and only if the old and new
      definitions are the same.  (6.10.3 paragraph 2).  */
   macro1 = node->value.macro;
-
+  
   /* The quick failures.  */
   if (macro1->count != macro2->count
       || macro1->paramc != macro2->paramc
@@ -1423,6 +1428,13 @@ _cpp_create_definition (pfile, node)
 
   macro->expansion = (cpp_token *) BUFF_FRONT (pfile->a_buff);
 
+  /* APPLE LOCAL begin PFE validation dpatel */
+#ifdef PFE
+  if (pfe_is_cmd_ln_processing ())
+    macro->pfe_entry = 1;
+#endif
+  /* APPLE LOCAL end PFE validation dpatel */
+  
   /* Don't count the CPP_EOF.  */
   macro->count--;
 
@@ -1444,18 +1456,76 @@ _cpp_create_definition (pfile, node)
 
   if (node->type != NT_VOID)
     {
+      //printf ("DPATEL: Inside : %s\n", NODE_NAME (node));
       if (warn_of_redefinition (node, macro))
 	{
+/* APPLE LOCAL begin PFE validation dpatel */
+#ifdef PFE
+          if (pfe_operation == PFE_LOAD && pfe_is_cmd_ln_processing ())
+            {
+              if (pfe_macro_validation)
+                cpp_error (pfile,
+                           "Macro \"%s\" was defined while making pre-compiled header: \"%s\"",
+                           NODE_NAME (node), pfe_name);
+              else
+                cpp_pedwarn_with_line (pfile, pfile->directive_line, 0,
+                           "Macro \"%s\" redefined. Previous definition is in "
+                           "pre-compiled header: \"%s\"", 
+                           NODE_NAME (node), pfe_name);
+            }
+          else
+            {
+#endif
+/* APPLE LOCAL end PFE validation dpatel */
 	  cpp_pedwarn_with_line (pfile, pfile->directive_line, 0,
 				 "\"%s\" redefined", NODE_NAME (node));
 
 	  if (node->type == NT_MACRO && !(node->flags & NODE_BUILTIN))
 	    cpp_pedwarn_with_line (pfile, node->value.macro->line, 0,
 			    "this is the location of the previous definition");
+/* APPLE LOCAL begin PFE validation dpatel */
+#ifdef PFE
+            }
+/* APPLE LOCAL end PFE validation dpatel */
+#endif
 	}
+/* APPLE LOCAL begin PFE validation dpatel */
+#ifdef PFE
+      else
+        {
+          if (pfe_operation == PFE_LOAD 
+              && pfe_is_cmd_ln_processing ()
+              && pfe_macro_validation
+              && (pfe_macro_status & PFE_MACRO_FOUND)
+              && !(pfe_macro_status & PFE_MACRO_CMD_LN))
+           {
+              cpp_error (pfile,
+                         "-D%s redefines macro in pre-compiled header: \"%s\"",
+                         NODE_NAME (node), pfe_name);
+            }
+        }
+/* APPLE LOCAL end PFE validation dpatel */
+#endif
       _cpp_free_definition (node);
     }
+/* APPLE LOCAL begin PFE validation dpatel */
+#ifdef PFE
+  else
+    {
+      //printf ("DPATEL: Outside : %s\n", NODE_NAME (node));
+      if (pfe_operation == PFE_LOAD 
+          && pfe_is_cmd_ln_processing()
+          && pfe_macro_validation
+          && (pfe_macro_status & PFE_MACRO_FOUND))
+        {
+          cpp_error (pfile,
+             	     "-D%s defines a macro that was not defined but was used in pre-compiled header: \"%s\"",
+                     NODE_NAME (node), pfe_name);
+        }
 
+    }
+/* APPLE LOCAL end PFE validation dpatel */
+#endif
   /* Enter definition in hash table.  */
   node->type = NT_MACRO;
   node->value.macro = macro;
@@ -1552,10 +1622,10 @@ cpp_macro_definition (pfile, node)
   len = NODE_LEN (node) + 1;			/* ' ' */
   if (macro->fun_like)
     {
-      len += 3;		/* "()" plus possible final "." of named
-			   varargs (we have + 2 below).  */
+      len += 4;		/* "()" plus possible final ".." of named
+			   varargs (we have + 1 below).  */
       for (i = 0; i < macro->paramc; i++)
-	len += NODE_LEN (macro->params[i]) + 2; /* ", " */
+	len += NODE_LEN (macro->params[i]) + 1; /* "," */
     }
 
   for (i = 0; i < macro->count; i++)
@@ -1598,17 +1668,23 @@ cpp_macro_definition (pfile, node)
 	    }
 
 	  if (i + 1 < macro->paramc)
-	    *buffer++ = ',', *buffer++ = ' ';
+            /* Don't emit a space after the comma here; we're trying
+               to emit a Dwarf-friendly definition, and the Dwarf spec
+               forbids spaces in the argument list.  */
+	    *buffer++ = ',';
 	  else if (macro->variadic)
 	    *buffer++ = '.', *buffer++ = '.', *buffer++ = '.';
 	}
       *buffer++ = ')';
     }
 
+  /* The Dwarf spec requires a space after the macro name, even if the
+     definition is the empty string.  */
+  *buffer++ = ' ';
+
   /* Expansion tokens.  */
   if (macro->count)
     {
-      *buffer++ = ' ';
       for (i = 0; i < macro->count; i++)
 	{
 	  cpp_token *token = &macro->expansion[i];
@@ -1684,6 +1760,9 @@ pfe_freeze_thaw_cpp_macro (mp)
     }
 #endif
   
+  if (m->pfe_entry)
+    pfe_compiler_state_ptr->cmd_ln_macro_count++;
+    
   /* Freeze/thaw the parameters (if any).  If there are parameters
      and we get a NULL back from PFE_FREEZE_THAW_PTR, then this macro
      has already been frozen.  */
@@ -1753,6 +1832,46 @@ pfe_freeze_thaw_cpp_macro (mp)
     }
 #endif
 }
+
+/* Determine whether node is already inside identitifer hashtable. */
+void
+pfe_find_macro (macro_name)
+     const  char *macro_name;
+{   
+  cpp_hashnode *node;
+  char *buf, *p;
+
+  if (!macro_name)
+    return;
+
+  p = strchr (macro_name, ' ');
+  if (p)
+    {
+      size_t count;
+      count = strlen (macro_name);
+      buf = (char *) alloca (count + 2);
+      memcpy (buf, macro_name, count);
+      buf [p - macro_name] = NULL;
+    }
+  else
+    {
+      buf = (char *)macro_name;
+    }
+
+  node = (cpp_hashnode *)ht_lookup (pfe_compiler_state_ptr->ident_hash,
+                      (const unsigned char *) buf,
+                      strlen (buf), HT_NO_INSERT);
+  if (node)
+    {
+      cpp_macro *macro = node->value.macro;
+      pfe_macro_status |= PFE_MACRO_FOUND;
+      if (macro && macro->pfe_entry)
+        {       
+          pfe_cmd_ln_macro_count++;
+          pfe_macro_status |= PFE_MACRO_CMD_LN;
+        }      
+    }
+}   
 
 /*-------------------------------------------------------------------*/
 

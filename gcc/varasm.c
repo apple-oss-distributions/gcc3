@@ -99,6 +99,12 @@ static void freeze_thaw_rtx_const PARAMS ((struct rtx_const *, rtx));
 
 static int symhash PARAMS ((const char *, int));
 #define SYMHASH(LABEL) symhash (LABEL, 0)
+
+/* A PFE dump operation is similar to a syntax check in that no
+   asm output is to be generated.  Rather than adding explicit
+   code to all places in here that check flag_syntax_only we
+   redefine flag_syntax_only to also test for PFE_DUMP.  */ 
+#define flag_syntax_only (flag_syntax_only || pfe_operation == PFE_DUMP)
 #endif /* PFE */
 
 #ifndef TRAMPOLINE_ALIGNMENT
@@ -146,6 +152,12 @@ struct varasm_status
   /* Chain of all CONST_DOUBLE rtx's constructed for the current function.
      They are chained through the CONST_DOUBLE_CHAIN.  */
   rtx x_const_double_chain;
+
+  /* APPLE LOCAL Altivec */
+  /* Chain of all CONST_VECTOR rtx's constructed for the current function.
+     They are chained through the CONST_VECTOR_CHAIN.  */
+  rtx x_const_vector_chain;
+  /* APPLE LOCAL end Altivec */
 };
 
 #define const_rtx_hash_table (cfun->varasm->x_const_rtx_hash_table)
@@ -154,6 +166,9 @@ struct varasm_status
 #define last_pool (cfun->varasm->x_last_pool)
 #define pool_offset (cfun->varasm->x_pool_offset)
 #define const_double_chain (cfun->varasm->x_const_double_chain)
+/* APPLE LOCAL Altivec */
+#define const_vector_chain (cfun->varasm->x_const_vector_chain)
+/* APPLE LOCAL end Altivec */
 
 /* Number for making the label on the next
    constant that is stored in memory.  */
@@ -214,9 +229,7 @@ static unsigned HOST_WIDE_INT array_size_for_constructor PARAMS ((tree));
 static unsigned min_align		PARAMS ((unsigned, unsigned));
 static void output_constructor		PARAMS ((tree, HOST_WIDE_INT,
 						 unsigned int));
-#ifdef ASM_WEAKEN_LABEL
-static void remove_from_pending_weak_list	PARAMS ((const char *));
-#endif
+static void globalize_decl		PARAMS ((tree));
 static int in_named_entry_eq		PARAMS ((const PTR, const PTR));
 static hashval_t in_named_entry_hash	PARAMS ((const PTR));
 #ifdef ASM_OUTPUT_BSS
@@ -493,11 +506,15 @@ named_section (decl, name, reloc)
   flags = (* targetm.section_type_flags) (decl, name, reloc);
 
   /* Sanity check user variables for flag changes.  Non-user
-     section flag changes will abort in named_section_flags.  */
+     section flag changes will abort in named_section_flags.
+     However, don't complain if SECTION_OVERRIDE is set.
+     We trust that the setter knows that it is safe to ignore
+     the default flags for this decl.  */
   if (decl && ! set_named_section_flags (name, flags))
     {
-      error_with_decl (decl, "%s causes a section type conflict");
       flags = get_named_section_flags (name);
+      if ((flags & SECTION_OVERRIDE) == 0)
+	error_with_decl (decl, "%s causes a section type conflict");
     }
 
   named_section_flags (name, flags);
@@ -1266,7 +1283,8 @@ assemble_start_function (decl, fnname)
 
   /* Make function name accessible from other files, if appropriate.  */
 
-  if (TREE_PUBLIC (decl))
+  /* APPLE LOCAL private extern */
+  if (TREE_PUBLIC (decl) || DECL_PRIVATE_EXTERN (decl) || DECL_COALESCED (decl))
     {
       if (! first_global_object_name)
 	{
@@ -1283,24 +1301,7 @@ assemble_start_function (decl, fnname)
 	    weak_global_object_name = name;
 	}
 
-#ifdef ASM_WEAKEN_LABEL
-      if (DECL_WEAK (decl))
-	{
-	  ASM_WEAKEN_LABEL (asm_out_file, fnname);
-	  /* Remove this function from the pending weak list so that
-	     we do not emit multiple .weak directives for it.  */
-	  remove_from_pending_weak_list
-	    (IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (decl)));
-	}
-      else
-#endif
-      /* APPLE LOCAL private extern */
-#ifdef ASM_PRIVATE_EXTERNIZE_LABEL
-      if (DECL_PRIVATE_EXTERN (decl))
-        ASM_PRIVATE_EXTERNIZE_LABEL (asm_out_file, fnname);
-      else
-#endif
-      ASM_GLOBALIZE_LABEL (asm_out_file, fnname);
+      globalize_decl (decl);
     }
 
   /* Do any machine/system dependent processing of the function name */
@@ -1459,6 +1460,10 @@ asm_emit_uninitialised (decl, name, size, rounded)
 	destination = asm_dest_common;
     }
 
+  if (destination == asm_dest_bss)
+    globalize_decl (decl);
+  resolve_unique_section (decl, 0);
+
   if (flag_shared_data)
     {
       switch (destination)
@@ -1482,8 +1487,6 @@ asm_emit_uninitialised (decl, name, size, rounded)
 	  break;
 	}
     }
-
-  resolve_unique_section (decl, 0);
 
   switch (destination)
     {
@@ -1694,27 +1697,11 @@ assemble_variable (decl, top_level, at_end, dont_output_data)
      target doesn't support ASM_OUTPUT_BSS.  */
 
   /* First make the assembler name(s) global if appropriate.  */
-  if (TREE_PUBLIC (decl) && DECL_NAME (decl))
-    {
-#ifdef ASM_WEAKEN_LABEL
-      if (DECL_WEAK (decl))
-	{
-	  ASM_WEAKEN_LABEL (asm_out_file, name);
-	   /* Remove this variable from the pending weak list so that
-	      we do not emit multiple .weak directives for it.  */
-	  remove_from_pending_weak_list
-	    (IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (decl)));
-	}
-      else
-#endif
-      /* APPLE LOCAL private extern */
-#ifdef ASM_PRIVATE_EXTERNIZE_LABEL
-      if (DECL_PRIVATE_EXTERN (decl))
-        ASM_PRIVATE_EXTERNIZE_LABEL (asm_out_file, name);
-      else
-#endif
-      ASM_GLOBALIZE_LABEL (asm_out_file, name);
-    }
+  /* APPLE LOCAL  coalescing  */
+  if ((TREE_PUBLIC (decl) || DECL_PRIVATE_EXTERN (decl)
+			  || DECL_COALESCED (decl))
+       && DECL_NAME (decl))
+    globalize_decl (decl);
 
   /* Output any data that we will need to use the address of.  */
   if (DECL_INITIAL (decl) == error_mark_node)
@@ -1728,10 +1715,9 @@ assemble_variable (decl, top_level, at_end, dont_output_data)
 
   /* APPLE LOCAL begin zerofill turly 20020218  */
 #ifdef ASM_OUTPUT_ZEROFILL
-#ifdef HAVE_COALESCED_SYMBOLS
   /* We need a ZEROFILL COALESCED option!  */
+  /* APPLE LOCAL coalescing */
   if (! DECL_COALESCED (decl))
-#endif
   if (flag_no_common
       && ! dont_output_data
       && (DECL_INITIAL (decl) == 0 || DECL_INITIAL (decl) == error_mark_node))
@@ -1771,7 +1757,7 @@ assemble_variable (decl, top_level, at_end, dont_output_data)
 
   if (!dont_output_data)
     {
-      if (DECL_INITIAL (decl))
+      if (DECL_INITIAL (decl) && DECL_INITIAL (decl) != error_mark_node)
 	/* Output the actual data.  */
 	output_constant (DECL_INITIAL (decl),
 			 tree_low_cst (DECL_SIZE_UNIT (decl), 1),
@@ -1833,6 +1819,13 @@ assemble_external (decl)
      open.  If it's not, we should not be calling this function.  */
   if (!asm_out_file)
     abort ();
+
+/* APPLE LOCAL PFE */
+#ifdef PFE
+  /* A PFE dump implies that no .o should is created.  */
+  if (pfe_operation == PFE_DUMP)
+    return;
+#endif
 
 #ifdef ASM_OUTPUT_EXTERNAL
   if (DECL_P (decl) && DECL_EXTERNAL (decl) && TREE_PUBLIC (decl))
@@ -2407,21 +2400,7 @@ immed_real_const (exp)
   return immed_real_const_1 (TREE_REAL_CST (exp), TYPE_MODE (TREE_TYPE (exp)));
 }
 
-/* APPLE LOCAL: AltiVec */
-/* Here we combine duplicate vector constants to make
-   CONST_VECTOR rtx's, and force those out to memory when necessary.  */
-
-/* Chain of all CONST_VECTOR rtx's constructed for the current function.
-   They are chained through the CONST_VECTOR_CHAIN.
-   A CONST_VECTOR rtx has CONST_VECTOR_MEM != cc0_rtx iff it is on this chain.
-   In that case, CONST_VECTOR_MEM is either a MEM,
-   or const0_rtx if no MEM has been made for this CONST_VECTOR yet.
-
-   (CONST_VECTOR_MEM is used only for top-level functions.
-   See force_const_mem for explanation.)  */
-
-static rtx const_vector_chain;
-
+/* APPLE LOCAL Altivec (entire function) */
 /* Return a CONST_VECTOR rtx for a value specified by EXP,
    which must be a VECTOR_CST tree node.  */
 
@@ -2430,73 +2409,70 @@ immed_vector_const (exp)
      tree exp;
 {
   enum machine_mode mode = TYPE_MODE (TREE_TYPE (exp));
-  HOST_WIDE_INT u[4];
+  HOST_WIDE_INT u1;
   register rtx r;
-  int in_current_obstack;
+  int i, count = 0;
+  tree t;
+  int bad = 0;
 
-  /* Compute the representation of the vector value EXP into an array of four
-     integers.  */
-  if (TREE_CODE (TREE_VECTOR_CST_0 (exp)) == INTEGER_CST)
-    {
-      u[0] = TREE_INT_CST_LOW (TREE_VECTOR_CST_0 (exp));
-      u[1] = TREE_INT_CST_LOW (TREE_VECTOR_CST_1 (exp));
-      u[2] = TREE_INT_CST_LOW (TREE_VECTOR_CST_2 (exp));
-      u[3] = TREE_INT_CST_LOW (TREE_VECTOR_CST_3 (exp));
-    }
-  else if (TREE_CODE (TREE_VECTOR_CST_0 (exp)) == REAL_CST)
-    {
-      REAL_VALUE_TO_TARGET_SINGLE (TREE_REAL_CST (TREE_VECTOR_CST_0 (exp)),
-				   u[0]);
-      REAL_VALUE_TO_TARGET_SINGLE (TREE_REAL_CST (TREE_VECTOR_CST_1 (exp)),
-				   u[1]);
-      REAL_VALUE_TO_TARGET_SINGLE (TREE_REAL_CST (TREE_VECTOR_CST_2 (exp)),
-				   u[2]);
-      REAL_VALUE_TO_TARGET_SINGLE (TREE_REAL_CST (TREE_VECTOR_CST_3 (exp)),
-				   u[3]);
-    }
-  else
-    abort ();
+  /* Count number of elements in exp. */
+  for (t = TREE_VECTOR_CST_ELTS (exp); t; t = TREE_CHAIN (t))
+    count++;
 
   /* Search the chain for an existing CONST_VECTOR with the right value.
      If one is found, return it.  */
 
   for (r = const_vector_chain; r; r = CONST_VECTOR_CHAIN (r))
-    if (! memcmp ((char *) &CONST_VECTOR_0 (r), (char *) &u, sizeof u)
-	&& GET_MODE (r) == mode)
-      return r;
-
-  /* No; make a new one and add it to the chain.
-
-     We may be called by an optimizer which may be discarding any memory
-     allocated during its processing (such as combine and loop).  However,
-     we will be leaving this constant on the chain, so we cannot tolerate
-     freed memory.  So switch to saveable_obstack for this allocation
-     and then switch back if we were in current_obstack.  */
-
-#if 0 /* These functions are no longer available in gcc 3.x.  */
-  push_obstacks_nochange ();
-  rtl_in_saveable_obstack ();
-#endif
+    {
+      if (GET_MODE (r) == mode && count == CONST_VECTOR_NUNITS (r))
+	{
+	  bad = 0;
+	  for ( t = TREE_VECTOR_CST_ELTS (exp), i = 0;
+	        t;
+		t = TREE_CHAIN (t), i++ )
+	    {
+	      if (TREE_CODE (TREE_VALUE (t)) == INTEGER_CST )
+		  u1 = TREE_INT_CST_LOW (TREE_VALUE (t));
+	      else if (TREE_CODE (TREE_VALUE (t)) == REAL_CST )
+		  REAL_VALUE_TO_TARGET_SINGLE (TREE_REAL_CST 
+		    (TREE_VALUE (t)), u1);
+	      else
+	        abort ();
+	      if ( u1 != INTVAL (CONST_VECTOR_ELT (r, i)))
+		{
+		  bad = 1;
+		  break;
+		}
+	    }
+	  if ( !bad )
+	    return r;
+	}
+    }
+	
   r = rtx_alloc (CONST_VECTOR);
   PUT_MODE (r, mode);
-  memcpy ((char *) &CONST_VECTOR_0 (r), (char *) &u, sizeof u);
-#if 0 /* This function is no longer available in gcc 3.x.  */
-  pop_obstacks ();
-#endif
+  XVEC (r, 0) = rtvec_alloc (count);
+  for (i = 0, t = TREE_VECTOR_CST_ELTS (exp); i < count; 
+	i++, t = TREE_CHAIN (t))
+    {
+      if (TREE_CODE (TREE_VALUE (t)) == INTEGER_CST )
+	  CONST_VECTOR_ELT (r, i) = GEN_INT (TREE_INT_CST_LOW (TREE_VALUE (t)));
+      else if (TREE_CODE (TREE_VALUE (t)) == REAL_CST )
+	{
+	  REAL_VALUE_TO_TARGET_SINGLE (TREE_REAL_CST (TREE_VALUE (t)), u1);
+	  CONST_VECTOR_ELT (r, i) = GEN_INT (u1);
+	}
+    }
 
   /* Don't touch const_vector_chain in nested function; see force_const_mem.
      Also, don't touch it if not inside any function.  */
-  if (/*outer_function_chain == 0 &&*/ current_function_decl != 0)
+  if (current_function_decl != 0)
     {
       CONST_VECTOR_CHAIN (r) = const_vector_chain;
       const_vector_chain = r;
     }
-
-  /* Store const0_rtx in CONST_VECTOR_MEM since this CONST_VECTOR is on the
-     chain, but has not been allocated memory.  Actual use of CONST_VECTOR_MEM
-     is only through force_const_mem.  */
-
-  CONST_VECTOR_MEM (r) = const0_rtx;
+  else
+    CONST_VECTOR_CHAIN (r) = NULL_RTX;
 
   return r;
 }
@@ -2517,24 +2493,12 @@ clear_const_double_mem ()
     }
   const_double_chain = 0;
 
-#if 0 /* probably don't need this... */
-  for (i = 0; i <= 2; i++)
-    for (mode = GET_CLASS_NARROWEST_MODE (MODE_FLOAT); mode != VOIDmode;
-         mode = GET_MODE_WIDER_MODE (mode))
-      {
-	r = const_tiny_rtx[i][(int) mode];
-	CONST_DOUBLE_CHAIN (r) = 0;
-	CONST_DOUBLE_MEM (r) = cc0_rtx;
-      }
-#endif
-
   /* APPLE LOCAL begin AltiVec */
   /* Clear the CONST_VECTORs at the same time.  */
   for (r = const_vector_chain; r; r = next)
     {
       next = CONST_VECTOR_CHAIN (r);
       CONST_VECTOR_CHAIN (r) = 0;
-      CONST_VECTOR_MEM (r) = cc0_rtx;
     }
   const_vector_chain = 0;
   /* APPLE LOCAL end AltiVec */
@@ -2596,7 +2560,7 @@ decode_addr_const (exp, value)
     case REAL_CST:
     case STRING_CST:
     case COMPLEX_CST:
-/* APPLE LOCAL: AltiVec */
+    /* APPLE LOCAL: AltiVec */
     case VECTOR_CST:
     case CONSTRUCTOR:
     case INTEGER_CST:
@@ -2617,8 +2581,9 @@ decode_addr_const (exp, value)
   value->offset = offset;
 }
 
-/* APPLE LOCAL: AltiVec */
-enum kind { RTX_DOUBLE, RTX_VECTOR, RTX_INT };
+/* We do RTX_UNSPEC + XINT (blah), so nothing can go after RTX_UNSPEC.  */
+/* APPLE LOCAL Altivec, rearrange so >RTX_DOUBLE works */
+enum kind { RTX_UNKNOWN, RTX_VECTOR, RTX_DOUBLE, RTX_INT, RTX_UNSPEC };
 struct rtx_const
 {
   ENUM_BITFIELD(kind) kind : 16;
@@ -2627,8 +2592,10 @@ struct rtx_const
     union real_extract du;
     struct addr_const addr;
     struct {HOST_WIDE_INT high, low;} di;
-/* APPLE LOCAL: AltiVec - might not be written in target-independent manner!!! */
-    struct {HOST_WIDE_INT v0, v1, v2, v3; } dv;
+
+    /* The max vector size we have is 8 wide.  This should be enough.  */
+    /* APPLE LOCAL Altivec, fix so store into vechi[] doesn't clobber veclo[] */
+    struct {HOST_WIDE_INT veclo, vechi; } vec[16];
   } un;
 };
 
@@ -2667,7 +2634,7 @@ static struct constant_descriptor *const_hash_table[MAX_HASH_TABLE];
    they are actually used.  This will be if something takes its address or if
    there is a usage of the string in the RTL of a function.  */
 
-#define STRHASH(x) ((hashval_t)((long)(x) >> 3))
+#define STRHASH(x) ((hashval_t) ((long) (x) >> 3))
 
 struct deferred_string
 {
@@ -2779,10 +2746,15 @@ const_hash (exp)
       return (const_hash (TREE_REALPART (exp)) * 5
 	      + const_hash (TREE_IMAGPART (exp)));
 
-/* APPLE LOCAL: AltiVec */
+    /* APPLE LOCAL Altivec */
     case VECTOR_CST:
-      return (const_hash (TREE_VECTOR_CST_LOW (exp)) * 11
-	      + const_hash (TREE_VECTOR_CST_HIGH (exp)));
+      {
+	int hash = 0;
+	tree t;
+	for ( t = TREE_VECTOR_CST_ELTS (exp); t; t = TREE_CHAIN (t))
+	  hash += const_hash (TREE_VALUE (t)) * 11;
+	return hash;
+      }
 
     case CONSTRUCTOR:
       if (TREE_CODE (TREE_TYPE (exp)) == SET_TYPE)
@@ -2837,7 +2809,7 @@ const_hash (exp)
 	else if (GET_CODE (value.base) == LABEL_REF)
 	  hi = value.offset + CODE_LABEL_NUMBER (XEXP (value.base, 0)) * 13;
 	else
-	  abort();
+	  abort ();
 
 	hi &= (1 << HASHBITS) - 1;
 	hi %= MAX_HASH_TABLE;
@@ -2931,7 +2903,7 @@ compare_constant_1 (exp, p)
       if ((enum machine_mode) *p++ != TYPE_MODE (TREE_TYPE (exp)))
 	return 0;
 
-      strp = (const unsigned char *)TREE_STRING_POINTER (exp);
+      strp = (const unsigned char *) TREE_STRING_POINTER (exp);
       len = TREE_STRING_LENGTH (exp);
       if (memcmp ((char *) &TREE_STRING_LENGTH (exp), p,
 		  sizeof TREE_STRING_LENGTH (exp)))
@@ -2947,13 +2919,18 @@ compare_constant_1 (exp, p)
 
       return compare_constant_1 (TREE_IMAGPART (exp), p);
 
-/* APPLE LOCAL: AltiVec */
+    /* APPLE LOCAL: AltiVec */
     case VECTOR_CST:
-      p = compare_constant_1 (TREE_VECTOR_CST_LOW (exp), p);
-      if (p == 0)
-	return 0;
-
-      return compare_constant_1 (TREE_VECTOR_CST_HIGH (exp), p);
+      {
+	tree t;
+	for ( t = TREE_VECTOR_CST_ELTS (exp); t; t = TREE_CHAIN (t))
+	  {
+	    p = compare_constant_1 (TREE_VALUE (t), p);
+	    if ( p==0 )
+	      return 0;
+	  }
+	return p;
+      }
 
     case CONSTRUCTOR:
       if (TREE_CODE (TREE_TYPE (exp)) == SET_TYPE)
@@ -3195,11 +3172,14 @@ record_constant_1 (exp)
       record_constant_1 (TREE_IMAGPART (exp));
       return;
 
-/* APPLE LOCAL: AltiVec */
+    /* APPLE LOCAL: AltiVec */
     case VECTOR_CST:
-      record_constant_1 (TREE_VECTOR_CST_LOW (exp));
-      record_constant_1 (TREE_VECTOR_CST_HIGH (exp));
-      return;
+      {
+	tree t;
+	for (t = TREE_VECTOR_CST_ELTS (exp); t; t = TREE_CHAIN (t))
+          record_constant_1 (TREE_VALUE (t));
+        return;
+      }
 
     case CONSTRUCTOR:
       if (TREE_CODE (TREE_TYPE (exp)) == SET_TYPE)
@@ -3433,13 +3413,16 @@ copy_constant (exp)
 			    copy_constant (TREE_REALPART (exp)),
 			    copy_constant (TREE_IMAGPART (exp)));
 
-/* APPLE LOCAL: AltiVec */
+    /* APPLE LOCAL: AltiVec */
     case VECTOR_CST:
-      return build_vector (TREE_TYPE (exp),
-			   copy_constant (TREE_VECTOR_CST_0 (exp)),
-			   copy_constant (TREE_VECTOR_CST_1 (exp)),
-			   copy_constant (TREE_VECTOR_CST_2 (exp)),
-			   copy_constant (TREE_VECTOR_CST_3 (exp)));
+      {
+	tree list = copy_list (TREE_VECTOR_CST_ELTS (exp));
+	tree t, l;
+	for ( t = TREE_VECTOR_CST_ELTS (exp), l = list; t;
+	      t = TREE_CHAIN (t), l = TREE_CHAIN (l))
+	  TREE_VALUE (l) = copy_constant (TREE_VALUE (t));
+        return build_vector (TREE_TYPE (exp), list);
+      }
 
     case PLUS_EXPR:
     case MINUS_EXPR:
@@ -3566,7 +3549,11 @@ output_constant_def (exp, defer)
      encoded in it.  */
   if (! found)
     {
-      ENCODE_SECTION_INFO (exp);
+      /* Take care not to invoque ENCODE_SECTION_INFO for constants
+	 which don't have a TREE_CST_RTL.  */
+      if (TREE_CODE (exp) != INTEGER_CST)
+	ENCODE_SECTION_INFO (exp);
+      
       desc->rtl = rtl;
       desc->label = XSTR (XEXP (desc->rtl, 0), 0);
     }
@@ -3760,6 +3747,8 @@ init_varasm_status (f)
   p->x_first_pool = p->x_last_pool = 0;
   p->x_pool_offset = 0;
   p->x_const_double_chain = 0;
+  /* APPLE LOCAL Altivec */
+  p->x_const_vector_chain = 0;
 }
 
 /* Mark PC for GC.  */
@@ -3789,7 +3778,7 @@ mark_varasm_status (p)
   mark_pool_constant (p->x_first_pool);
   ggc_mark_rtx (p->x_const_double_chain);
   /* APPLE LOCAL Altivec */
-  ggc_mark_rtx (const_vector_chain);
+  ggc_mark_rtx (p->x_const_vector_chain);
 }
 
 /* Clear out all parts of the state in F that can safely be discarded
@@ -3864,17 +3853,33 @@ decode_rtx_const (mode, x, value)
 	}
       break;
 
-/* APPLE LOCAL: AltiVec */
     case CONST_VECTOR:
-      value->kind = RTX_VECTOR;
-      if (GET_MODE (x) != VOIDmode)
-	{
-	  value->mode = GET_MODE (x);
-	  memcpy ((char *) &value->un.dv, (char *) &CONST_VECTOR_0 (x),
-		  sizeof value->un.dv);
-	}
-      else
-	abort ();
+      {
+	int units, i;
+	rtx elt;
+
+	units = CONST_VECTOR_NUNITS (x);
+	value->kind = RTX_VECTOR;
+	value->mode = mode;
+
+	for (i = 0; i < units; ++i)
+	  {
+	    elt = CONST_VECTOR_ELT (x, i);
+	    /* APPLE LOCAL Altivec data structure changed */
+	    if (GET_MODE_CLASS (mode) == MODE_VECTOR_INT)
+	      {
+		value->un.vec[i].veclo = (HOST_WIDE_INT) INTVAL (elt);
+		value->un.vec[i].vechi = 0;
+	      }
+	    else if (GET_MODE_CLASS (mode) == MODE_VECTOR_FLOAT)
+	      {
+		value->un.vec[i].veclo = (HOST_WIDE_INT) CONST_DOUBLE_LOW (elt);
+		value->un.vec[i].vechi = (HOST_WIDE_INT) CONST_DOUBLE_HIGH (elt);
+	      }
+	    else
+	      abort ();
+	  }
+      }
       break;
 
     case CONST_INT:
@@ -3907,10 +3912,28 @@ decode_rtx_const (mode, x, value)
       break;
 
     default:
-      abort ();
+      value->kind = RTX_UNKNOWN;
+      break;
     }
 
-  if (value->kind == RTX_INT && value->un.addr.base != 0)
+  if (value->kind == RTX_INT && value->un.addr.base != 0
+      && GET_CODE (value->un.addr.base) == UNSPEC)
+    {      
+      /* For a simple UNSPEC, the base is set to the
+	 operand, the kind field is set to the index of
+	 the unspec expression. 
+	 Together with the code below, in case that
+	 the operand is a SYMBOL_REF or LABEL_REF, 
+	 the address of the string or the code_label 
+	 is taken as base.  */
+      if (XVECLEN (value->un.addr.base, 0) == 1)
+        {
+	  value->kind = RTX_UNSPEC + XINT (value->un.addr.base, 1);
+	  value->un.addr.base = XVECEXP (value->un.addr.base, 0, 0);
+	}
+    }
+
+  if (value->kind > RTX_DOUBLE && value->un.addr.base != 0)
     switch (GET_CODE (value->un.addr.base))
       {
       case SYMBOL_REF:
@@ -3940,8 +3963,11 @@ simplify_subtraction (x)
   decode_rtx_const (GET_MODE (x), XEXP (x, 0), &val0);
   decode_rtx_const (GET_MODE (x), XEXP (x, 1), &val1);
 
-  if (val0.un.addr.base == val1.un.addr.base)
+  if (val0.kind > RTX_DOUBLE
+      && val0.kind == val1.kind
+      && val0.un.addr.base == val1.un.addr.base)
     return GEN_INT (val0.un.addr.offset - val1.un.addr.offset);
+
   return x;
 }
 
@@ -4174,6 +4200,19 @@ get_pool_constant (addr)
   return (find_pool_constant (cfun, addr))->constant;
 }
 
+/* Given a constant pool SYMBOL_REF, return the corresponding constant
+   and whether it has been output or not.  */
+
+rtx
+get_pool_constant_mark (addr, pmarked)
+     rtx addr;
+     bool *pmarked;
+{
+  struct pool_constant *pool = find_pool_constant (cfun, addr);
+  *pmarked = (pool->mark != 0);
+  return pool->constant;
+}
+
 /* Likewise, but for the constant pool of a specific function.  */
 
 rtx
@@ -4314,16 +4353,43 @@ output_constant_pool (fnname, fndecl)
 	  assemble_integer (x, GET_MODE_SIZE (pool->mode), pool->align, 1);
 	  break;
 
-/* APPLE LOCAL: AltiVec - might not be written in target-independent manner!!! */
-	case MODE_VECTOR_INT:
 	case MODE_VECTOR_FLOAT:
 	  {
-	    HOST_WIDE_INT v[4];
-	    int i;
-	    memcpy ((char *) v, (char *) &CONST_VECTOR_0 (x), sizeof v);
-	    for (i = 0; i < 4; i++)
-	      assemble_integer (gen_rtx (CONST_INT, SImode, v[i]),
-				GET_MODE_SIZE (SImode), pool->align, 1);
+	    int i, units;
+	    rtx elt;
+
+	    if (GET_CODE (x) != CONST_VECTOR)
+	      abort ();
+
+	    units = CONST_VECTOR_NUNITS (x);
+
+	    for (i = 0; i < units; i++)
+	      {
+		elt = CONST_VECTOR_ELT (x, i);
+		memcpy ((char *) &u,
+			(char *) &CONST_DOUBLE_LOW (elt),
+			sizeof u);
+		assemble_real (u.d, GET_MODE_INNER (pool->mode), pool->align);
+	      }
+	  }
+	  break;
+
+        case MODE_VECTOR_INT:
+	  {
+	    int i, units;
+	    rtx elt;
+
+	    if (GET_CODE (x) != CONST_VECTOR)
+	      abort ();
+
+	    units = CONST_VECTOR_NUNITS (x);
+
+	    for (i = 0; i < units; i++)
+	      {
+		elt = CONST_VECTOR_ELT (x, i);
+		assemble_integer (elt, GET_MODE_UNIT_SIZE (pool->mode),
+				  pool->align, 1);
+	      }
 	  }
 	  break;
 
@@ -4575,11 +4641,10 @@ initializer_constant_valid_p (value, endtype)
       return TREE_STATIC (value) ? null_pointer_node : 0;
 
     case INTEGER_CST:
+    case VECTOR_CST:
     case REAL_CST:
     case STRING_CST:
     case COMPLEX_CST:
-/* APPLE LOCAL: AltiVec */
-    case VECTOR_CST:
       return null_pointer_node;
 
     case ADDR_EXPR:
@@ -4695,8 +4760,37 @@ initializer_constant_valid_p (value, endtype)
 	  tree op0, op1;
 	  op0 = TREE_OPERAND (value, 0);
 	  op1 = TREE_OPERAND (value, 1);
-	  STRIP_NOPS (op0);
-	  STRIP_NOPS (op1);
+
+	  /* Like STRIP_NOPS except allow the operand mode to widen.
+	     This works around a feature of fold that simplfies
+	     (int)(p1 - p2) to ((int)p1 - (int)p2) under the theory
+	     that the narrower operation is cheaper.  */
+
+	  while (TREE_CODE (op0) == NOP_EXPR
+		 || TREE_CODE (op0) == CONVERT_EXPR
+		 || TREE_CODE (op0) == NON_LVALUE_EXPR)
+	    {
+	      tree inner = TREE_OPERAND (op0, 0);
+	      if (inner == error_mark_node
+	          || ! INTEGRAL_MODE_P (TYPE_MODE (TREE_TYPE (inner)))
+		  || (GET_MODE_SIZE (TYPE_MODE (TREE_TYPE (op0)))
+		      > GET_MODE_SIZE (TYPE_MODE (TREE_TYPE (inner)))))
+		break;
+	      op0 = inner;
+	    }
+
+	  while (TREE_CODE (op1) == NOP_EXPR
+		 || TREE_CODE (op1) == CONVERT_EXPR
+		 || TREE_CODE (op1) == NON_LVALUE_EXPR)
+	    {
+	      tree inner = TREE_OPERAND (op1, 0);
+	      if (inner == error_mark_node
+	          || ! INTEGRAL_MODE_P (TYPE_MODE (TREE_TYPE (inner)))
+		  || (GET_MODE_SIZE (TYPE_MODE (TREE_TYPE (op1)))
+		      > GET_MODE_SIZE (TYPE_MODE (TREE_TYPE (inner)))))
+		break;
+	      op1 = inner;
+	    }
 
 	  if (TREE_CODE (op0) == ADDR_EXPR
 	      && TREE_CODE (TREE_OPERAND (op0, 0)) == LABEL_DECL
@@ -4811,23 +4905,8 @@ output_constant (exp, size, align)
 		       min_align (align, BITS_PER_UNIT * (thissize / 2)));
       break;
 
-      /* APPLE LOCAL begin AltiVec */
-      /* might not be written in target-independent manner!!! */
-    case VECTOR_TYPE:
-      if (TREE_CODE (exp) == VECTOR_CST)
-	{
-	  output_constant (TREE_VECTOR_CST_0 (exp), size / 4, align);
-	  output_constant (TREE_VECTOR_CST_1 (exp), size / 4, align);
-	  output_constant (TREE_VECTOR_CST_2 (exp), size / 4, align);
-	  output_constant (TREE_VECTOR_CST_3 (exp), size / 4, align);
-	  size = 0;
-	}
-      else
-	abort ();
-      break;
-      /* APPLE LOCAL end AltiVec */
-
     case ARRAY_TYPE:
+    case VECTOR_TYPE:
       if (TREE_CODE (exp) == CONSTRUCTOR)
 	{
 	  output_constructor (exp, size, align);
@@ -4838,6 +4917,18 @@ output_constant (exp, size, align)
 	  thissize = MIN (TREE_STRING_LENGTH (exp), size);
 	  assemble_string (TREE_STRING_POINTER (exp), thissize);
 	}
+      /* APPLE LOCAL Altivec */
+      else if (TREE_CODE (exp) == VECTOR_CST )
+	{
+	  tree t;
+	  for ( t = TREE_VECTOR_CST_ELTS (exp); t; t = TREE_CHAIN (t))
+	    {
+	      int eltsize = tree_low_cst (TYPE_SIZE (TREE_TYPE (TREE_VALUE (t))), 1) 
+			/ BITS_PER_UNIT;
+	      int eltalign = min_align (align, BITS_PER_UNIT * eltsize);
+	      output_constant (TREE_VALUE (t), eltsize, eltalign);
+	    }
+        }
       else
 	abort ();
       break;
@@ -5228,39 +5319,9 @@ output_constructor (exp, size, align)
 }
 
 
-/* This structure contains any weak symbol declarations waiting
+/* This TREE_LIST contains any weak symbol declarations waiting
    to be emitted.  */
-struct weak_syms
-{
-  struct weak_syms * next;
-  const char * name;
-  const char * value;
-};
-
-static struct weak_syms * weak_decls;
-
-/* Add function NAME to the weak symbols list.  VALUE is a weak alias
-   associated with NAME.  */
-
-int
-add_weak (name, value)
-     const char *name;
-     const char *value;
-{
-  struct weak_syms *weak;
-
-  weak = (struct weak_syms *) xmalloc (sizeof (struct weak_syms));
-
-  if (weak == NULL)
-    return 0;
-
-  weak->next = weak_decls;
-  weak->name = name;
-  weak->value = value;
-  weak_decls = weak;
-
-  return 1;
-}
+static tree weak_decls;
 
 /* Declare DECL to be a weak symbol.  */
 
@@ -5273,7 +5334,10 @@ declare_weak (decl)
   else if (TREE_ASM_WRITTEN (decl))
     error_with_decl (decl, "weak declaration of `%s' must precede definition");
   else if (SUPPORTS_WEAK)
-    add_weak (IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (decl)), NULL);
+    {
+      if (! DECL_WEAK (decl))
+	weak_decls = tree_cons (NULL, decl, weak_decls);
+    }
   else
     warning_with_decl (decl, "weak declaration of `%s' not supported");
 
@@ -5285,48 +5349,87 @@ declare_weak (decl)
 void
 weak_finish ()
 {
-  if (SUPPORTS_WEAK)
+  tree t;
+
+  for (t = weak_decls; t ; t = TREE_CHAIN (t))
     {
-      struct weak_syms *t;
-      for (t = weak_decls; t; t = t->next)
-	{
-#ifdef ASM_OUTPUT_WEAK_ALIAS
-	  ASM_OUTPUT_WEAK_ALIAS (asm_out_file, t->name, t->value);
+      tree decl = TREE_VALUE (t);
+      const char *name = IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (decl));
+
+      if (! TREE_USED (decl))
+	continue;
+
+#ifdef ASM_WEAKEN_DECL
+      ASM_WEAKEN_DECL (asm_out_file, decl, name, NULL);
 #else
 #ifdef ASM_WEAKEN_LABEL
-	  if (t->value)
-	    abort ();
-	  ASM_WEAKEN_LABEL (asm_out_file, t->name);
+      ASM_WEAKEN_LABEL (asm_out_file, name);
+#else
+#ifdef ASM_OUTPUT_WEAK_ALIAS
+      warning ("only weak aliases are supported in this configuration");
+      return;
 #endif
 #endif
-	}
+#endif
     }
 }
 
-/* Remove NAME from the pending list of weak symbols.  This prevents
-   the compiler from emitting multiple .weak directives which confuses
-   some assemblers.  */
-#ifdef ASM_WEAKEN_LABEL
+/* Emit the assembly bits to indicate that DECL is globally visible.  */
+
 static void
-remove_from_pending_weak_list (name)
-     const char *name;
+globalize_decl (decl)
+     tree decl;
 {
-  struct weak_syms *t;
-  struct weak_syms **p;
-
-  for (p = &weak_decls; *p; )
+  const char *name = XSTR (XEXP (DECL_RTL (decl), 0), 0);
+  
+#if defined (ASM_WEAKEN_LABEL) || defined (ASM_WEAKEN_DECL)
+  if (DECL_WEAK (decl))
     {
-      t = *p;
-      if (strcmp (name, t->name) == 0)
-        {
-          *p = t->next;
-          free (t);
-        }
-      else
-        p = &(t->next);
+      tree *p, t;
+
+#ifdef ASM_WEAKEN_DECL
+      ASM_WEAKEN_DECL (asm_out_file, decl, name, 0);
+#else
+      ASM_WEAKEN_LABEL (asm_out_file, name);
+#endif
+
+      /* Remove this function from the pending weak list so that
+	 we do not emit multiple .weak directives for it.  */
+      for (p = &weak_decls; (t = *p) ; p = &TREE_CHAIN (t))
+	if (TREE_VALUE (t) == decl)
+	  {
+	    *p = TREE_CHAIN (t);
+	    break;
+	  }
+      return;
     }
+#endif
+
+  /* APPLE LOCAL coalesced symbols */
+  /* Weak definitions are used for coalesced symbols.  They're not the
+     same thing as weak references.  The naming is unfortunate. */
+#ifdef ASM_WEAK_DEFINITIONIZE_LABEL
+  if (DECL_COALESCED (decl) && flag_weak_coalesced_definitions)
+    {
+      ASM_WEAK_DEFINITIONIZE_LABEL(asm_out_file, name);
+    }
+#endif /* ASM_WEAK_DEFINITIONIZE_LABEL */
+  
+#ifdef ASM_PRIVATE_EXTERNIZE_LABEL
+  /* If not private extern but also not public, it must be coalesced,
+     in which case mark it private extern.  (There's no point in
+     having a static coalesced variable!) */
+  if (DECL_PRIVATE_EXTERN (decl) ||
+      (!flag_export_coalesced && !TREE_PUBLIC (decl) && DECL_COALESCED (decl)))
+    {
+      ASM_PRIVATE_EXTERNIZE_LABEL (asm_out_file, name);
+      return;
+    }
+#endif
+  /* APPLE LOCAL end coalesced symbols */
+
+  ASM_GLOBALIZE_LABEL (asm_out_file, name);
 }
-#endif /* ASM_WEAKEN_LABEL */
 
 /* Emit an assembler directive to make the symbol for DECL an alias to
    the symbol for TARGET.  */
@@ -5345,22 +5448,8 @@ assemble_alias (decl, target)
 
 #ifdef ASM_OUTPUT_DEF
   /* Make name accessible from other files, if appropriate.  */
-
   if (TREE_PUBLIC (decl))
-    {
-#ifdef ASM_WEAKEN_LABEL
-      if (DECL_WEAK (decl))
- 	{
-	  ASM_WEAKEN_LABEL (asm_out_file, name);
-	  /* Remove this function from the pending weak list so that
-	     we do not emit multiple .weak directives for it.  */
-	  remove_from_pending_weak_list
-	    (IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (decl)));
-	}
-      else
-#endif
-	ASM_GLOBALIZE_LABEL (asm_out_file, name);
-    }
+    globalize_decl (decl);
 
 #ifdef ASM_OUTPUT_DEF_FROM_DECLS
   ASM_OUTPUT_DEF_FROM_DECLS (asm_out_file, decl, target);
@@ -5368,12 +5457,16 @@ assemble_alias (decl, target)
   ASM_OUTPUT_DEF (asm_out_file, name, IDENTIFIER_POINTER (target));
 #endif
   TREE_ASM_WRITTEN (decl) = 1;
-#else
-#ifdef ASM_OUTPUT_WEAK_ALIAS
+#else /* !ASM_OUTPUT_DEF */
+#if defined (ASM_OUTPUT_WEAK_ALIAS) || defined (ASM_WEAKEN_DECL)
   if (! DECL_WEAK (decl))
     warning ("only weak aliases are supported in this configuration");
 
+#ifdef ASM_WEAKEN_DECL
+  ASM_WEAKEN_DECL (asm_out_file, decl, name, IDENTIFIER_POINTER (target));
+#else
   ASM_OUTPUT_WEAK_ALIAS (asm_out_file, name, IDENTIFIER_POINTER (target));
+#endif
   TREE_ASM_WRITTEN (decl) = 1;
 #else
   warning ("alias definitions not supported in this configuration; ignored");
@@ -5434,6 +5527,7 @@ init_varasm_once ()
 		mark_const_hash_entry);
   ggc_add_root (&const_str_htab, 1, sizeof const_str_htab,
 		mark_const_str_htab);
+  ggc_add_tree_root (&weak_decls, 1);
 
   const_alias_set = new_alias_set ();
 }
@@ -5612,7 +5706,7 @@ pfe_freeze_thaw_varasm_status (vp)
   freeze_thaw_pool_constant (v);
   PFE_FREEZE_THAW_RTX (v->x_const_double_chain);
   /* APPLE LOCAL Altivec */
-  PFE_FREEZE_THAW_RTX (const_vector_chain);
+  PFE_FREEZE_THAW_RTX (v->x_const_vector_chain);
 }
 
 /* Freeze/thaw the varasm_status x_const_rtx_sym_hash_table

@@ -1,6 +1,6 @@
 /* Type Analyzer for GNU C++.
    Copyright (C) 1987, 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001 Free Software Foundation, Inc.
+   1999, 2000, 2001, 2002 Free Software Foundation, Inc.
    Hacked... nay, bludgeoned... by Mark Eichin (eichin@cygnus.com)
 
 This file is part of GNU CC.
@@ -126,15 +126,14 @@ static int frob_id PARAMS ((int, int, tree *));
 
 /* The list of inline functions being held off until we reach the end of
    the current class declaration.  */
-struct unparsed_text *pending_inlines;
-struct unparsed_text *pending_inlines_tail;
+static struct unparsed_text *pending_inlines;
+static struct unparsed_text *pending_inlines_tail;
 
 /* The list of previously-deferred inline functions currently being parsed.
    This exists solely to be a GC root.  */
-struct unparsed_text *processing_these_inlines;
+static struct unparsed_text *processing_these_inlines;
 
 static void begin_parsing_inclass_inline PARAMS ((struct unparsed_text *));
-static void mark_pending_inlines PARAMS ((PTR));
 
 #ifdef SPEW_DEBUG
 int spew_debug = 0;
@@ -234,16 +233,16 @@ read_process_identifier (pyylval)
 	case RID_XOR_EQ: pyylval->code = BIT_XOR_EXPR;	return ASSIGN;
 	case RID_NOT_EQ: pyylval->code = NE_EXPR;	return EQCOMPARE;
 
-	/* APPLE LOCAL Objective-C++ begin */
-	/* Turn non-typedefed refs to "id" into plain identifiers; this
-	   allows constructs like "void foo(id id);" to work.  */
+	  /* APPLE LOCAL begin Objective-C++ */
+	  /* Turn non-typedefed refs to "id" into plain identifiers; this
+	     allows constructs like "void foo(id id);" to work.  */
 	case RID_ID:
 	  {
 	    tree decl = NULL_TREE, next_tok;
 	    enum cpp_ttype next_tok_type;
 	    
 	    if (!compiling_objc || objc_need_raw_identifier)
-		return IDENTIFIER;   /* short & sweet */
+	      return IDENTIFIER;   /* short & sweet */
 	
 	    decl = lookup_name (id, /*prefer_type=*/1);
 	    if (decl == NULL_TREE || TREE_CODE (decl) != TYPE_DECL
@@ -258,27 +257,22 @@ read_process_identifier (pyylval)
 	  }
 	  goto get_ridpointer;
 	case RID_CLASS:
-	    if (compiling_objc && objc_need_raw_identifier 
-		&& !processing_template_decl)
-	      {
-		/* Suppress the warning for now.
-		warning ("`class' is a reserved keyword in Objective-C++; "
-			 "this will be a hard error in the future"); */
-		return IDENTIFIER;
-	      }
-	    /* fall through */
+	  if (compiling_objc && objc_need_raw_identifier 
+	      && !processing_template_decl)
+	    {
+	      /* Suppress the warning for now.
+		 warning ("`class' is a reserved keyword in Objective-C++; "
+		 "this will be a hard error in the future"); */
+	      return IDENTIFIER;
+	    }
+	  /* fall through */
 	default: 
 	get_ridpointer:
-	/* APPLE LOCAL Objective-C++ end */
-	  if (C_RID_YYCODE (id) == TYPESPEC)
-	    GNU_xref_ref (current_function_decl, IDENTIFIER_POINTER (id));
-
+	  /* APPLE LOCAL end Objective-C++ */
 	  pyylval->ttype = ridpointers[C_RID_CODE (id)];
 	  return C_RID_YYCODE (id);
 	}
     }
-
-  GNU_xref_ref (current_function_decl, IDENTIFIER_POINTER (id));
 
   /* Make sure that user does not collide with our internal naming
      scheme.  This is not necessary if '.' is used to remove them from
@@ -309,8 +303,8 @@ read_token (t)
 
   switch (last_token)
     {
-#define YYCHAR(yy)	t->yychar = yy;	break;
-#define YYCODE(c)	t->yylval.code = c;
+#define YYCHAR(YY)	t->yychar = (YY); break;
+#define YYCODE(C)	t->yylval.code = (C);
 
     /* APPLE LOCAL AltiVec */
     case CPP_EQ:	altivec_context = 0;	YYCHAR('=');
@@ -536,7 +530,7 @@ end_input ()
 }
 
 /* GC callback to mark memory pointed to by the pending inline queue.  */
-static void
+void
 mark_pending_inlines (pi)
      PTR pi;
 {
@@ -795,7 +789,7 @@ do_aggr ()
       nth_token (1)->yychar = IDENTIFIER_DEFN;
       break;
     default:
-      my_friendly_abort (102);
+      abort ();
     }
 }  
 
@@ -1075,7 +1069,7 @@ frob_id (yyc, peek, idp)
             lastiddecl = trrr;
             break;
           default:
-            my_friendly_abort (20000907);
+            abort ();
         }
     }
   /* APPLE LOCAL begin Objective-C++ */
@@ -1121,8 +1115,11 @@ begin_parsing_inclass_inline (pi)
   tree context;
 
   /* Record that we are processing the chain of inlines starting at
-     PI in a special GC root.  */
-  processing_these_inlines = pi;
+     PI for GC.  */
+  if (cfun)
+    cp_function_chain->unparsed_inlines = pi;
+  else
+    processing_these_inlines = pi;
 
   ggc_collect ();
 
@@ -1196,7 +1193,10 @@ process_next_inline (i)
     begin_parsing_inclass_inline (i);
   else
     {
-      processing_these_inlines = 0;
+      if (cfun)
+	cp_function_chain->unparsed_inlines = 0;
+      else
+	processing_these_inlines = 0;
       extract_interface_info ();
     }
 }
@@ -1636,7 +1636,7 @@ debug_yychar (yy)
 
 #endif
 
-#define NAME(type) cpp_type2name (type)
+#define NAME(TYPE) cpp_type2name (TYPE)
 
 void
 yyerror (msgid)

@@ -50,13 +50,17 @@ extern void lhd_set_yydebug PARAMS ((int));
 extern void lhd_dump_tree_do_nothing PARAMS ((FILE *, tree, int, int));
 extern int  lhd_dump_tree_blank_line_do_nothing PARAMS ((tree, tree));
 extern int  lhd_dump_tree_lineno_do_nothing PARAMS ((FILE *, tree));
+extern int lhd_dmp_tree3_do_nothing PARAMS ((FILE *, tree, int));
 /* APPLE LOCAL PFE */
 /* Note, this cannot be under a #ifdef PFE since we need them defined for
    the LANG_HOOKS_INITIALIZER macro below.  */
 extern int lhd_pfe_freeze_thaw_do_nothing PARAMS ((tree));
 struct pfe_lang_compiler_state;
+extern void lhd_pfe_lang_init_do_nothing PARAMS ((int));
 extern void lhd_pfe_freeze_thaw_compiler_state_do_nothing
 			  PARAMS ((struct pfe_lang_compiler_state **));
+extern void lhd_pfe_check_settings_do_nothing
+			  PARAMS ((struct pfe_lang_compiler_state *));
 
 /* Declarations of default tree inlining hooks.  */
 tree lhd_tree_inlining_walk_subtrees		PARAMS ((tree *, int *,
@@ -73,6 +77,7 @@ tree lhd_tree_inlining_copy_res_decl_for_inlining PARAMS ((tree, tree,
 int lhd_tree_inlining_anon_aggr_type_p		PARAMS ((tree));
 int lhd_tree_inlining_start_inlining		PARAMS ((tree));
 void lhd_tree_inlining_end_inlining		PARAMS ((tree));
+tree lhd_tree_inlining_convert_parm_for_inlining PARAMS ((tree, tree, tree));
 
 #define LANG_HOOKS_NAME			"GNU unknown"
 #define LANG_HOOKS_IDENTIFIER_SIZE	sizeof (struct lang_identifier)
@@ -101,16 +106,18 @@ void lhd_tree_inlining_end_inlining		PARAMS ((tree));
 #define LANG_HOOKS_DUMP_IDENTIFIER	lhd_dump_tree_do_nothing
 #define LANG_HOOKS_DUMP_BLANK_LINE_P	lhd_dump_tree_blank_line_do_nothing
 #define LANG_HOOKS_DUMP_LINENO_P	lhd_dump_tree_lineno_do_nothing
+#define LANG_HOOKS_DMP_TREE3		lhd_dmp_tree3_do_nothing
 /* APPLE LOCAL end new tree dump */
 /* APPLE LOCAL PFE */
 /* Note, this cannot be under a #ifdef PFE since we need them defined for
    the LANG_HOOKS_INITIALIZER macro below.  */
-#define LANG_HOOKS_PFE_LANG_INIT		  lhd_do_nothing
+#define LANG_HOOKS_PFE_LANG_INIT		  lhd_pfe_lang_init_do_nothing
 #define LANG_HOOKS_PFE_FREEZE_THAW_COMPILER_STATE lhd_pfe_freeze_thaw_compiler_state_do_nothing
 #define LANG_HOOKS_PFE_FREEZE_THAW_DECL		  lhd_pfe_freeze_thaw_do_nothing
 #define LANG_HOOKS_PFE_FREEZE_THAW_TYPE	   	  lhd_pfe_freeze_thaw_do_nothing
 #define LANG_HOOKS_PFE_FREEZE_THAW_SPECIAL	  lhd_pfe_freeze_thaw_do_nothing
 #define LANG_HOOKS_PFE_CHECK_ALL_STRUCT_SIZES	  lhd_do_nothing
+#define LANG_HOOKS_PFE_CHECK_SETTINGS		  lhd_pfe_check_settings_do_nothing
 /* APPLE LOCAL end PFE */
 
 /* Tree inlining hooks.  */
@@ -133,6 +140,8 @@ void lhd_tree_inlining_end_inlining		PARAMS ((tree));
   lhd_tree_inlining_start_inlining
 #define LANG_HOOKS_TREE_INLINING_END_INLINING \
   lhd_tree_inlining_end_inlining
+#define LANG_HOOKS_TREE_INLINING_CONVERT_PARM_FOR_INLINING \
+  lhd_tree_inlining_convert_parm_for_inlining
 
 #define LANG_HOOKS_TREE_INLINING_INITIALIZER { \
   LANG_HOOKS_TREE_INLINING_WALK_SUBTREES, \
@@ -144,7 +153,8 @@ void lhd_tree_inlining_end_inlining		PARAMS ((tree));
   LANG_HOOKS_TREE_INLINING_COPY_RES_DECL_FOR_INLINING, \
   LANG_HOOKS_TREE_INLINING_ANON_AGGR_TYPE_P, \
   LANG_HOOKS_TREE_INLINING_START_INLINING, \
-  LANG_HOOKS_TREE_INLINING_END_INLINING \
+  LANG_HOOKS_TREE_INLINING_END_INLINING, \
+  LANG_HOOKS_TREE_INLINING_CONVERT_PARM_FOR_INLINING \
 } \
 
 /* Tree dump hooks.  */
@@ -188,6 +198,7 @@ int lhd_tree_dump_type_quals			PARAMS ((tree));
   LANG_HOOKS_DUMP_IDENTIFIER, \
   LANG_HOOKS_DUMP_BLANK_LINE_P, \
   LANG_HOOKS_DUMP_LINENO_P, \
+  LANG_HOOKS_DMP_TREE3, \
   /* APPLE LOCAL end new tree dump */ \
   /* APPLE LOCAL PFE */ \
   LANG_HOOKS_PFE_LANG_INIT, \
@@ -196,6 +207,7 @@ int lhd_tree_dump_type_quals			PARAMS ((tree));
   LANG_HOOKS_PFE_FREEZE_THAW_TYPE, \
   LANG_HOOKS_PFE_FREEZE_THAW_SPECIAL, \
   LANG_HOOKS_PFE_CHECK_ALL_STRUCT_SIZES, \
+  LANG_HOOKS_PFE_CHECK_SETTINGS, \
   /* APPLE LOCAL end PFE */ \
   LANG_HOOKS_TREE_INLINING_INITIALIZER, \
   LANG_HOOKS_TREE_DUMP_INITIALIZER \

@@ -87,11 +87,7 @@ extern void error_for_asm		PARAMS ((struct rtx_def *,
 						 const char *, ...));
 extern void warning_for_asm		PARAMS ((struct rtx_def *,
 						 const char *, ...));
-
-/* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
 extern void warn_deprecated_use		PARAMS ((union tree_node *));
-/* APPLE LOCAL end deprecated ilr */
-
 extern int do_float_handler PARAMS ((void (*) (PTR), PTR));
 
 #ifdef BUFSIZ

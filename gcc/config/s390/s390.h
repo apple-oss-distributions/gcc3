@@ -1,5 +1,5 @@
 /* Definitions of target machine for GNU compiler, for IBM S/390
-   Copyright (C) 1999, 2000, 2001 Free Software Foundation, Inc.
+   Copyright (C) 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
    Contributed by Hartmut Penner (hpenner@de.ibm.com) and
                   Ulrich Weigand (uweigand@de.ibm.com).
 This file is part of GNU CC.
@@ -22,8 +22,6 @@ Boston, MA 02111-1307, USA.  */
 #ifndef _S390_H
 #define _S390_H
 
-#define TARGET_VERSION fprintf (stderr, " (S/390)");
-
 extern int flag_pic; 
 
 /* Run-time compilation parameters selecting different hardware subsets.  */
@@ -33,14 +31,21 @@ extern int target_flags;
 /* Target macros checked at runtime of compiler.  */
 
 #define TARGET_HARD_FLOAT          (target_flags & 1)
+#define TARGET_SOFT_FLOAT          (!(target_flags & 1))
 #define TARGET_BACKCHAIN           (target_flags & 2)
 #define TARGET_SMALL_EXEC          (target_flags & 4)
 #define TARGET_DEBUG_ARG           (target_flags & 8)
 #define TARGET_64BIT               (target_flags & 16)
 #define TARGET_MVCLE               (target_flags & 32)
 
+#ifdef DEFAULT_TARGET_64BIT
+#define TARGET_DEFAULT             0x13
+#define TARGET_VERSION fprintf (stderr, " (zSeries)");
+#else
 #define TARGET_DEFAULT             0x3
-#define TARGET_SOFT_FLOAT          (!(target_flags & 1))
+#define TARGET_VERSION fprintf (stderr, " (S/390)");
+#endif
+
 
 /* Macro to define tables used to set the flags.  This is a list in braces
    of pairs in braces, each pair being { "NAME", VALUE }
@@ -222,7 +227,7 @@ if (INTEGRAL_MODE_P (MODE) &&	        	    	\
 {  1, 2, 3, 4, 5, 0, 14, 13, 12, 11, 10, 9, 8, 7, 6,            \
    16, 17, 18, 19, 20, 21, 22, 23,                              \
    24, 25, 26, 27, 28, 29, 30, 31,                              \
-   15, 32, 33 }
+   15, 32, 33, 34 }
 
 /* Standard register usage.  */
  
@@ -259,7 +264,7 @@ if (INTEGRAL_MODE_P (MODE) &&	        	    	\
    GPR 14: Return registers holds the return address
    GPR 15: Stack pointer */
 
-#define PIC_OFFSET_TABLE_REGNUM 12
+#define PIC_OFFSET_TABLE_REGNUM (flag_pic ? 12 : INVALID_REGNUM)
 #define BASE_REGISTER 13
 #define RETURN_REGNUM 14
 #define STACK_POINTER_REGNUM 15
@@ -577,6 +582,12 @@ extern enum reg_class regclass_map[FIRST_PSEUDO_REGISTER]; /* smalled class cont
       (GET_MODE_CLASS (MODE) == MODE_COMPLEX_FLOAT ? 2 : 1) :  		\
       (GET_MODE_SIZE (MODE) + UNITS_PER_WORD - 1) / UNITS_PER_WORD)
 
+/* We need a secondary reload when loading a PLUS which is 
+   not a valid operand for LOAD ADDRESS.  */
+
+#define SECONDARY_INPUT_RELOAD_CLASS(CLASS, MODE, IN)	\
+	s390_secondary_input_reload_class ((CLASS), (MODE), (IN))
+
 /* If we are copying between FP registers and anything else, we need a memory
    location.  */
 
@@ -634,7 +645,7 @@ extern enum reg_class regclass_map[FIRST_PSEUDO_REGISTER]; /* smalled class cont
 
 /* We have 31 bit mode.  */
 
-#define MASK_RETURN_ADDR (GEN_INT (0x7fffffff))
+#define MASK_RETURN_ADDR (TARGET_64BIT ? GEN_INT (-1) : GEN_INT (0x7fffffff))
 
 /* The offset from the incoming value of %sp to the top of the stack frame
    for the current function.  */
@@ -868,7 +879,7 @@ CUMULATIVE_ARGS;
 #define FUNCTION_PROFILER(FILE, LABELNO) 			\
 	s390_function_profiler ((FILE), ((LABELNO)))
 
-/* #define PROFILE_BEFORE_PROLOGUE */
+#define PROFILE_BEFORE_PROLOGUE 1
 
 /* Define EXIT_IGNORE_STACK if, when returning from a function, the stack
    pointer does not matter (provided there is a frame pointer).  */
@@ -1048,10 +1059,6 @@ CUMULATIVE_ARGS;
                  (MODE) == HImode ? SIGN_EXTEND : NIL)          \
               : ((MODE) == HImode ? SIGN_EXTEND : NIL))
 
-/* Specify the tree operation to be used to convert reals to integers.  */
-
-#define IMPLICIT_FIX_EXPR FIX_ROUND_EXPR
-
 /* Define this if fixuns_trunc is the same as fix_trunc.  */
 
 /* #define FIXUNS_TRUNC_LIKE_FIX_TRUNC */
@@ -1060,18 +1067,10 @@ CUMULATIVE_ARGS;
 
 #define DEFAULT_SIGNED_CHAR 0
 
-/* This is the kind of divide that is easiest to do in the general case.  */
-
-#define EASY_DIV_EXPR TRUNC_DIV_EXPR
-
 /* Max number of bytes we can move from memory to memory in one reasonably
    fast instruction.  */
 
 #define MOVE_MAX 256
-
-/* Define this if zero-extension is slow (more than one real instruction).  */
-
-#define SLOW_ZERO_EXTEND
 
 /* Nonzero if access to memory by bytes is slow and undesirable.  */
 
@@ -1228,8 +1227,10 @@ CUMULATIVE_ARGS;
 /* On s390, copy between fprs and gprs is expensive.  */
 
 #define REGISTER_MOVE_COST(MODE, CLASS1, CLASS2)                        \
-  (((CLASS1 != CLASS2) &&                                               \
-   (CLASS1 == FP_REGS || CLASS2 == FP_REGS)) ? 10 : 1)
+  ((   (   reg_classes_intersect_p ((CLASS1), GENERAL_REGS)		\
+        && reg_classes_intersect_p ((CLASS2), FP_REGS))			\
+    || (   reg_classes_intersect_p ((CLASS1), FP_REGS)			\
+        && reg_classes_intersect_p ((CLASS2), GENERAL_REGS))) ? 10 : 1)
 
 
 /* A C expression for the cost of moving data of mode M between a
@@ -1284,6 +1285,10 @@ extern struct rtx_def *s390_compare_op0, *s390_compare_op1;
 
 #define TARGET_MEM_FUNCTIONS
 
+/* Either simplify a location expression, or return the original.  */
+
+#define ASM_SIMPLIFY_DWARF_ADDR(X) \
+  s390_simplify_dwarf_addr (X)
 
 /* Print operand X (an rtx) in assembler syntax to file FILE.
    CODE is a letter or dot (`z' in `%z0') or 0 if no letter was specified.
@@ -1303,21 +1308,20 @@ extern struct rtx_def *s390_compare_op0, *s390_compare_op1;
   {"larl_operand",    { SYMBOL_REF, CONST, CONST_INT, CONST_DOUBLE }},	\
   {"load_multiple_operation", {PARALLEL}},			        \
   {"store_multiple_operation", {PARALLEL}},			        \
-  {"const0_operand",  { CONST_INT, CONST_DOUBLE }},
+  {"const0_operand",  { CONST_INT, CONST_DOUBLE }},			\
+  {"s390_plus_operand", { PLUS }},
 
 
 /* S/390 constant pool breaks the devices in crtstuff.c to control section
    in where code resides.  We have to write it as asm code.  */
 #ifndef __s390x__
-#define CRT_CALL_STATIC_FUNCTION(func) \
-  if (0) \
-     func (); /* ... to avoid warnings.  */ \
-  else \
-    asm \
-      ("bras\t%%r2,1f\n\
-0:	.long\t" #func " - 0b\n\
-1:	l\t%%r3,0(%%r2)\n\
-	bas\t%%r14,0(%%r3,%%r2)" : : : "2", "3", "cc", "memory");
+#define CRT_CALL_STATIC_FUNCTION(SECTION_OP, FUNC) \
+    asm (SECTION_OP "\n\
+	bras\t%r2,1f\n\
+0:	.long\t" USER_LABEL_PREFIX #FUNC " - 0b\n\
+1:	l\t%r3,0(%r2)\n\
+	bas\t%r14,0(%r3,%r2)\n\
+	.previous");
 #endif
 
 /* Constant Pool for all symbols operands which are changed with
@@ -1330,9 +1334,8 @@ extern int s390_nr_constants;
 /* Function is splitted in chunk, if literal pool could overflow
    Value need to be lowered, if problems with displacement overflow.  */
 
-#define S390_REL_MAX 55000
-#define S390_CHUNK_MAX 0x2000
-#define S390_CHUNK_OV 0x8000
+#define S390_CHUNK_MAX 0xe00
+#define S390_CHUNK_OV 0x1000
 #define S390_POOL_MAX 0xe00
 
 #define ASM_OUTPUT_POOL_PROLOGUE(FILE, FUNNAME, fndecl, size)  	        \

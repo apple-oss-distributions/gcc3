@@ -42,6 +42,26 @@ Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 # ifndef MMAP_THRESHOLD
 #  define MMAP_THRESHOLD 3 /* Minimum page count to mmap the file.  */
 # endif
+# if MMAP_THRESHOLD
+#  define TEST_THRESHOLD(size, pagesize) \
+     (size / pagesize >= MMAP_THRESHOLD && (size % pagesize) != 0)
+   /* Use mmap if the file is big enough to be worth it (controlled
+      by MMAP_THRESHOLD) and if we can safely count on there being
+      at least one readable NUL byte after the end of the file's
+      contents.  This is true for all tested operating systems when
+      the file size is not an exact multiple of the page size.  */
+#  ifndef __CYGWIN__
+#   define SHOULD_MMAP(size, pagesize) TEST_THRESHOLD (size, pagesize)
+#  else
+#   define WIN32_LEAN_AND_MEAN
+#   include <windows.h>
+    /* Cygwin can't correctly emulate mmap under Windows 9x style systems so
+       disallow use of mmap on those systems.  Windows 9x does not zero fill
+       memory at EOF and beyond, as required.  */
+#   define SHOULD_MMAP(size, pagesize) ((GetVersion() & 0x80000000) \
+    					? 0 : TEST_THRESHOLD (size, pagesize))
+#  endif
+# endif
 
 #else  /* No MMAP_FILE */
 #  undef MMAP_THRESHOLD
@@ -94,7 +114,7 @@ struct include_file
 };
 
 /* Variable length record files on VMS will have a stat size that includes
-   record control characters that won't be included in the read size. */
+   record control characters that won't be included in the read size.  */
 #ifdef VMS
 # define FAB_C_VAR 2 /* variable length records (see Starlet fabdef.h) */
 # define STAT_SIZE_TOO_BIG(ST) ((ST).st_fab_rfm == FAB_C_VAR)
@@ -518,13 +538,7 @@ read_include_file (pfile, inc)
       if (pagesize == -1)
 	pagesize = getpagesize ();
 
-      /* Use mmap if the file is big enough to be worth it (controlled
-	 by MMAP_THRESHOLD) and if we can safely count on there being
-	 at least one readable NUL byte after the end of the file's
-	 contents.  This is true for all tested operating systems when
-	 the file size is not an exact multiple of the page size.  */
-      if (size / pagesize >= MMAP_THRESHOLD
-	  && (size % pagesize) != 0)
+      if (SHOULD_MMAP (size, pagesize))
 	{
 	  buf = (U_CHAR *) mmap (0, size, PROT_READ, MAP_PRIVATE, inc->fd, 0);
 	  if (buf == (U_CHAR *)-1)
@@ -729,17 +743,17 @@ find_include_file (pfile, header, type)
 	}
       /* APPLE LOCAL begin -header-mapfile */
       else
-	{
+        {
           if (saved_path == CPP_OPTION (pfile, bracket_include)
-	      && CPP_OPTION (pfile, header_map))
-	    {
-	      /* Path was collected from header_map buckets.
-		 No point in using it again, if file does not
-		 exist. Otherwise we will never come out of
-		 for (; path; path = path->next) loop.  */
-	      path = saved_path;
-	    }
-	}
+              && CPP_OPTION (pfile, header_map))
+            {
+              /* Path was collected from header_map buckets.
+                 No point in using it again, if file does not
+                 exist. Otherwise we will never come out of
+                 for (; path; path = path->next) loop.  */
+              path = saved_path;    
+            }
+        }
       /* APPLE LOCAL end -header-mapfile */
     }
 

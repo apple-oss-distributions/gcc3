@@ -1,7 +1,7 @@
 /* Definitions of target machine for GNU compiler.
    Sun 68000/68020 version.
    Copyright (C) 1987, 1988, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
-   2000, 2001 Free Software Foundation, Inc.
+   2000, 2001, 2002 Free Software Foundation, Inc.
 
 This file is part of GNU CC.
 
@@ -406,7 +406,7 @@ extern int target_flags;
 #endif
 
 /* This defines the register which is used to hold the offset table for PIC.  */
-#define PIC_OFFSET_TABLE_REGNUM 13
+#define PIC_OFFSET_TABLE_REGNUM (flag_pic ? 13 : INVALID_REGNUM)
 
 #ifndef SUPPORT_SUN_FPA
 
@@ -488,43 +488,43 @@ extern int target_flags;
 
 #ifdef SUPPORT_SUN_FPA
 
-#define CONDITIONAL_REGISTER_USAGE \
-{ 						\
-  int i; 					\
-  HARD_REG_SET x; 				\
-  if (! TARGET_FPA)				\
-    { 						\
-      COPY_HARD_REG_SET (x, reg_class_contents[(int)FPA_REGS]); \
-      for (i = 0; i < FIRST_PSEUDO_REGISTER; i++ ) \
-       if (TEST_HARD_REG_BIT (x, i)) 		\
-	fixed_regs[i] = call_used_regs[i] = 1; 	\
-    } 						\
-  if (! TARGET_68881)				\
-    { 						\
-      COPY_HARD_REG_SET (x, reg_class_contents[(int)FP_REGS]); \
-      for (i = 0; i < FIRST_PSEUDO_REGISTER; i++ ) \
-       if (TEST_HARD_REG_BIT (x, i)) 		\
-	fixed_regs[i] = call_used_regs[i] = 1; 	\
-    } 						\
-  if (flag_pic)					\
-    fixed_regs[PIC_OFFSET_TABLE_REGNUM]		\
-      = call_used_regs[PIC_OFFSET_TABLE_REGNUM] = 1;\
+#define CONDITIONAL_REGISTER_USAGE				\
+{ 								\
+  int i; 							\
+  HARD_REG_SET x; 						\
+  if (! TARGET_FPA)						\
+    { 								\
+      COPY_HARD_REG_SET (x, reg_class_contents[(int)FPA_REGS]);	\
+      for (i = 0; i < FIRST_PSEUDO_REGISTER; i++ )		\
+       if (TEST_HARD_REG_BIT (x, i)) 				\
+	fixed_regs[i] = call_used_regs[i] = 1; 			\
+    } 								\
+  if (! TARGET_68881)						\
+    { 								\
+      COPY_HARD_REG_SET (x, reg_class_contents[(int)FP_REGS]);	\
+      for (i = 0; i < FIRST_PSEUDO_REGISTER; i++ )		\
+       if (TEST_HARD_REG_BIT (x, i)) 				\
+	fixed_regs[i] = call_used_regs[i] = 1; 			\
+    } 								\
+  if (PIC_OFFSET_TABLE_REGNUM != INVALID_REGNUM)		\
+    fixed_regs[PIC_OFFSET_TABLE_REGNUM]				\
+      = call_used_regs[PIC_OFFSET_TABLE_REGNUM] = 1;		\
 }
 #else
-#define CONDITIONAL_REGISTER_USAGE \
-{ 						\
-  int i; 					\
-  HARD_REG_SET x; 				\
-  if (! TARGET_68881)				\
-    { 						\
-      COPY_HARD_REG_SET (x, reg_class_contents[(int)FP_REGS]); \
-      for (i = 0; i < FIRST_PSEUDO_REGISTER; i++ ) \
-       if (TEST_HARD_REG_BIT (x, i)) 		\
-	fixed_regs[i] = call_used_regs[i] = 1; 	\
-    } 						\
-  if (flag_pic)					\
-    fixed_regs[PIC_OFFSET_TABLE_REGNUM]		\
-      = call_used_regs[PIC_OFFSET_TABLE_REGNUM] = 1;\
+#define CONDITIONAL_REGISTER_USAGE				\
+{ 								\
+  int i; 							\
+  HARD_REG_SET x; 						\
+  if (! TARGET_68881)						\
+    { 								\
+      COPY_HARD_REG_SET (x, reg_class_contents[(int)FP_REGS]);	\
+      for (i = 0; i < FIRST_PSEUDO_REGISTER; i++ )		\
+       if (TEST_HARD_REG_BIT (x, i)) 				\
+	fixed_regs[i] = call_used_regs[i] = 1; 			\
+    } 								\
+  if (PIC_OFFSET_TABLE_REGNUM != INVALID_REGNUM)		\
+    fixed_regs[PIC_OFFSET_TABLE_REGNUM]				\
+      = call_used_regs[PIC_OFFSET_TABLE_REGNUM] = 1;		\
 }
 
 #endif /* defined SUPPORT_SUN_FPA */
@@ -1519,12 +1519,6 @@ __transfer_from_trampoline ()					\
    Do not define this if the table should contain absolute addresses.  */
 #define CASE_VECTOR_PC_RELATIVE 1
 
-/* Specify the tree operation to be used to convert reals to integers.  */
-#define IMPLICIT_FIX_EXPR FIX_ROUND_EXPR
-
-/* This is the kind of divide that is easiest to do in the general case.  */
-#define EASY_DIV_EXPR TRUNC_DIV_EXPR
-
 /* Define this as 1 if `char' should by default be signed; else as 0.  */
 #define DEFAULT_SIGNED_CHAR 1
 
@@ -1534,9 +1528,6 @@ __transfer_from_trampoline ()					\
 /* Max number of bytes we can move from memory to memory
    in one reasonably fast instruction.  */
 #define MOVE_MAX 4
-
-/* Define this if zero-extension is slow (more than one real instruction).  */
-#define SLOW_ZERO_EXTEND
 
 /* Nonzero if access to memory by bytes is slow and undesirable.  */
 #define SLOW_BYTE_ACCESS 0

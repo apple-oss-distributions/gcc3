@@ -96,9 +96,9 @@ static void parse_zip_file_entries PARAMS ((void));
 static void process_zip_dir PARAMS ((FILE *));
 static void parse_source_file_1 PARAMS ((tree, FILE *));
 static void parse_source_file_2 PARAMS ((void));
+static void parse_source_file_3 PARAMS ((void));
 static void parse_class_file PARAMS ((void));
 static void set_source_filename PARAMS ((JCF *, int));
-static int predefined_filename_p PARAMS ((tree));
 static void ggc_mark_jcf PARAMS ((void**));
 static void jcf_parse PARAMS ((struct JCF*));
 static void load_inner_classes PARAMS ((tree));
@@ -326,7 +326,15 @@ get_constant (jcf, index)
 	lshift_double (num[0], 0, 32, 64, &lo, &hi, 0);
 	num[0] = JPOOL_INT (jcf, index+1);
 	add_double (lo, hi, num[0], 0, &lo, &hi);
-	if (FLOAT_WORDS_BIG_ENDIAN)
+
+	/* Since ereal_from_double expects an array of HOST_WIDE_INT
+	   in the target's format, we swap the elements for big endian
+	   targets, unless HOST_WIDE_INT is sufficiently large to
+	   contain a target double, in which case the 2nd element
+	   is ignored.
+
+	   FIXME: Is this always right for cross targets? */
+	if (FLOAT_WORDS_BIG_ENDIAN && sizeof(num[0]) < 8)
 	  {
 	    num[0] = hi;
 	    num[1] = lo;
@@ -355,16 +363,12 @@ get_constant (jcf, index)
 	tree name = get_name_constant (jcf, JPOOL_USHORT1 (jcf, index));
 	const char *utf8_ptr = IDENTIFIER_POINTER (name);
 	int utf8_len = IDENTIFIER_LENGTH (name);
-	unsigned char *str_ptr;
-	unsigned char *str;
 	const unsigned char *utf8;
-	int i, str_len;
+	int i;
 
-	/* Count the number of Unicode characters in the string,
-	   while checking for a malformed Utf8 string. */
+	/* Check for a malformed Utf8 string.  */
 	utf8 = (const unsigned char *) utf8_ptr;
 	i = utf8_len;
-	str_len = 0;
 	while (i > 0)
 	  {
 	    int char_len = UT8_CHAR_LENGTH (*utf8);
@@ -373,48 +377,10 @@ get_constant (jcf, index)
 
 	    utf8 += char_len;
 	    i -= char_len;
-	    str_len++;
 	  }
 
-	/* Allocate a scratch buffer, convert the string to UCS2, and copy it
-	   into the new space.  */
-	str_ptr = (unsigned char *) alloca (2 * str_len);
-	str = str_ptr;
-	utf8 = (const unsigned char *)utf8_ptr;
-
-	for (i = 0; i < str_len; i++)
-	  {
-	    int char_value;
-	    int char_len = UT8_CHAR_LENGTH (*utf8);
-	    switch (char_len)
-	      {
-	      case 1:
-		char_value = *utf8++;
-		break;
-	      case 2:
-		char_value = *utf8++ & 0x1F;
-		char_value = (char_value << 6) | (*utf8++ & 0x3F);
-		break;
-	      case 3:
-		char_value = *utf8++ & 0x0F;
-		char_value = (char_value << 6) | (*utf8++ & 0x3F);
-		char_value = (char_value << 6) | (*utf8++ & 0x3F);
-		break;
-	      default:
-		goto bad;
-	      }
-	    if (BYTES_BIG_ENDIAN)
-	      {
-		*str++ = char_value >> 8;
-		*str++ = char_value & 0xFF;
-	      }
-	    else
-	      {
-		*str++ = char_value & 0xFF;
-		*str++ = char_value >> 8;
-	      }
-	  }
-	value = build_string (str - str_ptr, str_ptr);
+	/* Allocate a new string value.  */
+	value = build_string (utf8_len, utf8_ptr);
 	TREE_TYPE (value) = build_pointer_type (string_type_node);
       }
       break;
@@ -600,6 +566,7 @@ read_class (name)
 	    fatal_io_error ("can't reopen %s", input_filename);
 	  parse_source_file_1 (file, finput);
 	  parse_source_file_2 ();
+	  parse_source_file_3 ();
 	  if (fclose (finput))
 	    fatal_io_error ("can't close %s", input_filename);
 	}
@@ -662,20 +629,20 @@ load_class (class_or_name, verbose)
   saved = name;
   while (1)
     {
-      char *dollar;
+      char *separator;
 
       if ((class_loaded = read_class (name)))
 	break;
 
       /* We failed loading name. Now consider that we might be looking
-	 for a inner class but it's only available in source for in
-	 its enclosing context. */
-      if ((dollar = strrchr (IDENTIFIER_POINTER (name), '$')))
+         for a inner class. */
+      if ((separator = strrchr (IDENTIFIER_POINTER (name), '$'))
+          || (separator = strrchr (IDENTIFIER_POINTER (name), '.')))
 	{
-	  int c = *dollar;
-	  *dollar = '\0';
+	  int c = *separator;
+	  *separator = '\0';
 	  name = get_identifier (IDENTIFIER_POINTER (name));
-	  *dollar = c;
+	  *separator = c;
 	}
       /* Otherwise, we failed, we bail. */
       else
@@ -786,7 +753,7 @@ init_outgoing_cpool ()
 static void
 parse_class_file ()
 {
-  tree method;
+  tree method, field;
   const char *save_input_filename = input_filename;
   int save_lineno = lineno;
 
@@ -801,8 +768,13 @@ parse_class_file ()
      compiling from class files.  */
   always_initialize_class_p = 1;
 
-  for ( method = TYPE_METHODS (CLASS_TO_HANDLE_TYPE (current_class));
-	method != NULL_TREE; method = TREE_CHAIN (method))
+  for (field = TYPE_FIELDS (CLASS_TO_HANDLE_TYPE (current_class));
+       field != NULL_TREE; field = TREE_CHAIN (field))
+    if (FIELD_STATIC (field))
+      DECL_EXTERNAL (field) = 0;
+
+  for (method = TYPE_METHODS (CLASS_TO_HANDLE_TYPE (current_class));
+       method != NULL_TREE; method = TREE_CHAIN (method))
     {
       JCF *jcf = current_jcf;
 
@@ -904,13 +876,11 @@ parse_source_file_1 (file, finput)
   /* There's no point in trying to find the current encoding unless we
      are going to do something intelligent with it -- hence the test
      for iconv.  */
-#ifdef HAVE_ICONV
-#ifdef HAVE_NL_LANGINFO
+#if defined (HAVE_LOCALE_H) && defined (HAVE_ICONV) && defined (HAVE_NL_LANGINFO)
   setlocale (LC_CTYPE, "");
   if (current_encoding == NULL)
     current_encoding = nl_langinfo (CODESET);
-#endif /* HAVE_NL_LANGINFO */
-#endif /* HAVE_ICONV */
+#endif 
   if (current_encoding == NULL || *current_encoding == '\0')
     current_encoding = DEFAULT_ENCODING;
 
@@ -930,6 +900,12 @@ parse_source_file_2 ()
   int save_error_count = java_error_count;
   java_complete_class ();	    /* Parse unsatisfied class decl. */
   java_parse_abort_on_error ();
+}
+
+static void
+parse_source_file_3 ()
+{
+  int save_error_count = java_error_count;
   java_check_circular_reference (); /* Check on circular references */
   java_parse_abort_on_error ();
   java_fix_constructors ();	    /* Fix the constructors */
@@ -937,14 +913,24 @@ parse_source_file_2 ()
   java_reorder_fields ();	    /* Reorder the fields */
 }
 
-static int
+void
+add_predefined_file (name)
+     tree name;
+{
+  predef_filenames = tree_cons (NULL_TREE, name, predef_filenames);
+}
+
+int
 predefined_filename_p (node)
      tree node;
 {
-  int i;
-  for (i = 0; i < PREDEF_FILENAMES_SIZE; i++)
-    if (predef_filenames [i] == node)
-      return 1;
+  tree iter;
+
+  for (iter = predef_filenames; iter != NULL_TREE; iter = TREE_CHAIN (iter))
+    {
+      if (TREE_VALUE (iter) == node)
+	return 1;
+    }
   return 0;
 }
 
@@ -1088,10 +1074,7 @@ yyparse ()
 
       resource_filename = IDENTIFIER_POINTER (TREE_VALUE (current_file_list));
       compile_resource_file (resource_name, resource_filename);
-      
-      java_expand_classes ();
-      if (!java_report_errors ())
-	emit_register_classes ();
+
       return 0;
     }
 
@@ -1172,6 +1155,13 @@ yyparse ()
       input_filename = ctxp->filename;
       parse_source_file_2 ();
     }
+
+  for (ctxp = ctxp_for_generation;  ctxp;  ctxp = ctxp->next)
+    {
+      input_filename = ctxp->filename;
+      parse_source_file_3 ();
+    }
+
   for (node = current_file_list; node; node = TREE_CHAIN (node))
     {
       input_filename = IDENTIFIER_POINTER (TREE_VALUE (node));

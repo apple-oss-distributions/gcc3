@@ -1,5 +1,5 @@
 /* Definitions for GCC.  Part of the machine description for CRIS.
-   Copyright (C) 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
    Contributed by Axis Communications.  Written by Hans-Peter Nilsson.
 
 This file is part of GCC.
@@ -67,6 +67,7 @@ Boston, MA 02111-1307, USA.  */
 #define CRIS_PLT_GOTOFFSET_SUFFIX ":PLTG"
 #define CRIS_PLT_PCOFFSET_SUFFIX ":PLT"
 
+/* If you tweak this, don't forget to check cris_expand_builtin_va_arg.  */
 #define CRIS_FUNCTION_ARG_SIZE(MODE, TYPE)	\
   ((MODE) != BLKmode ? GET_MODE_SIZE (MODE)	\
    : (unsigned) int_size_in_bytes (TYPE))
@@ -231,6 +232,7 @@ extern const char *cris_elinux_stacksize_str;
    link them to crt0.o to be prepared.  Use scrt0.c if running the
    simulator, linear style, or s2crt0.c if fixed style.  */
 /* We need to remove any previous definition (elfos.h).  */
+#undef STARTFILE_SPEC
 #define STARTFILE_SPEC \
  "%{sim2:s2crt0.o%s}\
   %{!sim2:%{sim:scrt0.o%s}\
@@ -238,6 +240,7 @@ extern const char *cris_elinux_stacksize_str;
     %{!pg:%{p:mcrt0.o%s}%{!p:crt0.o%s}}}}\
   crtbegin.o%s"
 
+#undef ENDFILE_SPEC
 #define ENDFILE_SPEC "crtend.o%s"
 
 #define EXTRA_SPECS				\
@@ -438,7 +441,7 @@ extern int target_flags;
    gcc-cris they are using.  Please use some flavor of "R<number>" for
    the version (no need for major.minor versions, I believe).  */
 #define TARGET_VERSION \
- fprintf (stderr, " [Axis CRIS release R36a%s]", CRIS_SUBTARGET_VERSION)
+ fprintf (stderr, " [Axis CRIS%s]", CRIS_SUBTARGET_VERSION)
 
 /* For the cris-*-elf subtarget.  */
 #define CRIS_SUBTARGET_VERSION " - generic ELF"
@@ -940,7 +943,8 @@ enum reg_class {NO_REGS, ALL_REGS, LIM_REG_CLASSES};
   ? 1 : 0)
 
 /* Structs may be passed by value, but they must not be more than 8
-   bytes long.  */
+   bytes long.  If you tweak this, don't forget to adjust
+   cris_expand_builtin_va_arg.  */
 #define FUNCTION_ARG_PASS_BY_REFERENCE(CUM, MODE, TYPE, NAMED)		\
  (MUST_PASS_IN_STACK (MODE, TYPE)					\
   || CRIS_FUNCTION_ARG_SIZE (MODE, TYPE) > 8)				\
@@ -1450,20 +1454,29 @@ struct cum_args {int regs;};
 
 /* We pull a little trick to register the _fini function with atexit,
    after (presumably) registering the eh frame info, since we don't handle
-   _fini (a.k.a. ___fini_start) in crt0 or have a crti for "pure" ELF.  */
+   _fini (a.k.a. ___fini_start) in crt0 or have a crti for "pure" ELF.  If
+   you change this, don't forget that you can't have library function
+   references (e.g. to atexit) in crtend.o, since those won't be resolved
+   to libraries; those are linked in *before* crtend.o.  */
 #ifdef CRT_BEGIN
-#define FORCE_INIT_SECTION_ALIGN		\
- do						\
-   {						\
-     extern void __fini__start (void);		\
-     atexit (__fini__start);			\
-   }						\
- while (0)
+# define CRT_CALL_STATIC_FUNCTION(SECTION_OP, FUNC)		\
+static void __attribute__((__used__))				\
+call_ ## FUNC (void)						\
+{								\
+  asm (SECTION_OP);						\
+  FUNC ();							\
+  if (__builtin_strcmp (#FUNC, "frame_dummy") == 0)		\
+   {								\
+     extern void __fini__start (void);				\
+     atexit (__fini__start);					\
+   }								\
+  asm (TEXT_SECTION_ASM_OP);					\
+}
 #endif
 
 /* Node: PIC */
 
-#define PIC_OFFSET_TABLE_REGNUM 0
+#define PIC_OFFSET_TABLE_REGNUM (flag_pic ? 0 : INVALID_REGNUM)
 
 #define LEGITIMATE_PIC_OPERAND_P(X) cris_legitimate_pic_operand (X)
 
@@ -1737,9 +1750,7 @@ struct cum_args {int regs;};
 
 
 /* Node: SDB and DWARF */
-
-#define DWARF_LINE_MIN_INSTR_LENGTH 2
-
+/* (no definitions) */
 
 /* Node: Cross-compilation */
 #define REAL_ARITHMETIC
@@ -1790,11 +1801,7 @@ struct cum_args {int regs;};
 /* FIXME: Investigate CASE_VECTOR_SHORTEN_MODE to make sure HImode is not
    used when broken-.word could possibly fail (plus test-case).  */
 
-#define IMPLICIT_FIX_EXPR FIX_ROUND_EXPR
-
 #define FIXUNS_TRUNC_LIKE_FIX_TRUNC
-
-#define EASY_DIV_EXPR TRUNC_DIV_EXPR
 
 /* This is the number of bytes that can be moved in one
    reasonably fast instruction sequence.  For CRIS, this is two

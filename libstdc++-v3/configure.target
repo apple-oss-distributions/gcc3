@@ -69,6 +69,7 @@ esac
 case "${target_os}" in
   aix4.[3456789]* | aix[56789]*)
     os_include_dir="config/os/aix"
+    OPT_LDFLAGS="-Wl,-G"
     ;;
   bsd* | freebsd* )
     os_include_dir="config/os/bsd/freebsd"
@@ -79,6 +80,7 @@ case "${target_os}" in
   # APPLE LOCAL darwin native
   darwin* )
     os_include_dir="config/os/bsd/darwin"
+    enable_cxx_flags="-DAPPLE_KEYMGR $enable_cxx_flags"
     ;;
   *djgpp*)
     os_include_dir="config/os/djgpp"
@@ -132,6 +134,13 @@ case "${target}" in
      ;;
    *-*-irix*)
      ATOMICITYH=$os_include_dir
+     ;;
+   mcore-*-pe*)
+     # The EPOC C++ environment does not support exceptions.
+     if test -z "$enable_cxx_flags"; then
+       enable_cxx_flags="-frtti -fno-exceptions"
+     fi
+     ATOMICITYH=$cpu_include_dir
      ;;
    *)
      ATOMICITYH=$cpu_include_dir

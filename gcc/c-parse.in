@@ -29,7 +29,8 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
    written by AT&T, but I have never seen it.  */
 
 ifobjc
-%expect 31 /* shift/reduce conflicts, and 1 reduce/reduce conflict.  */
+/* APPLE LOCAL designated initializers */
+%expect 32 /* shift/reduce conflicts, and 1 reduce/reduce conflict.  */
 end ifobjc
 ifc
 %expect 10 /* shift/reduce conflicts, and no reduce/reduce conflicts.  */
@@ -405,7 +406,7 @@ fndef:
 	  save_filename save_lineno compstmt_or_error
 		{ DECL_SOURCE_FILE (current_function_decl) = $7;
 		  DECL_SOURCE_LINE (current_function_decl) = $8;
-		  finish_function (0); 
+		  finish_function (0, 1); 
 		  POP_DECLSPEC_STACK; }
 	| declspecs_ts setspecs declarator error
 		{ POP_DECLSPEC_STACK; }
@@ -419,7 +420,7 @@ fndef:
 	  save_filename save_lineno compstmt_or_error
 		{ DECL_SOURCE_FILE (current_function_decl) = $7;
 		  DECL_SOURCE_LINE (current_function_decl) = $8;
-		  finish_function (0); 
+		  finish_function (0, 1); 
 		  POP_DECLSPEC_STACK; }
 	| declspecs_nots setspecs notype_declarator error
 		{ POP_DECLSPEC_STACK; }
@@ -433,7 +434,7 @@ fndef:
 	  save_filename save_lineno compstmt_or_error
 		{ DECL_SOURCE_FILE (current_function_decl) = $6;
 		  DECL_SOURCE_LINE (current_function_decl) = $7;
-		  finish_function (0); 
+		  finish_function (0, 1); 
 		  POP_DECLSPEC_STACK; }
 	| setspecs notype_declarator error
 		{ POP_DECLSPEC_STACK; }
@@ -1599,17 +1600,14 @@ designator_list:
 designator:
 	  '.' identifier
 		{ set_init_label ($2); }
-	/* These are for labeled elements.  The syntax for an array element
-	   initializer conflicts with the syntax for an Objective-C message,
-	   so don't include these productions in the Objective-C grammar.  */
-ifc
+/* APPLE LOCAL begin designated initializers */
 	| '[' expr_no_commas ELLIPSIS expr_no_commas ']'
 		{ set_init_index ($2, $4);
 		  if (pedantic)
 		    pedwarn ("ISO C forbids specifying range of elements to initialize"); }
 	| '[' expr_no_commas ']'
 		{ set_init_index ($2, NULL_TREE); }
-end ifc
+/* APPLE LOCAL end designated initializers */
 	;
 
 nested_function:
@@ -1637,7 +1635,7 @@ nested_function:
 		{ tree decl = current_function_decl;
 		  DECL_SOURCE_FILE (decl) = $5;
 		  DECL_SOURCE_LINE (decl) = $6;
-		  finish_function (1);
+		  finish_function (1, 1);
 		  pop_function_context (); 
 		  add_decl_stmt (decl); }
 	;
@@ -1667,7 +1665,7 @@ notype_nested_function:
 		{ tree decl = current_function_decl;
 		  DECL_SOURCE_FILE (decl) = $5;
 		  DECL_SOURCE_LINE (decl) = $6;
-		  finish_function (1);
+		  finish_function (1, 1);
 		  pop_function_context (); 
 		  add_decl_stmt (decl); }
 	;
@@ -2103,15 +2101,13 @@ pushlevel:  /* empty */
 		{ pushlevel (0);
 		  clear_last_expr ();
 		  add_scope_stmt (/*begin_p=*/1, /*partial_p=*/0);
-ifobjc
-		  if (objc_method_context)
-		    add_objc_decls ();
-end ifobjc
+		  /* APPLE LOCAL msg send super */
 		}
 	;
 
 poplevel:  /* empty */
                 { $$ = add_scope_stmt (/*begin_p=*/0, /*partial_p=*/0); }
+        ;
 
 /* Start and end blocks created for the new scopes of C99.  */
 c99_block_start: /* empty */
@@ -2121,10 +2117,7 @@ c99_block_start: /* empty */
 		      pushlevel (0);
 		      clear_last_expr ();
 		      add_scope_stmt (/*begin_p=*/1, /*partial_p=*/0);
-ifobjc
-		      if (objc_method_context)
-			add_objc_decls ();
-end ifobjc
+		      /* APPLE LOCAL msg send super */
 		    }
 		  else
 		    $$ = NULL_TREE;
@@ -2182,7 +2175,8 @@ compstmt_or_error:
 	;
 
 compstmt_start: '{' { compstmt_count++;
-                      $$ = c_begin_compound_stmt (); } 
+                      $$ = c_begin_compound_stmt (); }
+        ;
 
 compstmt_nostart: '}'
 		{ $$ = convert (void_type_node, integer_zero_node); }
@@ -2214,9 +2208,11 @@ compstmt_primary_start:
 		  compstmt_count++;
 		  $$ = add_stmt (build_stmt (COMPOUND_STMT, last_tree));
 		}
+        ;
 
 compstmt: compstmt_start compstmt_nostart
 		{ RECHAIN_STMTS ($1, COMPOUND_BODY ($1)); 
+		  last_expr_type = NULL_TREE;
                   $$ = $1; }
 	;
 
@@ -2650,11 +2646,12 @@ setspecs_fp:
    where either a parmlist or an identifier list is ok.
    Its value is a list of ..._TYPE nodes or a list of identifiers.  */
 parmlist_or_identifiers:
+	  maybe_attribute
 		{ pushlevel (0);
 		  clear_parm_order ();
 		  declare_parm_level (1); }
 	  parmlist_or_identifiers_1
-		{ $$ = $2;
+		{ $$ = $3;
 		  parmlist_tags_warning ();
 		  poplevel (0, 0, 0); }
 	;
@@ -2666,7 +2663,15 @@ parmlist_or_identifiers_1:
 		  for (t = $1; t; t = TREE_CHAIN (t))
 		    if (TREE_VALUE (t) == NULL_TREE)
 		      error ("`...' in old-style identifier list");
-		  $$ = tree_cons (NULL_TREE, NULL_TREE, $1); }
+		  $$ = tree_cons (NULL_TREE, NULL_TREE, $1);
+
+		  /* Make sure we have a parmlist after attributes.  */
+		  if ($<ttype>-1 != 0
+		      && (TREE_CODE ($$) != TREE_LIST
+			  || TREE_PURPOSE ($$) == 0
+			  || TREE_CODE (TREE_PURPOSE ($$)) != PARM_DECL))
+		    YYERROR1;
+		}
 	;
 
 /* A nonempty list of identifiers.  */
@@ -3240,14 +3245,12 @@ receiver:
 	;
 
 objcmessageexpr:
-	  '['
-		{ objc_receiver_context = 1; }
-	  receiver
-		{ objc_receiver_context = 0; }
-	  messageargs ']'
+	/* APPLE LOCAL begin designated initializers */
+	  '[' receiver messageargs ']'
 		{
-		  $$ = build_tree_list ($3, $5);
+		  $$ = build_tree_list ($2, $3);
 		}
+	/* APPLE LOCAL end designated initializers */
 	;
 
 selectorarg:

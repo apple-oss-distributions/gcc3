@@ -1,6 +1,6 @@
 # Top level makefile fragment for the GNU compiler for the Java(TM)
 # language.
-#   Copyright (C) 1996, 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
+#   Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
 #This file is part of GNU CC.
 
@@ -101,7 +101,7 @@ $(srcdir)/java/keyword.h: $(srcdir)/java/keyword.gperf
 JAVA_OBJS = java/parse.o java/class.o java/decl.o java/expr.o \
   java/constants.o java/lang.o java/typeck.o java/except.o java/verify.o \
   java/zextract.o java/jcf-io.o java/jcf-parse.o java/mangle.o \
-  java/mangle_name.o \
+  java/mangle_name.o java/builtins.o \
   java/jcf-write.o java/buffer.o java/check-init.o java/jcf-depend.o \
   java/jcf-path.o java/xref.o java/boehm.o mkdeps.o
 
@@ -119,7 +119,8 @@ JVGENMAIN_OBJS = java/jvgenmain.o java/mangle_name.o errors.o
 java-warn =
 
 # APPLE LOCAL PFE
-jc1$(exeext): $(JAVA_OBJS) $(BACKEND) $(LIBDEPS) $(PFE_STUB_OBJS)
+# APPLE LOCAL indexing
+jc1$(exeext): $(JAVA_OBJS) $(BACKEND) $(LIBDEPS) $(PFE_STUB_OBJS) stub-genindex.o
 	rm -f $@
 	$(CC) $(ALL_CFLAGS) $(LDFLAGS) -o $@ \
 		$(JAVA_OBJS) $(BACKEND) $(ZLIB) $(LIBICONV) $(LIBS) \
@@ -153,7 +154,8 @@ java.info: $(srcdir)/java/gcj.info
 java.dvi: java/gcj.dvi
 java.generated-manpages: $(srcdir)/java/gcj.1 $(srcdir)/java/gcjh.1 \
 	$(srcdir)/java/jv-scan.1 $(srcdir)/java/jcf-dump.1 \
-	$(srcdir)/java/gij.1
+	$(srcdir)/java/gij.1 $(srcdir)/java/jv-convert.1 \
+	$(srcdir)/java/rmic.1 $(srcdir)/java/rmiregistry.1
 
 # Install hooks:
 # jc1, gcj, jvgenmain, and gcjh are installed elsewhere as part
@@ -194,6 +196,7 @@ java.uninstall:
 	-rm -rf $(man1dir)/jv-scan$(man1ext)
 	-rm -rf $(man1dir)/jcf-dump$(man1ext)
 	-rm -rf $(man1dir)/gij$(man1ext)
+	-rm -rf $(man1dir)/jv-convert$(man1ext)
 
 java.install-info: installdirs
 	if [ -f jc1$(exeext) ] ; then \
@@ -230,6 +233,9 @@ java.maintainer-clean:
 	-rm -f $(srcdir)/java/gcj.1 $(srcdir)/java/gcjh.1
 	-rm -f $(srcdir)/java/jv-scan.1 $(srcdir)/java/jcf-dump.1
 	-rm -f $(srcdir)/java/gij.1
+	-rm -f $(srcdir)/java/jv-convert.1
+	-rm -f $(srcdir)/java/rmic.1
+	-rm -f $(srcdir)/java/rmiregistry.1
 #
 # Stage hooks:
 # The main makefile has already created stage?/java.
@@ -257,6 +263,8 @@ java/gjavah.o: $(CONFIG_H) $(SYSTEM_H) $(JAVA_TREE_H) java/gjavah.c \
 java/boehm.o: java/boehm.c $(CONFIG_H) $(SYSTEM_H) $(TREE_H) $(JAVA_TREE_H) \
   java/parse.h toplev.h
 java/buffer.o: java/buffer.c $(CONFIG_H) java/buffer.h $(SYSTEM_H) toplev.h
+java/builtins.o: java/builtins.c $(CONFIG_H) $(SYSTEM_H) $(JAVA_TREE_H) \
+  $(GGC_H) flags.h
 java/check-init.o: java/check-init.c $(CONFIG_H) \
   $(JAVA_TREE_H) $(SYSTEM_H) toplev.h
 java/class.o: java/class.c $(CONFIG_H) $(JAVA_TREE_H) $(RTL_H) java/jcf.h \
@@ -307,7 +315,8 @@ java/jcf-io.o: java/jcf-io.c $(CONFIG_H) $(SYSTEM_H) $(JAVA_TREE_H)
 # jcf-path.o needs a -D.
 java/jcf-path.o: java/jcf-path.c $(CONFIG_H) $(SYSTEM_H) java/jcf.h
 	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) \
-	  -DLIBGCJ_ZIP_FILE='"$(prefix)/share/libgcj.jar"' \
+	  -DLIBGCJ_ZIP_FILE='"$(prefix)/share/java/libgcj-$(version).jar"' \
+	  -DDEFAULT_TARGET_VERSION=\"$(version)\" \
 	  $(srcdir)/java/jcf-path.c $(OUTPUT_OPTION)
 
 # Documentation
@@ -358,6 +367,27 @@ $(srcdir)/java/gij.1: $(srcdir)/java/gcj.texi
 		(rm -f java/gij.1.T$$$$ && exit 1)
 	rm -f java/gij.pod
 
+$(srcdir)/java/jv-convert.1: $(srcdir)/java/gcj.texi
+	-$(TEXI2POD) -D jv-convert < $(srcdir)/java/gcj.texi > java/jv-convert.pod
+	($(POD2MAN) --section=1 java/jv-convert.pod > java/jv-convert.1.T$$$$ && \
+		mv -f java/jv-convert.1.T$$$$ $(srcdir)/java/jv-convert.1) || \
+		(rm -f java/jv-convert.1.T$$$$ && exit 1)
+	rm -f java/jv-convert.pod
+
+$(srcdir)/java/rmic.1: $(srcdir)/java/gcj.texi
+	-$(TEXI2POD) -D rmic < $(srcdir)/java/gcj.texi > java/rmic.pod
+	($(POD2MAN) --section=1 java/rmic.pod > java/rmic.1.T$$$$ && \
+		mv -f java/rmic.1.T$$$$ $(srcdir)/java/rmic.1) || \
+		(rm -f java/rmic.1.T$$$$ && exit 1)
+	rm -f java/rmic.pod
+
+$(srcdir)/java/rmiregistry.1: $(srcdir)/java/gcj.texi
+	-$(TEXI2POD) -D rmiregistry < $(srcdir)/java/gcj.texi > java/rmiregistry.pod
+	($(POD2MAN) --section=1 java/rmiregistry.pod > java/rmiregistry.1.T$$$$ && \
+		mv -f java/rmiregistry.1.T$$$$ $(srcdir)/java/rmiregistry.1) || \
+		(rm -f java/rmiregistry.1.T$$$$ && exit 1)
+	rm -f java/rmiregistry.pod
+
 # Install the man pages.
 java.install-man: installdirs $(GENERATED_JAVA_MANPAGES)
 	-if [ -f $(GCJ)$(exeext) ]; then \
@@ -383,3 +413,12 @@ java.install-man: installdirs $(GENERATED_JAVA_MANPAGES)
 	-rm -f $(man1dir)/gij$(man1ext)
 	-$(INSTALL_DATA) $(srcdir)/java/gij.1 $(man1dir)/gij$(man1ext)
 	-chmod a-x $(man1dir)/gij$(man1ext)
+	-rm -f $(man1dir)/jv-convert$(man1ext)
+	-$(INSTALL_DATA) $(srcdir)/java/jv-convert.1 $(man1dir)/jv-convert$(man1ext)
+	-chmod a-x $(man1dir)/jv-convert$(man1ext)
+	-rm -f $(man1dir)/rmic$(man1ext)
+	-$(INSTALL_DATA) $(srcdir)/java/rmic.1 $(man1dir)/rmic$(man1ext)
+	-chmod a-x $(man1dir)/rmic$(man1ext)
+	-rm -f $(man1dir)/rmiregistry$(man1ext)
+	-$(INSTALL_DATA) $(srcdir)/java/rmiregistry.1 $(man1dir)/rmiregistry$(man1ext)
+	-chmod a-x $(man1dir)/rmiregistry$(man1ext)

@@ -141,7 +141,6 @@ _Unwind_RaiseException(struct _Unwind_Exception *exc)
   Dprintf("about to install context, this=%p, cur=%p\n",
 	 &this_context, &cur_context);
   uw_install_context (&this_context, &cur_context);
-  breaker();
 }
 
 
@@ -234,7 +233,6 @@ _Unwind_Resume (struct _Unwind_Exception *exc)
   Dprintf("_Unwind_Resume after init context exc %p cur_context %p\n",
 	 exc, &cur_context);
 
-  breaker();
   /* Choose between continuing to process _Unwind_RaiseException
      or _Unwind_ForcedUnwind.  */
   if (exc->private_1 == 0)

@@ -785,7 +785,8 @@ expand_builtin_prefetch (arglist)
   if (HAVE_prefetch)
     {
       if (! (*insn_data[(int)CODE_FOR_prefetch].operand[0].predicate)
-	    (op0, Pmode))
+	    (op0,
+	     insn_data[(int)CODE_FOR_prefetch].operand[0].mode))
         op0 = force_reg (Pmode, op0);
       emit_insn (gen_prefetch (op0, op1, op2));
     }
@@ -922,17 +923,6 @@ apply_args_size ()
 		    && have_insn_for (SET, mode))
 		  best_mode = mode;
 
-#if 0
-/* APPLE LOCAL: AltiVec - not written in target-independent manner!!! */
-	    /* This V16QImode stuff might not be required,
-	       but we do OK with it.  Needs revisiting!  */
-
-	    if (best_mode == VOIDmode
-		&& HARD_REGNO_MODE_OK (regno, V16QImode)
-		&& (mov_optab->handlers[(int) V16QImode].insn_code
-		    != CODE_FOR_nothing))
-	      best_mode = V16QImode;
-#endif
 	    if (best_mode == VOIDmode)
 	      for (mode = GET_CLASS_NARROWEST_MODE (MODE_VECTOR_FLOAT);
 		   mode != VOIDmode;
@@ -1005,14 +995,6 @@ apply_result_size ()
 		    && have_insn_for (SET, mode))
 		  best_mode = mode;
 
-#if 0
-/* APPLE LOCAL: AltiVec - not written in target-independent manner!!! */
-	    if (best_mode == VOIDmode
-		&& HARD_REGNO_MODE_OK (regno, V16QImode)
-		&& (mov_optab->handlers[(int) V16QImode].insn_code
-		    != CODE_FOR_nothing))
-	      best_mode = V16QImode;
-#endif
 	    if (best_mode == VOIDmode)
 	      for (mode = GET_CLASS_NARROWEST_MODE (MODE_VECTOR_FLOAT);
 		   mode != VOIDmode;
@@ -2080,7 +2062,7 @@ expand_builtin_strncpy (arglist, target, mode)
 	return 0;
 
       /* If the len parameter is zero, return the dst parameter.  */
-      if (compare_tree_int (len, 0) == 0)
+      if (integer_zerop (len))
         {
 	/* Evaluate and ignore the src argument in case it has
            side-effects.  */
@@ -2297,10 +2279,11 @@ expand_builtin_memcmp (exp, arglist, target, mode)
   /* If all arguments are constant, and the value of len is not greater
      than the lengths of arg1 and arg2, evaluate at compile-time.  */
   if (host_integerp (len, 1) && p1 && p2
-      && compare_tree_int (len, strlen (p1)+1) <= 0
-      && compare_tree_int (len, strlen (p2)+1) <= 0)
+      && compare_tree_int (len, strlen (p1) + 1) <= 0
+      && compare_tree_int (len, strlen (p2) + 1) <= 0)
     {
       const int r = memcmp (p1, p2, tree_low_cst (len, 1));
+
       return (r < 0 ? constm1_rtx : (r > 0 ? const1_rtx : const0_rtx));
     }
 
@@ -2625,8 +2608,7 @@ expand_builtin_strncat (arglist, target, mode)
 
       /* If the requested length is zero, or the src parameter string
           length is zero, return the dst parameter.  */
-      if ((TREE_CODE (len) == INTEGER_CST && compare_tree_int (len, 0) == 0)
-	  || (p && *p == '\0'))
+      if (integer_zerop (len) || (p && *p == '\0'))
         {
 	  /* Evaluate and ignore the src and len parameters in case
 	     they have side-effects.  */
@@ -2640,9 +2622,9 @@ expand_builtin_strncat (arglist, target, mode)
       if (TREE_CODE (len) == INTEGER_CST && p
 	  && compare_tree_int (len, strlen (p)) >= 0)
         {
-	  tree newarglist =
-	    tree_cons (NULL_TREE, dst, build_tree_list (NULL_TREE, src)),
-	    fn = built_in_decls[BUILT_IN_STRCAT];
+	  tree newarglist
+	    = tree_cons (NULL_TREE, dst, build_tree_list (NULL_TREE, src));
+	  tree fn = built_in_decls[BUILT_IN_STRCAT];
 
 	  /* If the replacement _DECL isn't initialized, don't do the
 	     transformation.  */
@@ -3009,37 +2991,54 @@ rtx
 std_expand_builtin_va_arg (valist, type)
      tree valist, type;
 {
-  tree addr_tree, t;
-  HOST_WIDE_INT align;
-  HOST_WIDE_INT rounded_size;
+  tree addr_tree, t, type_size = NULL;
+  tree align, alignm1;
+  tree rounded_size;
   rtx addr;
 
   /* Compute the rounded size of the type.  */
-  align = PARM_BOUNDARY / BITS_PER_UNIT;
-  rounded_size = (((int_size_in_bytes (type) + align - 1) / align) * align);
+  align = size_int (PARM_BOUNDARY / BITS_PER_UNIT);
+  alignm1 = size_int (PARM_BOUNDARY / BITS_PER_UNIT - 1);
+  if (type == error_mark_node
+      || (type_size = TYPE_SIZE_UNIT (TYPE_MAIN_VARIANT (type))) == NULL
+      || TREE_OVERFLOW (type_size))
+    rounded_size = size_zero_node;
+  else
+    rounded_size = fold (build (MULT_EXPR, sizetype,
+				fold (build (TRUNC_DIV_EXPR, sizetype,
+					     fold (build (PLUS_EXPR, sizetype,
+							  type_size, alignm1)),
+					     align)),
+				align));
 
   /* Get AP.  */
   addr_tree = valist;
-  if (PAD_VARARGS_DOWN)
+  if (PAD_VARARGS_DOWN && ! integer_zerop (rounded_size))
     {
       /* Small args are padded downward.  */
-
-      HOST_WIDE_INT adj
-	= rounded_size > align ? rounded_size : int_size_in_bytes (type);
-
-      addr_tree = build (PLUS_EXPR, TREE_TYPE (addr_tree), addr_tree,
-			 build_int_2 (rounded_size - adj, 0));
+      addr_tree = fold (build (PLUS_EXPR, TREE_TYPE (addr_tree), addr_tree,
+			       fold (build (COND_EXPR, sizetype,
+					    fold (build (GT_EXPR, sizetype,
+							 rounded_size,
+							 align)),
+					    size_zero_node,
+					    fold (build (MINUS_EXPR, sizetype,
+							 rounded_size,
+							 type_size))))));
     }
 
   addr = expand_expr (addr_tree, NULL_RTX, Pmode, EXPAND_NORMAL);
   addr = copy_to_reg (addr);
 
   /* Compute new value for AP.  */
-  t = build (MODIFY_EXPR, TREE_TYPE (valist), valist,
-	     build (PLUS_EXPR, TREE_TYPE (valist), valist,
-		    build_int_2 (rounded_size, 0)));
-  TREE_SIDE_EFFECTS (t) = 1;
-  expand_expr (t, const0_rtx, VOIDmode, EXPAND_NORMAL);
+  if (! integer_zerop (rounded_size))
+    {
+      t = build (MODIFY_EXPR, TREE_TYPE (valist), valist,
+		 build (PLUS_EXPR, TREE_TYPE (valist), valist,
+			rounded_size));
+      TREE_SIDE_EFFECTS (t) = 1;
+      expand_expr (t, const0_rtx, VOIDmode, EXPAND_NORMAL);
+    }
 
   return addr;
 }
@@ -3082,7 +3081,7 @@ expand_builtin_va_arg (valist, type)
   else if ((promoted_type = (*lang_type_promotes_to) (type)) != NULL_TREE)
     {
       const char *name = "<anonymous type>", *pname = 0;
-      static int gave_help;
+      static bool gave_help;
 
       if (TYPE_NAME (type))
 	{
@@ -3101,13 +3100,24 @@ expand_builtin_va_arg (valist, type)
 	    pname = IDENTIFIER_POINTER (DECL_NAME (TYPE_NAME (promoted_type)));
 	}
 
-      error ("`%s' is promoted to `%s' when passed through `...'", name, pname);
+      /* Unfortunately, this is merely undefined, rather than a constraint
+	 violation, so we cannot make this an error.  If this call is never
+	 executed, the program is still strictly conforming.  */
+      warning ("`%s' is promoted to `%s' when passed through `...'",
+	       name, pname);
       if (! gave_help)
 	{
-	  gave_help = 1;
-	  error ("(so you should pass `%s' not `%s' to `va_arg')", pname, name);
+	  gave_help = true;
+	  warning ("(so you should pass `%s' not `%s' to `va_arg')",
+		   pname, name);
 	}
 
+      /* We can, however, treat "undefined" any way we please.
+	 Call abort to encourage the user to fix the program.  */
+      expand_builtin_trap ();
+
+      /* This is dead code, but go ahead and finish so that the
+	 mode of the result comes out right.  */
       addr = const0_rtx;
     }
   else
@@ -3559,6 +3569,18 @@ expand_builtin_expect_jump (exp, if_false_label, if_true_label)
 
   return ret;
 }
+
+void
+expand_builtin_trap ()
+{
+#ifdef HAVE_trap
+  if (HAVE_trap)
+    emit_insn (gen_trap ());
+  else
+#endif
+    emit_library_call (abort_libfunc, LCT_NORETURN, VOIDmode, 0);
+  emit_barrier ();
+}
 
 /* Expand an expression EXP that calls a built-in function,
    with result going to TARGET if that's convenient
@@ -3893,13 +3915,7 @@ expand_builtin (exp, target, subtarget, mode, ignore)
 	}
 
     case BUILT_IN_TRAP:
-#ifdef HAVE_trap
-      if (HAVE_trap)
-	emit_insn (gen_trap ());
-      else
-#endif
-	error ("__builtin_trap not supported by this target");
-      emit_barrier ();
+      expand_builtin_trap ();
       return const0_rtx;
 
     case BUILT_IN_PUTCHAR:
@@ -3960,8 +3976,16 @@ expand_builtin (exp, target, subtarget, mode, ignore)
     case BUILT_IN_PREFETCH:
       expand_builtin_prefetch (arglist);
       return const0_rtx;
-
-
+      
+    /* APPLE LOCAL begin constant cfstrings */
+    case BUILT_IN___CFSTRINGMAKECONSTANTSTRING:
+      /* if __builtin___CFStringMakeConstantString made it intact this far,
+	 past the constant folding, it means that the argument is not a 
+	 constant.  This is a no-no.  */
+      error ("CFString literal expression not constant");
+      return const0_rtx;
+    /* APPLE LOCAL end constant cfstrings */
+    
     default:			/* just do library call, if unknown builtin */
       error ("built-in function `%s' not currently supported",
 	     IDENTIFIER_POINTER (DECL_NAME (fndecl)));
@@ -4057,6 +4081,18 @@ fold_builtin (exp)
 	}
       break;
 
+    /* APPLE LOCAL begin constant cfstrings */
+    case BUILT_IN___CFSTRINGMAKECONSTANTSTRING:
+      if (validate_arglist (arglist, POINTER_TYPE, VOID_TYPE))
+	{
+	  tree offset_node;
+	  tree literal = string_constant (TREE_VALUE (arglist), &offset_node);
+
+	  if (literal)
+	    return build_cfstring_ascii (literal); 
+	}
+    /* APPLE LOCAL end constant cfstrings */
+    
     default:
       break;
     }

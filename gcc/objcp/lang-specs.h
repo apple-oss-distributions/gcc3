@@ -40,6 +40,7 @@ Boston, MA 02111-1307, USA.  */
        %{!fno-exceptions:-D__EXCEPTIONS}\
        -D__GXX_ABI_VERSION=100\
        %{ansi:-D__STRICT_ANSI__ -trigraphs -$} %(cpp_options)}\
+      %{E|S:%{@:%e-E and -S are not allowed with multiple -arch flags}}\
       %{E:\
 	  %{cpp-precomp:\
 	    %(cpp_precomp) -lang-objc++ %{!no-gcc:-D__GNUG__=%v1}\
@@ -62,28 +63,35 @@ Boston, MA 02111-1307, USA.  */
        -D__OBJC__ -D__cplusplus %(cpp_precomp_options) %y1\
        %{@:-o %f%u.pp}%{!@:%W{o}%W{!o*:-o %b-gcc3.pp}} \n}\
      %{!E:%{!M:%{!MM:%{!precomp:\
-       %{!save-temps:%{!fload=*:%{!fdump=*:%{cpp-precomp:%(cpp_precomp) -lang-objc++ \
+       %{!save-temps:%{!no-integrated-cpp:%{!fload=*:%{!fdump=*:%{cpp-precomp:%(cpp_precomp) -lang-objc++ \
 		    %{!no-gcc:-D__GNUG__=%v1}\
        		    %{!Wno-deprecated:-D__DEPRECATED}\
 		    %{!fno-exceptions:-D__EXCEPTIONS}\
 		    -D__GXX_ABI_VERSION=100\
 		    %{ansi:-D__STRICT_ANSI__ -trigraphs -$}\
-		    -D__OBJC__ -D__cplusplus %(cpp_precomp_options) %y1 %d%b.mii \n}}}}\
-       %{save-temps:cpp0 -lang-objc++ \
+		    -D__OBJC__ -D__cplusplus %(cpp_precomp_options) %y1 %d%g.mii \n}}}}}\
+       %{save-temps|no-integrated-cpp:%{!cpp-precomp|fdump=*|fload=*:cpp0 -lang-objc++ \
 		    %{!no-gcc:-D__GNUG__=%v1}\
        		    %{!Wno-deprecated:-D__DEPRECATED}\
 		    %{!fno-exceptions:-D__EXCEPTIONS}\
 		    -D__GXX_ABI_VERSION=100\
 		    %{ansi:-D__STRICT_ANSI__ -trigraphs -$}\
-		    %(cpp_options) %b.mii \n}\
-      cc1objplus %{save-temps:-fpreprocessed %b.mii}\
+		    %(cpp_options) %b.mii \n}}\
+       %{save-temps|no-integrated-cpp:%{cpp-precomp:%{!fdump=*:%{!fload=*:%(cpp_precomp) -lang-objc++ \
+		    %{!no-gcc:-D__GNUG__=%v1}\
+       		    %{!Wno-deprecated:-D__DEPRECATED}\
+		    %{!fno-exceptions:-D__EXCEPTIONS}\
+		    -D__GXX_ABI_VERSION=100\
+		    %{ansi:-D__STRICT_ANSI__ -trigraphs -$}\
+		    %(cpp_precomp_options) %y1 %b.mii \n}}}}\
+      cc1objplus %{save-temps|no-integrated-cpp:%{!cpp-precomp:-fpreprocessed} %{cpp-precomp:-cpp-precomp} %b.mii}\
               %{cpp-precomp:%{!fload=*:%{!fdump=*:-cpp-precomp %d%b.mii}}}\
-              %{!save-temps:%{!cpp-precomp|fload=*|fdump=*:%(cpp_options)\
+              %{!save-temps:%{!no-integrated-cpp:%{!cpp-precomp|fload=*|fdump=*:%(cpp_options)\
 			    %{!no-gcc:-D__GNUG__=%v1} \
        			    %{!Wno-deprecated:-D__DEPRECATED}\
 			    %{!fno-exceptions:-D__EXCEPTIONS}\
 			    -D__GXX_ABI_VERSION=100\
-			    %{ansi:-D__STRICT_ANSI__}}}\
+			    %{ansi:-D__STRICT_ANSI__}}}}\
        %{ansi:-trigraphs -$}\
        %(cc1_options) %{gen-decls} %2 %{+e1*}\
        %{!fsyntax-only:%(invoke_as)}}}}}",

@@ -214,8 +214,7 @@ no)	;;
 	;;
 esac
 ], 
-# Enable some checks by default for development versions of GCC
-[ac_checking=1; ac_tree_checking=1; ac_gc_checking=1;])
+[])
 if test x$ac_checking != x ; then
   AC_DEFINE(ENABLE_CHECKING, 1,
 [Define if you want more run-time sanity checks.  This one gets a grab
@@ -404,6 +403,13 @@ vax-*-*)
     stage1_cflags="-J"
   fi
   ;;
+powerpc-*-darwin*)
+  # The spiffy cpp-precomp chokes on some legitimate constructs in GCC
+  # sources; use -no-cpp-precomp to get to GNU cpp.
+  # Apple's GCC has bugs in designated initializer handling, so disable
+  # that too.
+  stage1_cflags="-no-cpp-precomp -DHAVE_DESIGNATED_INITIALIZERS=0"
+  ;;
 esac
 AC_SUBST(stage1_cflags)
 
@@ -461,6 +467,8 @@ AC_CHECK_HEADERS(limits.h stddef.h string.h strings.h stdlib.h time.h \
 		 fcntl.h unistd.h sys/file.h sys/time.h \
 		 sys/resource.h sys/param.h sys/times.h sys/stat.h \
 		 direct.h malloc.h langinfo.h)
+# APPLE LOCAL Mach time
+AC_CHECK_HEADERS(mach/mach_time.h)
 
 # Check for thread headers.
 AC_CHECK_HEADER(thread.h, [have_thread_h=yes], [have_thread_h=])
@@ -487,7 +495,7 @@ else
   # that we can use it.
   gcc_AC_CHECK_PROG_VER(MAKEINFO, makeinfo, --version,
   [GNU texinfo.* \([0-9][0-9.]*\)],
-  [4.*])
+  [4.[1-9]*])
 fi
 
 if test $gcc_cv_prog_makeinfo_modern = no; then
@@ -630,7 +638,7 @@ saved_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS -I${srcdir} -I${srcdir}/../include"
 gcc_AC_CHECK_DECLS(getenv atol sbrk abort atof getcwd getwd \
 	strsignal putc_unlocked fputs_unlocked fwrite_unlocked \
-        fprintf_unlocked strstr environ errno \
+        fprintf_unlocked strstr errno \
 	malloc realloc calloc free basename getopt clock, , ,[
 #include "ansidecl.h"
 #include "system.h"])
@@ -837,11 +845,11 @@ fi
 # If host=build, it is correct to have hconfig include auto-host.h
 # as well.  If host!=build, we are in error and need to do more 
 # work to find out the build config parameters.
-# APPLE LOCAL begin fat builds ilr
+# APPLE LOCAL begin fat builds  ilr
 host_darwin="`echo $host   | sed -e 's/.*-darwin$/darwin/'`"
 build_darwin="`echo $build | sed -e 's/.*-darwin$/darwin/'`"
 if test x$host = x$build -o "$host_darwin" = "$build_darwin" -a "$host_darwin" = "darwin"
-# APPLE LOCAL end fat builds ilr
+# APPLE LOCAL end fat builds  ilr
 then
 	build_auto=auto-host.h
 	FORBUILD=..
@@ -861,7 +869,7 @@ else
 	saved_CFLAGS="${CFLAGS}"
 	CC="${CC_FOR_BUILD}" CFLAGS="${CFLAGS_FOR_BUILD}" \
 	${realsrcdir}/configure \
-		--target=$target --host=$build --build=$build
+		--target=$target_alias --host=$build_alias --build=$build_alias
 	CFLAGS="${saved_CFLAGS}"
 
 	# We just finished tests for the build machine, so rename
@@ -875,9 +883,11 @@ fi
 AC_SUBST(FORBUILD)
 
 tm_file="${tm_file} defaults.h"
+host_xm_file="auto-host.h ansidecl.h ${host_xm_file} ${tm_file}"
+build_xm_file="${build_auto} ansidecl.h ${build_xm_file} ${tm_file}"
 # APPLE LOCAL begin PFE - always require pfe-config.h as part of a build.  ilr
-host_xm_file="auto-host.h ansidecl.h ${host_xm_file} ${tm_file} pfe-config.h"
-build_xm_file="${build_auto} ansidecl.h ${build_xm_file} ${tm_file} pfe-config.h"
+host_xm_file="${host_xm_file} pfe-config.h"
+build_xm_file="${build_xm_file} pfe-config.h"
 # APPLE LOCAL end PFE
 xm_file="ansidecl.h ${xm_file} ${tm_file}"
 
@@ -914,10 +924,10 @@ changequote([,])dnl
 # Internationalization
 PACKAGE=gcc
 VERSION="$gcc_version"
-AC_DEFINE_UNQUOTED(PACKAGE, "$PACKAGE",
-	[Define to the name of the distribution.])
+/* APPLE LOCAL begin fat builds  ilr */
 AC_DEFINE_UNQUOTED(VERSION, "$VERSION",
 	[Define to the version of the distribution.])
+/* APPLE LOCAL end fat builds  ilr */
 AC_SUBST(PACKAGE)
 AC_SUBST(VERSION)
 
@@ -1215,8 +1225,7 @@ changequote(,)dnl
 changequote([,])dnl
 fi
 
-if test "x$gcc_cv_as" = x -a x$host = x$target; then
-	# Native build.
+if test "x$gcc_cv_as" = x; then
 	# Search the same directories that the installed compiler will
 	# search.  Else we may find the wrong assembler and lose.  If we
 	# do not find a suitable assembler binary, then try the user's
@@ -1241,14 +1250,21 @@ if test "x$gcc_cv_as" = x -a x$host = x$target; then
 	# If the loop below does not find an assembler, then use whatever
 	# one we can find in the users's path.
 	# user's path.
-	gcc_cv_as=as$host_exeext
+	if test "x$program_prefix" != xNONE; then
+		gcc_cv_as=${program_prefix}as$host_exeext
+	else
+		gcc_cv_as=`echo as | sed ${program_transform_name}`$host_exeext
+	fi
 
-	test_dirs="$test_prefix/lib/gcc-lib/$target/$gcc_version \
-		   $test_prefix/lib/gcc-lib/$target \
-		   /usr/lib/gcc/$target/$gcc_version \
-		   /usr/lib/gcc/$target \
-		   $test_prefix/$target/bin/$target/$gcc_version \
-		   $test_prefix/$target/bin \
+	test_dirs="$test_prefix/lib/gcc-lib/$target_alias/$gcc_version \
+		   $test_prefix/lib/gcc-lib/$target_alias \
+		   /usr/lib/gcc/$target_alias/$gcc_version \
+		   /usr/lib/gcc/$target_alias \
+		   $test_prefix/$target_alias/bin/$target_alias/$gcc_version \
+		   $test_prefix/$target_alias/bin"
+
+	if test x$host = x$target; then
+	    test_dirs="$test_dirs \
 		   /usr/libexec \
 		   /usr/ccs/gcc \
 		   /usr/ccs/bin \
@@ -1259,9 +1275,10 @@ if test "x$gcc_cv_as" = x -a x$host = x$target; then
 		   /sysv/usr/lib/cmplrs/cc \
 		   /svr4/usr/lib/cmplrs/cc \
 		   /usr/bin"
+	fi
 
 	for dir in $test_dirs; do
-		if test -f $dir/as$host_exeext; then
+		if test -x $dir/as$host_exeext; then
 			gcc_cv_as=$dir/as$host_exeext
 			break;
 		fi
@@ -1304,8 +1321,7 @@ changequote(,)dnl
 changequote([,])dnl
 fi
 
-if test "x$gcc_cv_ld" = x -a x$host = x$target; then
-	# Native build.
+if test "x$gcc_cv_ld" = x; then
 	# Search the same directories that the installed compiler will
 	# search.  Else we may find the wrong linker and lose.  If we
 	# do not find a suitable linker binary, then try the user's
@@ -1330,14 +1346,21 @@ if test "x$gcc_cv_ld" = x -a x$host = x$target; then
 	# If the loop below does not find an linker, then use whatever
 	# one we can find in the users's path.
 	# user's path.
-	gcc_cv_ld=ld$host_exeext
+	if test "x$program_prefix" != xNONE; then
+		gcc_cv_ld=${program_prefix}ld$host_exeext
+	else
+		gcc_cv_ld=`echo ld | sed ${program_transform_name}`$host_exeext
+	fi
 
-	test_dirs="$test_prefix/lib/gcc-lib/$target/$gcc_version \
-		   $test_prefix/lib/gcc-lib/$target \
-		   /usr/lib/gcc/$target/$gcc_version \
-		   /usr/lib/gcc/$target \
-		   $test_prefix/$target/bin/$target/$gcc_version \
-		   $test_prefix/$target/bin \
+	test_dirs="$test_prefix/lib/gcc-lib/$target_alias/$gcc_version \
+		   $test_prefix/lib/gcc-lib/$target_alias \
+		   /usr/lib/gcc/$target_alias/$gcc_version \
+		   /usr/lib/gcc/$target_alias \
+		   $test_prefix/$target_alias/bin/$target_alias/$gcc_version \
+		   $test_prefix/$target_alias/bin"
+
+	if test x$host = x$target; then
+	    test_dirs="$test_dirs \
 		   /usr/libexec \
 		   /usr/ccs/gcc \
 		   /usr/ccs/bin \
@@ -1348,9 +1371,10 @@ if test "x$gcc_cv_ld" = x -a x$host = x$target; then
 		   /sysv/usr/lib/cmplrs/cc \
 		   /svr4/usr/lib/cmplrs/cc \
 		   /usr/bin"
+	fi
 
 	for dir in $test_dirs; do
-		if test -f $dir/ld$host_exeext; then
+		if test -x $dir/ld$host_exeext; then
 			gcc_cv_ld=$dir/ld$host_exeext
 			break;
 		fi
@@ -1366,9 +1390,10 @@ fi
 AC_MSG_CHECKING(what nm to use)
 if test -x nm$host_exeext; then
 	gcc_cv_nm=./nm$host_exeext
-elif test x$host = x$target; then
-	# Native build.
-	gcc_cv_nm=nm$host_exeext
+elif test "x$program_prefix" != xNONE; then
+	gcc_cv_nm=${program_prefix}nm$host_exeext
+else
+	gcc_cv_nm=`echo nm | sed ${program_transform_name}`$host_exeext
 fi
 AC_MSG_RESULT($gcc_cv_nm)
 
@@ -1376,9 +1401,10 @@ AC_MSG_RESULT($gcc_cv_nm)
 AC_MSG_CHECKING(what objdump to use)
 if test -x objdump$host_exeext; then
 	gcc_cv_objdump=./objdump$host_exeext
-elif test x$host = x$target; then
-	# Native build.
-	gcc_cv_objdump=objdump$host_exeext
+elif test "x$program_prefix" != xNONE; then
+	gcc_cv_objdump=${program_prefix}objdump$host_exeext
+else
+	gcc_cv_objdump=`echo objdump | sed ${program_transform_name}`$host_exeext
 fi
 AC_MSG_RESULT($gcc_cv_objdump)
 
@@ -1495,6 +1521,8 @@ if test x"$gcc_cv_as_hidden" = xyes; then
 		[Define if your assembler supports .hidden.])
 fi
 AC_MSG_RESULT($gcc_cv_as_hidden)
+libgcc_visibility=$gcc_cv_as_hidden
+AC_SUBST(libgcc_visibility)
 
 AC_MSG_CHECKING(assembler leb128 support)
 gcc_cv_as_leb128=no
@@ -1726,10 +1754,9 @@ EOF
 	if test x$gcc_cv_as != x -a x$gcc_cv_ld != x; then
 	    gcc_cv_as_sparc_ua_pcrel=no
 	    echo ".text; foo: nop; .data; .align 4; .byte 0; .uaword %r_disp32(foo)" > conftest.s
-	    if $gcc_cv_as -K PIC -o conftest.o conftest.s > /dev/null 2>&1; then
-		if $gcc_cv_ld -o conftest conftest.o -G > /dev/null 2>&1; then
-		    gcc_cv_as_sparc_ua_pcrel=yes
-		fi
+	    if $gcc_cv_as -K PIC -o conftest.o conftest.s > /dev/null 2>&1 \
+	       && $gcc_cv_ld -o conftest conftest.o -G > /dev/null 2>&1; then
+		gcc_cv_as_sparc_ua_pcrel=yes
 	    fi
 	    rm -f conftest.s conftest.o conftest
 	fi
@@ -1739,42 +1766,36 @@ EOF
 		[Define if your assembler and linker support unaligned PC relative relocs.])
     fi
 
-    case "$tm_file" in
-    *64*)
-	AC_CACHE_CHECK([for 64 bit support in assembler ($gcc_cv_as)],
-	    gcc_cv_as_flags64, [
-		if test -n "$gcc_cv_as"; then
-		    echo ".xword foo" > conftest.s
-		    gcc_cv_as_flags64=no
-		    for flag in "-xarch=v9" "-64 -Av9"; do
-			if $gcc_cv_as $flag -o conftest.o conftest.s \
-			    > /dev/null 2>&1; then
-			    gcc_cv_as_flags64=$flag
-			    break
-			fi
-		    done
-		    rm -f conftest.s conftest.o
-		else
-		    if test "$gas" = yes; then
-			gcc_cv_as_flags64="-64 -Av9"
+    AC_CACHE_CHECK([assembler and linker support unaligned pc related relocs against hidden symbols],
+	gcc_cv_as_sparc_ua_pcrel_hidden, [
+	if test "x$gcc_cv_as_sparc_ua_pcrel" = xyes; then
+	    gcc_cv_as_sparc_ua_pcrel_hidden=unknown
+	    if test x$gcc_cv_objdump != x; then
+	        gcc_cv_as_sparc_ua_pcrel_hidden=no
+		echo ".data; .align 4; .byte 0x31; .uaword %r_disp32(foo)" > conftest.s
+		echo ".byte 0x32, 0x33, 0x34; .global foo; .hidden foo" >> conftest.s
+		echo "foo: .skip 4" >> conftest.s
+		if $gcc_cv_as -K PIC -o conftest.o conftest.s > /dev/null 2>&1 \
+		   && $gcc_cv_ld -o conftest conftest.o -G > /dev/null 2>&1 \
+		   && $gcc_cv_objdump -s -j .data conftest 2> /dev/null \
+		      | grep ' 31000000 07323334' > /dev/null 2>&1; then
+		    if $gcc_cv_objdump -R conftest 2> /dev/null \
+		       | grep 'DISP32' > /dev/null 2>&1; then
+			:
 		    else
-			gcc_cv_as_flags64="-xarch=v9"
+			gcc_cv_as_sparc_ua_pcrel_hidden=yes
 		    fi
 		fi
-	])
-	if test "x$gcc_cv_as_flags64" = xno; then
-changequote(, )
-	    tmake_file=`echo " $tmake_file " | sed -e 's, sparc/t-sol2-64 , ,' -e 's,^ ,,' -e 's, $,,'`
-	    dep_tmake_file=`echo " $dep_tmake_file " | sed -e 's, [^ ]*/config/sparc/t-sol2-64 , ,' -e 's,^ ,,' -e 's, $,,'`
-changequote([, ])
+	    fi
+	    rm -f conftest.s conftest.o conftest
 	else
-	    AC_DEFINE_UNQUOTED(AS_SPARC64_FLAG, "$gcc_cv_as_flags64",
-			[Define if the assembler supports 64bit sparc.])
+	    gcc_cv_as_sparc_ua_pcrel_hidden="$gcc_cv_as_sparc_ua_pcrel"
 	fi
-	;;
-    *) gcc_cv_as_flags64=${gcc_cv_as_flags64-no}
-	;;
-    esac
+    ])
+    if test "x$gcc_cv_as_sparc_ua_pcrel_hidden" = xyes; then
+	AC_DEFINE(HAVE_AS_SPARC_UA_PCREL_HIDDEN, 1,
+		[Define if your assembler and linker support unaligned PC relative relocs against hidden symbols.])
+    fi
 
     if test "x$gcc_cv_as_flags64" != xno; then
 	AC_CACHE_CHECK([for assembler offsetable %lo() support],
@@ -1940,6 +1961,73 @@ if test x"$gcc_cv_as_gdwarf2_flag" = xyes; then
 [Define if your assembler supports the --gdwarf2 option.])
 fi
 AC_MSG_RESULT($gcc_cv_as_gdwarf2_flag)
+
+# APPLE LOCAL coalescing --matt
+AC_MSG_CHECKING([whether assembler supports weak section attribute.])
+cat > conftest.s  <<EOF
+.section __TEXT,text,coalesced,weak_definitions
+	.align 2
+	.globl foo
+foo:
+EOF
+apple_gcc_as_weak_section_attribute=no
+if $gcc_cv_as -o conftest.o conftest.s > /dev/null 2>&1 ; then
+  apple_gcc_as_weak_section_attribute="yes"
+fi
+rm -f conftest.s conftest.o
+if test x"$apple_gcc_as_weak_section_attribute" = xyes; then
+	AC_DEFINE(APPLE_WEAK_SECTION_ATTRIBUTE, 1,
+[APPLE LOCAL coalescing
+Define if your assembler supports weak section attribute.])
+AC_MSG_RESULT(yes)
+else
+AC_MSG_RESULT(no)
+fi
+
+AC_MSG_CHECKING([whether assembler supports weak assembler directive.])
+apple_gcc_as_weak_assembler_directive=no
+cat > conftest.s <<EOF
+.section __TEXT,text,coalesced
+	.align 2
+        .weak_definition foo
+	.globl foo
+foo:
+EOF
+if $gcc_cv_as -o conftest.o conftest.s > /dev/null 2>&1 ; then
+  apple_gcc_as_weak_assembler_directive="yes"
+fi
+rm -f conftest.s conftest.o
+if test x"$apple_gcc_as_weak_assembler_directive" = xyes; then
+	AC_DEFINE(APPLE_WEAK_ASSEMBLER_DIRECTIVE, 1,
+[APPLE LOCAL coalescing
+Define if your assembler supports weak assembler directives.])
+AC_MSG_RESULT(yes)
+else
+AC_MSG_RESULT(no)
+fi
+
+AC_MSG_CHECKING([whether assembler supports strip static syms assembler directive.])
+apple_gcc_as_strip_static_syms_assembler_directive=no
+cat > conftest.s <<EOF
+.section __TEXT,text,coalesced,no_toc+strip_static_syms
+        .weak_definition foo
+	.globl foo
+foo:
+EOF
+if $gcc_cv_as -o conftest.o conftest.s > /dev/null 2>&1 ; then
+  apple_gcc_as_strip_static_syms_assembler_directive="yes"
+fi
+rm -f conftest.s conftest.o
+if test x"$apple_gcc_as_strip_static_syms_assembler_directive" = xyes; then
+	AC_DEFINE(APPLE_STRIP_STATIC_SYMS_SECTION_ATTRIBUTE, 1,
+[APPLE LOCAL coalescing
+Define if your assembler supports strip static syms section attribute.])
+AC_MSG_RESULT(yes)
+else
+AC_MSG_RESULT(no)
+fi
+
+# APPLE LOCAL end coalescing --matt
 
 AC_MSG_CHECKING(assembler --gstabs support)
 gcc_cv_as_gstabs_flag=no
@@ -2217,6 +2305,7 @@ if test x${enable_build_gcc} = xyes; then
 else
   AC_MSG_RESULT(no)
 fi
+AC_SUBST(enable_build_gcc)
 # APPLE LOCAL end fat builds  ilr
 
 # Make empty files to contain the specs and options for each language.
@@ -2225,21 +2314,16 @@ fi
 lang_specs_files=
 lang_options_files=
 lang_tree_files=
-rm -f specs.h options.h gencheck.h
-touch specs.h options.h gencheck.h
 for subdir in . $subdirs
 do
 	if test -f $srcdir/$subdir/lang-specs.h; then
-		echo "#include \"$subdir/lang-specs.h\"" >>specs.h
-		lang_specs_files="$lang_specs_files $srcdir/$subdir/lang-specs.h"
+	    lang_specs_files="$lang_specs_files $srcdir/$subdir/lang-specs.h"
 	fi
 	if test -f $srcdir/$subdir/lang-options.h; then
-		echo "#include \"$subdir/lang-options.h\"" >>options.h
-		lang_options_files="$lang_options_files $srcdir/$subdir/lang-options.h"
+	    lang_options_files="$lang_options_files $srcdir/$subdir/lang-options.h"
 	fi
 	if test -f $srcdir/$subdir/$subdir-tree.def; then
-		echo "#include \"$subdir/$subdir-tree.def\"" >>gencheck.h
-		lang_tree_files="$lang_tree_files $srcdir/$subdir/$subdir-tree.def"
+	    lang_tree_files="$lang_tree_files $srcdir/$subdir/$subdir-tree.def"
 	fi
 done
 
@@ -2556,36 +2640,7 @@ if test x${enable_pfe} = xyes; then
   test ! -d pfe/memmgr && mkdir pfe/memmgr
 fi
 # APPLE LOCAL end PFE  ilr
-],
-[
-host='${host}'
-build='${build}'
-target='${target}'
-target_alias='${target_alias}'
-srcdir='${srcdir}'
-subdirs='${subdirs}'
-symbolic_link='${symbolic_link}'
-program_transform_set='${program_transform_set}'
-program_transform_name='${program_transform_name}'
-dep_host_xmake_file='${dep_host_xmake_file}'
-host_xmake_file='${host_xmake_file}'
-dep_tmake_file='${dep_tmake_file}'
-tmake_file='${tmake_file}'
-thread_file='${thread_file}'
-gcc_config_arguments='${gcc_config_arguments}'
-gcc_version='${gcc_version}'
-gcc_version_full='${gcc_version_full}'
-gcc_version_trigger='${gcc_version_trigger}'
-local_prefix='${local_prefix}'
-build_install_headers_dir='${build_install_headers_dir}'
-build_exeext='${build_exeext}'
-host_exeext='${host_exeext}'
-out_file='${out_file}'
-gdb_needs_out_file_path='${gdb_needs_out_file_path}'
-SET_MAKE='${SET_MAKE}'
-target_list='${target_list}'
-target_overrides='${target_overrides}'
-host_overrides='${host_overrides}'
-cpp_install_dir='${cpp_install_dir}'
-enable_pfe='${enable_pfe}'
+], 
+[subdirs='$subdirs'
+symbolic_link='$symbolic_link'
 ])

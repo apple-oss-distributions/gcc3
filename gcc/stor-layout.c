@@ -1,6 +1,6 @@
 /* C-compiler utilities for types and variables storage layout
    Copyright (C) 1987, 1988, 1992, 1993, 1994, 1995, 1996, 1996, 1998,
-   1999, 2000, 2001 Free Software Foundation, Inc.
+   1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -30,6 +30,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "expr.h"
 #include "toplev.h"
 #include "ggc.h"
+#include "target.h"
 
 /* Set to one when set_sizetype has been called.  */
 static int sizetype_set;
@@ -74,6 +75,15 @@ int immediate_size_expand;
 
 /* APPLE LOCAL bitfield alignment */
 extern int compiling_objc;
+
+/* APPLE LOCAL begin Macintosh alignment 2002-5-24 ff  */
+/* Keep track of whether we are laying out the first declared member
+   of a C++ class.  We need this flag to handle the case of classes
+   with v-tables where the test to see if the offset in the record
+   is zero is not sufficient to determine if we are dealing with the
+   first declared member.  */
+int darwin_align_is_first_member_of_class = 0;
+/* APPLE LOCAL end Macintosh alignment 2002-5-24 ff  */
 
 void
 internal_reference_types ()
@@ -515,6 +525,7 @@ start_record_layout (t)
 
   rli->offset = size_zero_node;
   rli->bitpos = bitsize_zero_node;
+  rli->prev_field = 0;
   rli->pending_statics = 0;
   rli->packed_maybe_necessary = 0;
 
@@ -800,20 +811,40 @@ place_field (rli, field)
 #endif
 
 #ifdef ADJUST_FIELD_ALIGN
-/* APPLE LOCAL begin Macintosh alignment 2002-2-26 ff */
+/* APPLE LOCAL begin Macintosh alignment 2002-5-24 ff */
   /* The third argument to ADJUST_FIELD_ALIGN indicates whether
      we are dealing with the first field of the structure.  */
   desired_align = ADJUST_FIELD_ALIGN (field, desired_align, 
-  				      integer_zerop (rli->offset)
-  				      && integer_zerop (rli->bitpos));
-/* APPLE LOCAL end Macintosh alignment 2002-2-26 ff */
+  				      (darwin_align_is_first_member_of_class 
+  				       == 1)	  
+				      || (integer_zerop (rli->offset)
+  				          && integer_zerop (rli->bitpos)));
+/* APPLE LOCAL end Macintosh alignment 2002-5-24 ff */
 #endif
 
   /* Record must have at least as much alignment as any field.
      Otherwise, the alignment of the field within the record is
      meaningless.  */
+  if ((* targetm.ms_bitfield_layout_p) (rli->t)
+      && type != error_mark_node
+      && DECL_BIT_FIELD_TYPE (field)
+      && ! integer_zerop (TYPE_SIZE (type))
+      && integer_zerop (DECL_SIZE (field)))
+    {
+      if (rli->prev_field
+	  && DECL_BIT_FIELD_TYPE (rli->prev_field)
+	  && ! integer_zerop (DECL_SIZE (rli->prev_field)))
+	{
+	  rli->record_align = MAX (rli->record_align, desired_align);
+	  rli->unpacked_align = MAX (rli->unpacked_align, TYPE_ALIGN (type));
+	}
+      else
+	desired_align = 1;
+    }	
+  else
 #ifdef PCC_BITFIELD_TYPE_MATTERS
   if (PCC_BITFIELD_TYPE_MATTERS && type != error_mark_node
+      && ! (* targetm.ms_bitfield_layout_p) (rli->t)
       && DECL_BIT_FIELD_TYPE (field)
       && ! integer_zerop (TYPE_SIZE (type)))
     {
@@ -909,13 +940,16 @@ place_field (rli, field)
      variable-sized fields, we need not worry about compatibility.  */
 #ifdef PCC_BITFIELD_TYPE_MATTERS
   if (PCC_BITFIELD_TYPE_MATTERS
+      && ! (* targetm.ms_bitfield_layout_p) (rli->t)
       && TREE_CODE (field) == FIELD_DECL
       && type != error_mark_node
       && DECL_BIT_FIELD (field)
       && ! DECL_PACKED (field)
       && maximum_field_alignment == 0
 /* APPLE LOCAL begin Macintosh alignment 2002-2-12 ff */
+#ifdef PEG_ALIGN_FOR_MAC68K
       && ! TARGET_ALIGN_MAC68K
+#endif
 /* APPLE LOCAL end Macintosh alignment 2002-2-12 ff */
       && ! integer_zerop (DECL_SIZE (field))
       && host_integerp (DECL_SIZE (field), 1)
@@ -941,6 +975,7 @@ place_field (rli, field)
 
 #ifdef BITFIELD_NBYTES_LIMITED
   if (BITFIELD_NBYTES_LIMITED
+      && ! (* targetm.ms_bitfield_layout_p) (rli->t)
       && TREE_CODE (field) == FIELD_DECL
       && type != error_mark_node
       && DECL_BIT_FIELD_TYPE (field)
@@ -980,6 +1015,50 @@ place_field (rli, field)
     }
 #endif
 
+  /* See the docs for TARGET_MS_BITFIELD_LAYOUT_P for details.  */
+  if ((* targetm.ms_bitfield_layout_p) (rli->t)
+      && TREE_CODE (field) == FIELD_DECL
+      && type != error_mark_node
+      && ! DECL_PACKED (field)
+      && rli->prev_field
+      && DECL_SIZE (field)
+      && host_integerp (DECL_SIZE (field), 1)
+      && DECL_SIZE (rli->prev_field)
+      && host_integerp (DECL_SIZE (rli->prev_field), 1)
+      && host_integerp (rli->offset, 1)
+      && host_integerp (TYPE_SIZE (type), 1)
+      && host_integerp (TYPE_SIZE (TREE_TYPE (rli->prev_field)), 1)
+      && ((DECL_BIT_FIELD_TYPE (rli->prev_field)
+	   && ! integer_zerop (DECL_SIZE (rli->prev_field)))
+	  || (DECL_BIT_FIELD_TYPE (field)
+	      && ! integer_zerop (DECL_SIZE (field))))
+      && (! simple_cst_equal (TYPE_SIZE (type),
+			      TYPE_SIZE (TREE_TYPE (rli->prev_field)))
+	  /* If the previous field was a zero-sized bit-field, either
+	     it was ignored, in which case we must ensure the proper
+	     alignment of this field here, or it already forced the
+	     alignment of this field, in which case forcing the
+	     alignment again is harmless.  So, do it in both cases.  */
+	  || (DECL_BIT_FIELD_TYPE (rli->prev_field)
+	      && integer_zerop (DECL_SIZE (rli->prev_field)))))
+    {
+      unsigned int type_align = TYPE_ALIGN (type);
+
+      if (rli->prev_field
+	  && DECL_BIT_FIELD_TYPE (rli->prev_field)
+	  /* If the previous bit-field is zero-sized, we've already
+	     accounted for its alignment needs (or ignored it, if
+	     appropriate) while placing it.  */
+	  && ! integer_zerop (DECL_SIZE (rli->prev_field)))
+	type_align = MAX (type_align,
+			  TYPE_ALIGN (TREE_TYPE (rli->prev_field)));
+
+      if (maximum_field_alignment != 0)
+	type_align = MIN (type_align, maximum_field_alignment);
+
+      rli->bitpos = round_up (rli->bitpos, type_align);
+    }
+
   /* Offset so far becomes the position of this field after normalizing.  */
   normalize_rli (rli);
   DECL_FIELD_OFFSET (field) = rli->offset;
@@ -1005,6 +1084,8 @@ place_field (rli, field)
 
   if (known_align != actual_align)
     layout_decl (field, actual_align);
+
+  rli->prev_field = field;
 
   /* Now add size of this field to the size of the record.  If the size is
      not constant, treat the field as being a multiple of bytes and just
@@ -1562,8 +1643,13 @@ layout_type (type)
 	    && (TYPE_MODE (TREE_TYPE (type)) != BLKmode
 		|| TYPE_NO_FORCE_BLK (TREE_TYPE (type))))
 	  {
-	    TYPE_MODE (type)
-	      = mode_for_size_tree (TYPE_SIZE (type), MODE_INT, 1);
+	    /* One-element arrays get the component type's mode.  */
+	    if (simple_cst_equal (TYPE_SIZE (type),
+				  TYPE_SIZE (TREE_TYPE (type))))
+	      TYPE_MODE (type) = TYPE_MODE (TREE_TYPE (type));
+	    else
+	      TYPE_MODE (type)
+		= mode_for_size_tree (TYPE_SIZE (type), MODE_INT, 1);
 
 	    if (TYPE_MODE (type) != BLKmode
 		&& STRICT_ALIGNMENT && TYPE_ALIGN (type) < BIGGEST_ALIGNMENT
@@ -1611,7 +1697,7 @@ layout_type (type)
     case SET_TYPE:  /* Used by Chill and Pascal.  */
       if (TREE_CODE (TYPE_MAX_VALUE (TYPE_DOMAIN (type))) != INTEGER_CST
 	  || TREE_CODE (TYPE_MIN_VALUE (TYPE_DOMAIN (type))) != INTEGER_CST)
-	abort();
+	abort ();
       else
 	{
 #ifndef SET_WORD_SIZE

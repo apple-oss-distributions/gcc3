@@ -167,6 +167,9 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #ifndef EPILOGUE_USES
 #define EPILOGUE_USES(REGNO)  0
 #endif
+#ifndef EH_USES
+#define EH_USES(REGNO)  0
+#endif
 
 #ifdef HAVE_conditional_execution
 #ifndef REVERSE_CONDEXEC_PREDICATES_P
@@ -280,14 +283,9 @@ struct propagate_block_info
    new elements on the floor.  */
 #define MAX_MEM_SET_LIST_LEN	100
 
-/* Have print_rtl_and_abort give the same information that fancy_abort
-   does.  */
-#define print_rtl_and_abort() \
-  print_rtl_and_abort_fcn (__FILE__, __LINE__, __FUNCTION__)
-
 /* Forward declarations */
 static int verify_wide_reg_1		PARAMS ((rtx *, void *));
-static void verify_wide_reg		PARAMS ((int, rtx, rtx));
+static void verify_wide_reg		PARAMS ((int, basic_block));
 static void verify_local_live_at_start	PARAMS ((regset, basic_block));
 static void notice_stack_pointer_modification_1 PARAMS ((rtx, rtx, void *));
 static void notice_stack_pointer_modification PARAMS ((rtx));
@@ -335,10 +333,6 @@ static void mark_used_regs		PARAMS ((struct propagate_block_info *,
 						 rtx, rtx, rtx));
 void dump_flow_info			PARAMS ((FILE *));
 void debug_flow_info			PARAMS ((void));
-static void print_rtl_and_abort_fcn	PARAMS ((const char *, int,
-						 const char *))
-					ATTRIBUTE_NORETURN;
-
 static void add_to_mem_set_list		PARAMS ((struct propagate_block_info *,
 						 rtx));
 static void invalidate_mems_from_autoinc PARAMS ((struct propagate_block_info *,
@@ -510,7 +504,8 @@ life_analysis (f, file, flags)
 }
 
 /* A subroutine of verify_wide_reg, called through for_each_rtx.
-   Search for REGNO.  If found, abort if it is not wider than word_mode.  */
+   Search for REGNO.  If found, return 2 if it is not wider than
+   word_mode.  */
 
 static int
 verify_wide_reg_1 (px, pregno)
@@ -523,34 +518,43 @@ verify_wide_reg_1 (px, pregno)
   if (GET_CODE (x) == REG && REGNO (x) == regno)
     {
       if (GET_MODE_BITSIZE (GET_MODE (x)) <= BITS_PER_WORD)
-	abort ();
+	return 2;
       return 1;
     }
   return 0;
 }
 
 /* A subroutine of verify_local_live_at_start.  Search through insns
-   between HEAD and END looking for register REGNO.  */
+   of BB looking for register REGNO.  */
 
 static void
-verify_wide_reg (regno, head, end)
+verify_wide_reg (regno, bb)
      int regno;
-     rtx head, end;
+     basic_block bb;
 {
+  rtx head = bb->head, end = bb->end;
+
   while (1)
     {
-      if (INSN_P (head)
-	  && for_each_rtx (&PATTERN (head), verify_wide_reg_1, &regno))
-	return;
+      if (INSN_P (head))
+	{
+	  int r = for_each_rtx (&PATTERN (head), verify_wide_reg_1, &regno);
+	  if (r == 1)
+	    return;
+	  if (r == 2)
+	    break;
+	}
       if (head == end)
 	break;
       head = NEXT_INSN (head);
     }
 
-  /* We didn't find the register at all.  Something's way screwy.  */
   if (rtl_dump_file)
-    fprintf (rtl_dump_file, "Aborting in verify_wide_reg; reg %d\n", regno);
-  print_rtl_and_abort ();
+    {
+      fprintf (rtl_dump_file, "Register %d died unexpectedly.\n", regno);
+      dump_bb (bb, rtl_dump_file);
+    }
+  abort ();
 }
 
 /* A subroutine of update_life_info.  Verify that there are no untoward
@@ -570,12 +574,13 @@ verify_local_live_at_start (new_live_at_start, bb)
 	  if (rtl_dump_file)
 	    {
 	      fprintf (rtl_dump_file,
-		       "live_at_start mismatch in bb %d, aborting\n",
+		       "live_at_start mismatch in bb %d, aborting\nNew:\n",
 		       bb->index);
-	      debug_bitmap_file (rtl_dump_file, bb->global_live_at_start);
 	      debug_bitmap_file (rtl_dump_file, new_live_at_start);
+	      fputs ("Old:\n", rtl_dump_file);
+	      dump_bb (bb, rtl_dump_file);
 	    }
-	  print_rtl_and_abort ();
+	  abort ();
 	}
     }
   else
@@ -591,14 +596,16 @@ verify_local_live_at_start (new_live_at_start, bb)
 	  if (REGNO_REG_SET_P (bb->global_live_at_start, i))
 	    {
 	      if (rtl_dump_file)
-		fprintf (rtl_dump_file,
-			 "Register %d died unexpectedly in block %d\n", i,
-			 bb->index);
-	      print_rtl_and_abort ();
+		{
+		  fprintf (rtl_dump_file,
+			   "Register %d died unexpectedly.\n", i);
+		  dump_bb (bb, rtl_dump_file);
+		}
+	      abort ();
 	    }
 
           /* Verify that the now-live register is wider than word_mode.  */
-	  verify_wide_reg (i, bb->head, bb->end);
+	  verify_wide_reg (i, bb);
 	});
     }
 }
@@ -629,6 +636,7 @@ update_life_info (blocks, extent, prop_flags)
   regset tmp;
   regset_head tmp_head;
   int i;
+  int stabilized_prop_flags = prop_flags;
 
   tmp = INITIALIZE_REG_SET (tmp_head);
 
@@ -672,8 +680,21 @@ update_life_info (blocks, extent, prop_flags)
 					      | PROP_KILL_DEAD_CODE));
 	    }
 
-	  if (! changed || ! cleanup_cfg (CLEANUP_EXPENSIVE))
+	  /* Don't pass PROP_SCAN_DEAD_CODE or PROP_KILL_DEAD_CODE to
+	     subsequent propagate_block calls, since removing or acting as
+	     removing dead code can affect global register liveness, which
+	     is supposed to be finalized for this call after this loop.  */
+	  stabilized_prop_flags
+	    &= ~(PROP_SCAN_DEAD_CODE | PROP_KILL_DEAD_CODE);
+
+	  if (! changed)
 	    break;
+
+	  /* We repeat regardless of what cleanup_cfg says.  If there were
+	     instructions deleted above, that might have been only a
+	     partial improvement (see MAX_MEM_SET_LIST_LEN usage).
+	     Further improvement may be possible.  */
+	  cleanup_cfg (CLEANUP_EXPENSIVE);
 	}
 
       /* If asked, remove notes from the blocks we'll update.  */
@@ -688,7 +709,7 @@ update_life_info (blocks, extent, prop_flags)
 	  basic_block bb = BASIC_BLOCK (i);
 
 	  COPY_REG_SET (tmp, bb->global_live_at_end);
-	  propagate_block (bb, tmp, NULL, NULL, prop_flags);
+	  propagate_block (bb, tmp, NULL, NULL, stabilized_prop_flags);
 
 	  if (extent == UPDATE_LIFE_LOCAL)
 	    verify_local_live_at_start (tmp, bb);
@@ -701,7 +722,8 @@ update_life_info (blocks, extent, prop_flags)
 	  basic_block bb = BASIC_BLOCK (i);
 
 	  COPY_REG_SET (tmp, bb->global_live_at_end);
-	  propagate_block (bb, tmp, NULL, NULL, prop_flags);
+
+	  propagate_block (bb, tmp, NULL, NULL, stabilized_prop_flags);
 
 	  if (extent == UPDATE_LIFE_LOCAL)
 	    verify_local_live_at_start (tmp, bb);
@@ -1073,6 +1095,11 @@ calculate_global_regs_live (blocks_in, blocks_out, flags)
 	}
     }
 
+  /* We clean aux when we remove the initially-enqueued bbs, but we
+     don't enqueue ENTRY and EXIT initially, so clean them upfront and
+     unconditionally.  */
+  ENTRY_BLOCK_PTR->aux = EXIT_BLOCK_PTR->aux = NULL;
+
   if (blocks_out)
     sbitmap_zero (blocks_out);
 
@@ -1107,21 +1134,40 @@ calculate_global_regs_live (blocks_in, blocks_out, flags)
 
       /* Begin by propagating live_at_start from the successor blocks.  */
       CLEAR_REG_SET (new_live_at_end);
-      for (e = bb->succ; e; e = e->succ_next)
-	{
-	  basic_block sb = e->dest;
 
-	  /* Call-clobbered registers die across exception and call edges.  */
-	  /* ??? Abnormal call edges ignored for the moment, as this gets
-	     confused by sibling call edges, which crashes reg-stack.  */
-	  if (e->flags & EDGE_EH)
-	    {
-	      bitmap_operation (tmp, sb->global_live_at_start,
-				call_used, BITMAP_AND_COMPL);
-	      IOR_REG_SET (new_live_at_end, tmp);
-	    }
-	  else
-	    IOR_REG_SET (new_live_at_end, sb->global_live_at_start);
+      if (bb->succ)
+	for (e = bb->succ; e; e = e->succ_next)
+	  {
+	    basic_block sb = e->dest;
+
+	    /* Call-clobbered registers die across exception and
+	       call edges.  */
+	    /* ??? Abnormal call edges ignored for the moment, as this gets
+	       confused by sibling call edges, which crashes reg-stack.  */
+	    if (e->flags & EDGE_EH)
+	      {
+		bitmap_operation (tmp, sb->global_live_at_start,
+				  call_used, BITMAP_AND_COMPL);
+		IOR_REG_SET (new_live_at_end, tmp);
+	      }
+	    else
+	      IOR_REG_SET (new_live_at_end, sb->global_live_at_start);
+
+	    /* If a target saves one register in another (instead of on
+	       the stack) the save register will need to be live for EH.  */
+	    if (e->flags & EDGE_EH)
+	      for (i = 0; i < FIRST_PSEUDO_REGISTER; i++)
+		if (EH_USES (i))
+		  SET_REGNO_REG_SET (new_live_at_end, i);
+	  }
+      else
+	{
+	  /* This might be a noreturn function that throws.  And
+	     even if it isn't, getting the unwind info right helps
+	     debugging.  */
+	  for (i = 0; i < FIRST_PSEUDO_REGISTER; i++)
+	    if (EH_USES (i))
+	      SET_REGNO_REG_SET (new_live_at_end, i);
 	}
 
       /* The all-important stack pointer must always be live.  */
@@ -1295,8 +1341,8 @@ calculate_global_regs_live (blocks_in, blocks_out, flags)
 
 
 /* This structure is used to pass parameters to an from the
-   the function find_regno_partial(). It is used to pass in the 
-   register number we are looking, as well as to return any rtx 
+   the function find_regno_partial(). It is used to pass in the
+   register number we are looking, as well as to return any rtx
    we find.  */
 
 typedef struct {
@@ -1308,7 +1354,7 @@ typedef struct {
 /* Find the rtx for the reg numbers specified in 'data' if it is
    part of an expression which only uses part of the register.  Return
    it in the structure passed in.  */
-static int 
+static int
 find_regno_partial (ptr, data)
      rtx *ptr;
      void *data;
@@ -1320,7 +1366,7 @@ find_regno_partial (ptr, data)
   if (*ptr == NULL_RTX)
     return 0;
 
-  switch (GET_CODE (*ptr)) 
+  switch (GET_CODE (*ptr))
     {
     case ZERO_EXTRACT:
     case SIGN_EXTRACT:
@@ -1333,7 +1379,7 @@ find_regno_partial (ptr, data)
       break;
 
     case SUBREG:
-      if (GET_CODE (SUBREG_REG (*ptr)) == REG 
+      if (GET_CODE (SUBREG_REG (*ptr)) == REG
 	  && REGNO (SUBREG_REG (*ptr)) == reg)
 	{
 	  param->retval = SUBREG_REG (*ptr);
@@ -1349,14 +1395,14 @@ find_regno_partial (ptr, data)
 }
 
 /* Process all immediate successors of the entry block looking for pseudo
-   registers which are live on entry. Find all of those whose first 
-   instance is a partial register reference of some kind, and initialize 
+   registers which are live on entry. Find all of those whose first
+   instance is a partial register reference of some kind, and initialize
    them to 0 after the entry block.  This will prevent bit sets within
-   registers whose value is unknown, and may contain some kind of sticky 
+   registers whose value is unknown, and may contain some kind of sticky
    bits we don't want.  */
 
 int
-initialize_uninitialized_subregs () 
+initialize_uninitialized_subregs ()
 {
   rtx insn;
   edge e;
@@ -1375,7 +1421,7 @@ initialize_uninitialized_subregs ()
 
 	  /* Find an insn which mentions the register we are looking for.
 	     Its preferable to have an instance of the register's rtl since
-	     there may be various flags set which we need to duplicate.  
+	     there may be various flags set which we need to duplicate.
 	     If we can't find it, its probably an automatic whose initial
 	     value doesn't matter, or hopefully something we don't care about.  */
 	  for (i = get_insns (); i && INSN_UID (i) != uid; i = NEXT_INSN (i))
@@ -1387,7 +1433,7 @@ initialize_uninitialized_subregs ()
 	      for_each_rtx (&i, find_regno_partial, &param);
 	      if (param.retval != NULL_RTX)
 		{
-		  insn = gen_move_insn (param.retval, 
+		  insn = gen_move_insn (param.retval,
 				        CONST0_RTX (GET_MODE (param.retval)));
 		  insert_insn_on_edge (insn, e);
 		  did_something = 1;
@@ -1566,7 +1612,7 @@ propagate_one_insn (pbi, insn)
 	      || (HAVE_sibcall_epilogue
 		  && sibcall_epilogue_contains (insn)))
 	  && find_reg_note (insn, REG_MAYBE_DEAD, NULL_RTX) == 0)
-	abort ();
+	fatal_insn ("Attempt to delete prologue/epilogue insn:", insn);
 
       /* Record sets.  Do this even for dead instructions, since they
 	 would have killed the values if they hadn't been deleted.  */
@@ -1633,6 +1679,7 @@ propagate_one_insn (pbi, insn)
     ;
   else
     {
+      rtx note;
       /* Any regs live at the time of a call instruction must not go
 	 in a register clobbered by calls.  Find all regs now live and
 	 record this for them.  */
@@ -1688,6 +1735,10 @@ propagate_one_insn (pbi, insn)
       /* Record uses.  */
       if (! insn_is_dead)
 	mark_used_regs (pbi, PATTERN (insn), NULL_RTX, insn);
+      if ((flags & PROP_EQUAL_NOTES)
+	  && ((note = find_reg_note (insn, REG_EQUAL, NULL_RTX))
+	      || (note = find_reg_note (insn, REG_EQUIV, NULL_RTX))))
+	mark_used_regs (pbi, XEXP (note, 0), NULL_RTX, insn);
 
       /* Sometimes we may have inserted something before INSN (such as a move)
 	 when we make an auto-inc.  So ensure we will scan those insns.  */
@@ -2010,7 +2061,7 @@ insn_dead_p (pbi, x, call_ok, notes)
       if (REG_NOTE_KIND (notes) == REG_INC)
 	{
 	  int regno = REGNO (XEXP (notes, 0));
-	  
+
 	  /* Don't delete insns to set global regs.  */
 	  if ((regno < FIRST_PSEUDO_REGISTER && global_regs[regno])
 	      || REGNO_REG_SET_P (pbi->reg_live, regno))
@@ -3534,6 +3585,10 @@ mark_used_reg (pbi, reg, cond, insn)
   /* Mark the register as being live.  */
   for (i = regno_first; i <= regno_last; ++i)
     {
+#ifdef HAVE_conditional_execution
+      int this_was_live = REGNO_REG_SET_P (pbi->reg_live, i);
+#endif
+
       SET_REGNO_REG_SET (pbi->reg_live, i);
 
 #ifdef HAVE_conditional_execution
@@ -3545,7 +3600,7 @@ mark_used_reg (pbi, reg, cond, insn)
 	  struct reg_cond_life_info *rcli;
 	  rtx ncond;
 
-	  if (some_was_live)
+	  if (this_was_live)
 	    {
 	      node = splay_tree_lookup (pbi->reg_cond_dead, i);
 	      if (node == NULL)
@@ -3587,7 +3642,7 @@ mark_used_reg (pbi, reg, cond, insn)
 	      SET_REGNO_REG_SET (pbi->reg_cond_reg, REGNO (XEXP (cond, 0)));
 	    }
 	}
-      else if (some_was_live)
+      else if (this_was_live)
 	{
 	  /* The register may have been conditionally live previously, but
 	     is now unconditionally live.  Remove it from the conditionally
@@ -3616,6 +3671,8 @@ mark_used_regs (pbi, x, cond, insn)
   int flags = pbi->flags;
 
  retry:
+  if (!x)
+    return;
   code = GET_CODE (x);
   switch (code)
     {
@@ -3624,6 +3681,7 @@ mark_used_regs (pbi, x, cond, insn)
     case CONST_INT:
     case CONST:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case PC:
     case ADDR_VEC:
     case ADDR_DIFF_VEC:
@@ -3974,13 +4032,13 @@ try_pre_increment (insn, reg, amount)
   use = 0;
   if (pre_ok)
     use = find_use_as_address (PATTERN (insn), reg, 0);
-  if (post_ok && (use == 0 || use == (rtx) 1))
+  if (post_ok && (use == 0 || use == (rtx) (size_t) 1))
     {
       use = find_use_as_address (PATTERN (insn), reg, -amount);
       do_post = 1;
     }
 
-  if (use == 0 || use == (rtx) 1)
+  if (use == 0 || use == (rtx) (size_t) 1)
     return 0;
 
   if (GET_MODE_SIZE (GET_MODE (use)) != (amount > 0 ? amount : - amount))
@@ -4008,7 +4066,7 @@ try_pre_increment (insn, reg, amount)
 
    If such an address does not appear, return 0.
    If REG appears more than once, or is used other than in such an address,
-   return (rtx)1.  */
+   return (rtx) 1.  */
 
 rtx
 find_use_as_address (x, reg, plusconst)
@@ -4036,11 +4094,11 @@ find_use_as_address (x, reg, plusconst)
       /* If REG occurs inside a MEM used in a bit-field reference,
 	 that is unacceptable.  */
       if (find_use_as_address (XEXP (x, 0), reg, 0) != 0)
-	return (rtx) (HOST_WIDE_INT) 1;
+	return (rtx) (size_t) 1;
     }
 
   if (x == reg)
-    return (rtx) (HOST_WIDE_INT) 1;
+    return (rtx) (size_t) 1;
 
   for (i = GET_RTX_LENGTH (code) - 1; i >= 0; i--)
     {
@@ -4050,7 +4108,7 @@ find_use_as_address (x, reg, plusconst)
 	  if (value == 0)
 	    value = tem;
 	  else if (tem != 0)
-	    return (rtx) (HOST_WIDE_INT) 1;
+	    return (rtx) (size_t) 1;
 	}
       else if (fmt[i] == 'E')
 	{
@@ -4061,7 +4119,7 @@ find_use_as_address (x, reg, plusconst)
 	      if (value == 0)
 		value = tem;
 	      else if (tem != 0)
-		return (rtx) (HOST_WIDE_INT) 1;
+		return (rtx) (size_t) 1;
 	    }
 	}
     }
@@ -4103,23 +4161,6 @@ debug_regset (r)
 {
   dump_regset (r, stderr);
   putc ('\n', stderr);
-}
-
-/* Dump the rtl into the current debugging dump file, then abort.  */
-
-static void
-print_rtl_and_abort_fcn (file, line, function)
-     const char *file;
-     int line;
-     const char *function;
-{
-  if (rtl_dump_file)
-    {
-      print_rtl_with_bb (rtl_dump_file, get_insns ());
-      fclose (rtl_dump_file);
-    }
-
-  fancy_abort (file, line, function);
 }
 
 /* Recompute register set/reference counts immediately prior to register

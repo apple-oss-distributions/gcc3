@@ -28,6 +28,7 @@ Boston, MA 02111-1307, USA.  */
 #include "rtl.h"
 #include "insn-config.h"
 #include "integrate.h"
+#include "flags.h"
 #include "langhooks.h"
 #include "langhooks-def.h"
 
@@ -153,8 +154,12 @@ lhd_tree_inlining_walk_subtrees (tp,subtrees,func,data,htab)
 
 int
 lhd_tree_inlining_cannot_inline_tree_fn (fnp)
-     tree *fnp ATTRIBUTE_UNUSED;
+     tree *fnp;
 {
+  if (flag_really_no_inline
+      && lookup_attribute ("always_inline", DECL_ATTRIBUTES (*fnp)) == NULL)
+    return 1;
+
   return 0;
 }
 
@@ -164,8 +169,11 @@ lhd_tree_inlining_cannot_inline_tree_fn (fnp)
 
 int
 lhd_tree_inlining_disregard_inline_limits (fn)
-     tree fn ATTRIBUTE_UNUSED;
+     tree fn;
 {
+  if (lookup_attribute ("always_inline", DECL_ATTRIBUTES (fn)) != NULL)
+    return 1;
+
   return 0;
 }
 
@@ -266,13 +274,36 @@ lhd_dump_tree_lineno_do_nothing (file, node)
 {
   return 0;
 }
+
+int 
+lhd_dmp_tree3_do_nothing (file, node, flags)
+     FILE *file ATTRIBUTE_UNUSED;
+     tree node ATTRIBUTE_UNUSED;
+     int flags ATTRIBUTE_UNUSED;
+{
+  return 0;
+}
 /* APPLE LOCAL end new tree dump */
 
 /* APPLE LOCAL PFE */
+/* Do nothing language hooks for PFE lang init.  */
+void 
+lhd_pfe_lang_init_do_nothing (lang)
+     int lang ATTRIBUTE_UNUSED;
+{
+}
+
 /* Do nothing language hooks for PFE.  */
 void
 lhd_pfe_freeze_thaw_compiler_state_do_nothing (pp) 
      struct pfe_lang_compiler_state **pp ATTRIBUTE_UNUSED;
+{
+}
+
+/* Do nothing language hooks for PFE.  */
+void
+lhd_pfe_check_settings_do_nothing (p) 
+     struct pfe_lang_compiler_state *p ATTRIBUTE_UNUSED;
 {
 }
 
@@ -303,6 +334,18 @@ void
 lhd_tree_inlining_end_inlining (fn)
      tree fn ATTRIBUTE_UNUSED;
 {
+}
+
+/* lang_hooks.tree_inlining.convert_parm_for_inlining performs any
+   language-specific conversion before assigning VALUE to PARM.  */
+
+tree
+lhd_tree_inlining_convert_parm_for_inlining (parm, value, fndecl)
+     tree parm ATTRIBUTE_UNUSED;
+     tree value;
+     tree fndecl ATTRIBUTE_UNUSED;
+{
+  return value;
 }
 
 /* lang_hooks.tree_dump.dump_tree:  Dump language-specific parts of tree 

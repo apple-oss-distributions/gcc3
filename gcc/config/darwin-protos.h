@@ -71,7 +71,8 @@ extern void machopic_finish PARAMS ((FILE *));
 /* APPLE LOCAL C++ EH */
 extern void darwin_asm_output_dwarf_delta PARAMS ((FILE *file, int size,
 						   const char *lab1,
-						   const char *lab2));
+						   const char *lab2,
+						   int force_reloc));
 
 extern void darwin_exception_section PARAMS ((void));
 extern void darwin_eh_frame_section PARAMS ((void));
@@ -87,6 +88,9 @@ extern void darwin_pragma_unused PARAMS ((cpp_reader *));
 extern void darwin_pragma_call_on_load PARAMS ((cpp_reader *));
 extern void darwin_pragma_call_on_unload PARAMS ((cpp_reader *));
 /* APPLE LOCAL end CALL_ON_LOAD/CALL_ON_UNLOAD pragmas  20020202 turly  */
+/* APPLE LOCAL begin CALL_ON_MODULE_BIND deprecated 2002-4-10 ff */
+extern void darwin_pragma_call_on_module_bind PARAMS ((cpp_reader *));
+/* APPLE LOCAL end CALL_ON_MODULE_BIND deprecated 2002-4-10 ff */
 /* APPLE LOCAL begin temporary pragmas 2001-07-05 sts */
 extern void darwin_pragma_cc_no_mach_text_sections PARAMS ((cpp_reader *));
 extern void darwin_pragma_cc_opt_off PARAMS ((cpp_reader *));
@@ -119,4 +123,13 @@ extern tree darwin_handle_odd_attribute (tree *, tree, tree, int, bool *);
    course during thawing *pp will be the pointer set when the function was
    originally called with a NULL argument.  */
 extern void darwin_pfe_freeze_thaw_target_additions PARAMS ((void *pp));
+
+/* This is called by pfe_savestring() to determine whether strings should be
+   treated  specially and not placed in PFE memory by pfe_savestring().  For
+   darwin there are actually some strings in this category.  See comments
+   for darwin_pfe_maybe_savestring() for details.  */
+extern int  darwin_pfe_maybe_savestring PARAMS ((char *));
+
+/* Called to check for consistent target-specific switches in pfe files.  */
+extern void darwin_pfe_check_target_settings PARAMS ((void));
 #endif

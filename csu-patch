@@ -1,3 +1,4 @@
+APPLE LOCAL file
 diff -u Csu-37-orig/crt.c Csu-37/crt.c
 --- Csu-37-orig/crt.c	Thu Jun 28 08:55:59 2001
 +++ Csu-37/crt.c	Fri Jan  4 09:40:36 2002

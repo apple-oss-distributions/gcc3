@@ -57,6 +57,9 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "pfe/objc-freeze-thaw.h"
 #endif
 
+/* APPLE LOCAL indexing */
+#include "genindex.h"
+
 static tree objcp_parmlist = NULL_TREE;
 
 /* Hacks to simulate start_struct() and finish_struct(). */
@@ -74,7 +77,15 @@ objcp_start_struct (code, name)
   if (!name)
      name = make_anon_name ();
   h = handle_class_head (ridpointers [RID_STRUCT], 0, name, 1, &new_scope);
+
+  /* APPLE LOCAL indexing dpatel */
+  flag_suppress_builtin_indexing = 1;
+
   s = begin_class_definition (TREE_TYPE (h));
+
+  /* APPLE LOCAL indexing dpatel */
+  flag_suppress_builtin_indexing = 0;
+
   return s;	
 }
 
@@ -84,6 +95,10 @@ objcp_finish_struct (t, fieldlist, attributes)
      tree fieldlist, attributes;
 {
   tree s, field, next_field;
+
+  /* APPLE LOCAL indexing dpatel */
+  flag_suppress_builtin_indexing = 1;
+
   for (field = fieldlist; field; field = next_field) 
   {
     next_field = TREE_CHAIN (field);      /* insert one field at a time;  */
@@ -91,6 +106,10 @@ objcp_finish_struct (t, fieldlist, attributes)
     finish_member_declaration (field);
   } 
   s = finish_class_definition (t, attributes, 1, 0);  
+
+  /* APPLE LOCAL indexing dpatel */
+  flag_suppress_builtin_indexing = 0;
+
   pop_lang_context ();
   return s;
 }

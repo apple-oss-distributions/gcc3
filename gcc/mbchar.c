@@ -273,7 +273,7 @@ local_mbtowc (pwc, s, n)
       return -1;  
     }
                
-  /* APPLE LOCAL  PHAT builds  */
+  /* APPLE LOCAL fat builds  */
 #if defined (CROSS_COMPILE) && !defined (PHAT)
   if (s == NULL)
     /* Not state-dependent.  */
@@ -321,7 +321,7 @@ local_mb_cur_max ()
   else if (! strcmp (literal_codeset, "C-JIS"))
     return 8; /* 3 + 2 + 3 */
 
-  /* APPLE LOCAL  PHAT builds  */
+  /* APPLE LOCAL fat builds  */
 #if defined (CROSS_COMPILE) && !defined (PHAT)
   return 1;
 #else

@@ -48,6 +48,9 @@ struct lang_hooks_for_tree_inlining
   int (*anon_aggr_type_p) PARAMS ((union tree_node *));
   int (*start_inlining) PARAMS ((union tree_node *));
   void (*end_inlining) PARAMS ((union tree_node *));
+  union tree_node *(*convert_parm_for_inlining) PARAMS ((union tree_node *,
+							 union tree_node *,
+							 union tree_node *));
 };
 
 /* APPLE LOCAL PFE */
@@ -167,10 +170,11 @@ struct lang_hooks
   void (*dump_identifier)   PARAMS ((FILE *, tree, int, int));
   int  (*dump_blank_line_p) PARAMS ((tree, tree));
   int  (*dump_lineno_p)     PARAMS ((FILE *, tree));
+  int  (*dmp_tree3)         PARAMS ((FILE *, tree, int));
   
   /* APPLE LOCAL PFE */
   /* Called to do language-specific PFE initialization.  */
-  void (*pfe_lang_init)		 PARAMS ((void));
+  void (*pfe_lang_init)		 PARAMS ((int));
   
   /* Called to freeze/thaw language specific compiler state.  */
   void (*pfe_freeze_thaw_compiler_state) PARAMS ((struct pfe_lang_compiler_state **));
@@ -185,6 +189,7 @@ struct lang_hooks
   /* Called to check the sizes of structs we freeze/thaw to see if
      any updates from FSF caused any changes.  */
   void (*pfe_check_all_struct_sizes) PARAMS ((void));
+  void (*pfe_check_settings) PARAMS ((struct pfe_lang_compiler_state *));
 
   struct lang_hooks_for_tree_inlining tree_inlining;
   

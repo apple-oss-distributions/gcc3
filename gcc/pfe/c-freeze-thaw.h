@@ -32,7 +32,7 @@ Boston, MA 02111-1307, USA.  */
 #include "c-tree.h"
 
 struct pfe_lang_compiler_state {
-  /* globals from c-lang.c.  */
+  /* globals from c-objc-common.c.  */
   varray_type deferred_fns;
 };
 
@@ -40,12 +40,13 @@ struct pfe_lang_compiler_state {
 extern void pfe_freeze_thaw_c_lang_globals PARAMS ((struct pfe_lang_compiler_state *));
 
 /* Language hooks (in c-freeze-thaw.c).  */
-extern void c_pfe_lang_init	         PARAMS ((void));
+extern void c_pfe_lang_init	         PARAMS ((int));
 extern void c_freeze_thaw_compiler_state PARAMS ((struct pfe_lang_compiler_state **));
 extern int c_pfe_freeze_thaw_decl        PARAMS ((union tree_node *));
 extern int c_pfe_freeze_thaw_type        PARAMS ((union tree_node *));
 extern int c_pfe_freeze_thaw_special     PARAMS ((union tree_node *));
 extern void c_pfe_check_all_struct_sizes PARAMS ((void));
+extern void c_pfe_check_settings 	 PARAMS ((struct pfe_lang_compiler_state *));
 
 #endif /* PFE */
 #endif /* ! GCC_PFE_C_HEADER_H */

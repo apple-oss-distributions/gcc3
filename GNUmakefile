@@ -1,3 +1,4 @@
+# APPLE LOCAL file build machinery
 # Apple GCC Compiler Makefile for use by buildit.  
 #
 # This makefile is intended only for use with B&I buildit. For "normal"
@@ -135,6 +136,7 @@ PREFIX = /usr
 
 std_include_dir = $(DSTROOT)/usr/include
 gcc_hdr_dir     = $(std_include_dir)/gcc/darwin/$(VERSION)
+gcc_man1_dir = $(DSTROOT)/usr/share/man/man1
 
 # Order of buildit events.
 # 1. installsrc
@@ -193,7 +195,8 @@ installhdrs: DSTROOT #cplusplus_hdrs
 	    	    gcc/ginclude/stdbool.h \
 	    	    `ls more-hdrs/*.h`; do \
 	    install -c -m 444 $$file $(gcc_hdr_dir) && \
-	    if [ "$(DO_HDR_SYMLINKS)" = yes ]; then \
+	    if [ "$(DO_HDR_SYMLINKS)" = yes -a \
+	    	 "$$file" != "more-hdrs/ppc_intrinsics.h" ]; then \
 	      file1=$${file##*/} && \
 	      rm -f $(std_include_dir)/$$file1 && \
 	      ln -s gcc/darwin/default/$$file1 $(std_include_dir); \
@@ -268,6 +271,18 @@ install_no_src:
 	    --targets="$(TARGETS)" \
 	    --prefix="$(PREFIX)" \
 	    --symlinks=$(DO_SYMLINKS)
+	mkdir -p $(gcc_man1_dir)
+	install -c -m 444 man-pages/gcc3.1 $(gcc_man1_dir)/gcc3.1
+	ln -s gcc3.1 $(gcc_man1_dir)/g++3.1
+	ln -s gcc3.1 $(gcc_man1_dir)/c++3.1
+	ln -s gcc3.1 $(gcc_man1_dir)/cc.1
+	ln -s gcc3.1 $(gcc_man1_dir)/c++.1
+	ln -s gcc3.1 $(gcc_man1_dir)/gcc.1
+	ln -s gcc3.1 $(gcc_man1_dir)/g++.1
+	install -c -m 444 man-pages/cpp3.1 $(gcc_man1_dir)/cpp3.1
+	ln -s cpp3.1 $(gcc_man1_dir)/cpp.1
+	install -c -m 444 man-pages/gcov3.1 $(gcc_man1_dir)/gcov3.1
+	ln -s gcov3.1 $(gcc_man1_dir)/gcov.1
 
 installsrc: SRCROOT
 	@echo

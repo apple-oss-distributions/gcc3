@@ -248,32 +248,8 @@ retry:
       break;
     
     default:
-      my_friendly_abort (108);
+      abort ();
     }
-}
-
-/* This is a wrapper around fancy_abort, as used in the back end and
-   other front ends.  It will also report the magic number assigned to
-   this particular abort.  That is for backward compatibility with the
-   old C++ abort handler, which would just report the magic number.  */
-void
-friendly_abort (where, file, line, func)
-     int where;
-     const char *file;
-     int line;
-     const char *func;
-{
-  if (errorcount > 0 || sorrycount > 0)
-    /* Say nothing.  */;
-  else if (where > 0)
-    {
-      error ("internal error #%d", where);
-
-      /* Uncount this error, so internal_error will do the right thing.  */
-      --errorcount;
-    }
-
-  fancy_abort (file, line, func);
 }
 
 
@@ -318,7 +294,7 @@ store_init_value (decl, init)
     {
       if (! TYPE_HAS_TRIVIAL_INIT_REF (type)
 	  && TREE_CODE (init) != CONSTRUCTOR)
-	my_friendly_abort (109);
+	abort ();
 
       if (TREE_CODE (init) == TREE_LIST)
 	{
@@ -482,6 +458,12 @@ digest_init (type, init, tail)
     /* __PRETTY_FUNCTION__'s initializer is a bogus expression inside
        a template function. This gets substituted during instantiation. */
     return init;
+
+  /* We must strip the outermost array type when completing the type,
+     because the its bounds might be incomplete at the moment.  */
+  if (!complete_type_or_else (TREE_CODE (type) == ARRAY_TYPE
+			      ? TREE_TYPE (type) : type, NULL_TREE))
+    return error_mark_node;
   
   /* Strip NON_LVALUE_EXPRs since we aren't using as an lvalue.  */
   if (TREE_CODE (init) == NON_LVALUE_EXPR)
@@ -570,7 +552,7 @@ digest_init (type, init, tail)
 
   if (code == INTEGER_TYPE || code == REAL_TYPE || code == POINTER_TYPE
       || code == ENUMERAL_TYPE || code == REFERENCE_TYPE
-      || code == BOOLEAN_TYPE || code == COMPLEX_TYPE || code == VECTOR_TYPE
+      || code == BOOLEAN_TYPE || code == COMPLEX_TYPE
       || TYPE_PTRMEMFUNC_P (type))
     {
       if (raw_constructor)
@@ -604,7 +586,7 @@ digest_init (type, init, tail)
       return error_mark_node;
     }
 
-  if (code == ARRAY_TYPE || IS_AGGR_TYPE_CODE (code))
+  if (code == ARRAY_TYPE || code == VECTOR_TYPE || IS_AGGR_TYPE_CODE (code))
     {
       if (raw_constructor && TYPE_NON_AGGREGATE_CLASS (type)
 	  && TREE_HAS_CONSTRUCTOR (init))
@@ -685,18 +667,26 @@ process_init_constructor (type, init, elts)
      for each element of this aggregate.  Chain them together in result.
      If there are too few, use 0 for each scalar ultimate component.  */
 
-  if (TREE_CODE (type) == ARRAY_TYPE)
+  if (TREE_CODE (type) == ARRAY_TYPE || TREE_CODE (type) == VECTOR_TYPE)
     {
-      tree domain = TYPE_DOMAIN (type);
       register long len;
       register int i;
 
-      if (domain)
-	len = (TREE_INT_CST_LOW (TYPE_MAX_VALUE (domain))
-	       - TREE_INT_CST_LOW (TYPE_MIN_VALUE (domain))
-	       + 1);
+      if (TREE_CODE (type) == ARRAY_TYPE)
+	{
+	  tree domain = TYPE_DOMAIN (type);
+	  if (domain)
+	    len = (TREE_INT_CST_LOW (TYPE_MAX_VALUE (domain))
+		   - TREE_INT_CST_LOW (TYPE_MIN_VALUE (domain))
+		   + 1);
+	  else
+	    len = -1;  /* Take as many as there are */
+	}
       else
-	len = -1;  /* Take as many as there are */
+	{
+	  /* Vectors are like simple fixed-size arrays.  */
+	  len = TYPE_VECTOR_SUBPARTS (type);
+	}
 
       for (i = 0; len < 0 || i < len; i++)
 	{
@@ -933,7 +923,7 @@ process_init_constructor (type, init, elts)
 	  next1 = digest_init (TREE_TYPE (field),
 			       TREE_VALUE (tail), &tail1);
 	  if (tail1 != 0 && TREE_CODE (tail1) != TREE_LIST)
-	    my_friendly_abort (357);
+	    abort ();
 	  tail = tail1;
 	}
       else

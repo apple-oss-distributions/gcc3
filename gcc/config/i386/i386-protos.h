@@ -108,6 +108,7 @@ extern rtx i386_simplify_dwarf_addr PARAMS ((rtx));
 
 extern void ix86_expand_clear PARAMS ((rtx));
 extern void ix86_expand_move PARAMS ((enum machine_mode, rtx[]));
+extern void ix86_expand_vector_move PARAMS ((enum machine_mode, rtx[]));
 extern void ix86_expand_binary_operator PARAMS ((enum rtx_code,
 					       enum machine_mode, rtx[]));
 extern int ix86_binary_operator_ok PARAMS ((enum rtx_code, enum machine_mode,
@@ -168,6 +169,7 @@ extern int ix86_memory_move_cost PARAMS ((enum machine_mode, enum reg_class,
 extern void ix86_set_move_mem_attrs PARAMS ((rtx, rtx, rtx, rtx, rtx));
 extern void emit_i387_cw_initialization PARAMS ((rtx, rtx));
 extern bool ix86_fp_jump_nontrivial_p PARAMS ((enum rtx_code));
+extern void x86_order_regs_for_local_alloc PARAMS ((void));
 
 
 #ifdef TREE_CODE
@@ -177,7 +179,6 @@ extern void function_arg_advance PARAMS ((CUMULATIVE_ARGS *, enum machine_mode,
 					tree, int));
 extern rtx ix86_function_value PARAMS ((tree));
 extern void ix86_init_builtins PARAMS ((void));
-extern void ix86_init_mmx_sse_builtins PARAMS ((void));
 extern rtx ix86_expand_builtin PARAMS ((tree, rtx, rtx, enum machine_mode, int));
 #endif
 

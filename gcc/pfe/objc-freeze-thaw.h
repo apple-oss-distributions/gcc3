@@ -50,16 +50,24 @@ struct pfe_lang_compiler_state {
   /* Hash tables to manage the global pool of method prototypes.  */
   hash *nst_method_hash_list;
   hash *cls_method_hash_list;
-  varray_type deferred_fns;
+  int selector_ref_idx;
+  int class_names_idx;
+  int meth_var_names_idx;
+  int meth_var_types_idx;
+  int class_ref_idx;
 };
 
 /* Language hooks (in objc-freeze-thaw.c).  */
-extern void objc_pfe_lang_init	 	    PARAMS ((void));
+extern void objc_pfe_lang_init	 	    PARAMS ((int));
 extern void objc_freeze_thaw_compiler_state PARAMS ((struct pfe_lang_compiler_state **));
 extern int objc_pfe_freeze_thaw_decl        PARAMS ((union tree_node *));
 extern int objc_pfe_freeze_thaw_type        PARAMS ((union tree_node *));
 extern int objc_pfe_freeze_thaw_special	    PARAMS ((union tree_node *));
 extern void objc_pfe_check_all_struct_sizes PARAMS ((void));
+extern void objc_pfe_check_settings         PARAMS ((struct pfe_lang_compiler_state *));
+
+/* objc/objc-act.c */
+extern void pfe_freeze_thaw_objc_act_globals PARAMS ((struct pfe_lang_compiler_state *));
 
 /* Macros.  */
 #define PFE_FREEZE_THAW_GLOBAL_HASH_ENTRY(g) \

@@ -54,6 +54,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "toplev.h"
 #include "predict.h"
 #include "insn-flags.h"
+#include "optabs.h"
 
 /* Not really meaningful values, but at least something.  */
 #ifndef SIMULTANEOUS_PREFETCHES
@@ -64,6 +65,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #endif
 #ifndef HAVE_prefetch
 #define HAVE_prefetch 0
+#define CODE_FOR_prefetch 0
 #define gen_prefetch(a,b,c) (abort(), NULL_RTX)
 #endif
 
@@ -245,6 +247,7 @@ FILE *loop_dump_stream;
 
 /* Forward declarations.  */
 
+static void invalidate_loops_containing_label PARAMS ((rtx));
 static void find_and_verify_loops PARAMS ((rtx, struct loops *));
 static void mark_loop_jump PARAMS ((rtx, struct loop *));
 static void prescan_loop PARAMS ((struct loop *));
@@ -772,6 +775,9 @@ scan_loop (loop, flags)
       if (GET_CODE (p) == INSN
 	  && (set = single_set (p))
 	  && GET_CODE (SET_DEST (set)) == REG
+#ifdef PIC_OFFSET_TABLE_REG_CALL_CLOBBERED
+	  && SET_DEST (set) != pic_offset_table_rtx
+#endif
 	  && ! regs->array[REGNO (SET_DEST (set))].may_not_optimize)
 	{
 	  int tem1 = 0;
@@ -875,6 +881,11 @@ scan_loop (loop, flags)
 		 once if we are in a loop with calls (a "large loop"), see if
 		 we can replace the usage of this register with the source
 		 of this SET.  If we can, delete this insn.
+		
+		 APPLE LOCAL: Don't do this if the source of the SET is
+		 a memory reference.  We generally want to move loads out of
+		 loops when possible.  I haven't experimented, but I suspect
+		 this is not true on x86, so the change is ppc-only.
 
 		 Don't do this if P has a REG_RETVAL note or if we have
 		 SMALL_REGISTER_CLASSES and SET_SRC is a hard register.  */
@@ -898,6 +909,11 @@ scan_loop (loop, flags)
 		  && ! modified_between_p (SET_SRC (set), p,
 					   regs->array[regno].single_usage)
 		  && no_labels_between_p (p, regs->array[regno].single_usage)
+		  /* APPLE LOCAL */
+#ifdef TARGET_POWERPC
+		  && GET_CODE (SET_SRC (set)) != MEM
+#endif
+		  /* APPLE LOCAL end */
 		  && validate_replace_rtx (SET_DEST (set), SET_SRC (set),
 					   regs->array[regno].single_usage))
 		{
@@ -1109,7 +1125,25 @@ scan_loop (loop, flags)
      optimizing for code size.  */
 
   if (! optimize_size)
-    move_movables (loop, movables, threshold, insn_count);
+    {
+      move_movables (loop, movables, threshold, insn_count);
+
+      /* Recalculate regs->array if move_movables has created new
+	 registers.  */
+      if (max_reg_num () > regs->num)
+	{
+	  loop_regs_scan (loop, 0);
+	  for (update_start = loop_start;
+	       PREV_INSN (update_start)
+	       && GET_CODE (PREV_INSN (update_start)) != CODE_LABEL;
+	       update_start = PREV_INSN (update_start))
+	    ;
+	  update_end = NEXT_INSN (loop_end);
+
+	  reg_scan_update (update_start, update_end, loop_max_reg);
+	  loop_max_reg = max_reg_num ();
+	}
+    }
 
   /* Now candidates that still are negative are those not moved.
      Change regs->array[I].set_in_loop to indicate that those are not actually
@@ -2491,6 +2525,8 @@ prescan_loop (loop)
 	      loop_info->unknown_address_altered = 1;
 	      loop_info->has_nonconst_call = 1;
 	    }
+	  else if (pure_call_p (insn))
+	    loop_info->has_nonconst_call = 1;
 	  loop_info->has_call = 1;
 	  if (can_throw_internal (insn))
 	    loop_info->has_multiple_exit_targets = 1;
@@ -2503,16 +2539,17 @@ prescan_loop (loop)
 
 	      if (set)
 		{
+		  rtx src = SET_SRC (set);
 		  rtx label1, label2;
 
-		  if (GET_CODE (SET_SRC (set)) == IF_THEN_ELSE)
+		  if (GET_CODE (src) == IF_THEN_ELSE)
 		    {
-		      label1 = XEXP (SET_SRC (set), 1);
-		      label2 = XEXP (SET_SRC (set), 2);
+		      label1 = XEXP (src, 1);
+		      label2 = XEXP (src, 2);
 		    }
 		  else
 		    {
-		      label1 = SET_SRC (PATTERN (insn));
+		      label1 = src;
 		      label2 = NULL_RTX;
 		    }
 
@@ -2606,6 +2643,17 @@ prescan_loop (loop)
     }
 }
 
+/* Invalidate all loops containing LABEL.  */
+
+static void
+invalidate_loops_containing_label (label)
+     rtx label;
+{
+  struct loop *loop;
+  for (loop = uid_loop[INSN_UID (label)]; loop; loop = loop->outer)
+    loop->invalid = 1;
+}
+
 /* Scan the function looking for loops.  Record the start and end of each loop.
    Also mark as invalid loops any loops that contain a setjmp or are branched
    to from outside the loop.  */
@@ -2692,17 +2740,14 @@ find_and_verify_loops (f, loops)
 
   /* Any loop containing a label used in an initializer must be invalidated,
      because it can be jumped into from anywhere.  */
-
   for (label = forced_labels; label; label = XEXP (label, 1))
-    {
-      for (loop = uid_loop[INSN_UID (XEXP (label, 0))];
-	   loop; loop = loop->outer)
-	loop->invalid = 1;
-    }
+    invalidate_loops_containing_label (XEXP (label, 0));
 
   /* Any loop containing a label used for an exception handler must be
      invalidated, because it can be jumped into from anywhere.  */
+  for_each_eh_label (invalidate_loops_containing_label);
 
+#if 0 /* APPLE MERGE move local patch elsewhere? */
   for (label = exception_handler_labels; label; label = XEXP (label, 1))
     {
       /* APPLE LOCAL  ensure EH label is within loop bounds.  */
@@ -2711,6 +2756,7 @@ find_and_verify_loops (f, loops)
 	     loop; loop = loop->outer)
 	  loop->invalid = 1;
     }
+#endif
 
   /* Now scan all insn's in the function.  If any JUMP_INSN branches into a
      loop that it is not contained within, that loop is marked invalid.
@@ -2734,11 +2780,7 @@ find_and_verify_loops (f, loops)
 	  {
 	    rtx note = find_reg_note (insn, REG_LABEL, NULL_RTX);
 	    if (note)
-	      {
-		for (loop = uid_loop[INSN_UID (XEXP (note, 0))];
-		     loop; loop = loop->outer)
-		  loop->invalid = 1;
-	      }
+	      invalidate_loops_containing_label (XEXP (note, 0));
 	  }
 
 	if (GET_CODE (insn) != JUMP_INSN)
@@ -3249,7 +3291,7 @@ loop_invariant_p (loop, x)
 	 since the reg might be set by initialization within the loop.  */
 
       if ((x == frame_pointer_rtx || x == hard_frame_pointer_rtx
-	   || x == arg_pointer_rtx)
+	   || x == arg_pointer_rtx || x == pic_offset_table_rtx)
 	  && ! current_function_has_nonlocal_goto)
 	return 1;
 
@@ -3702,8 +3744,19 @@ remove_constant_addition (x)
   HOST_WIDE_INT addval = 0;
   rtx exp = *x;
 
+  /* Avoid clobbering a shared CONST expression.  */
   if (GET_CODE (exp) == CONST)
-    exp = XEXP (exp, 0);
+    {
+      if (GET_CODE (XEXP (exp, 0)) == PLUS
+	  && GET_CODE (XEXP (XEXP (exp, 0), 0)) == SYMBOL_REF
+	  && GET_CODE (XEXP (XEXP (exp, 0), 1)) == CONST_INT)
+	{
+	  *x = XEXP (XEXP (exp, 0), 0);
+	  return INTVAL (XEXP (XEXP (exp, 0), 1));
+	}
+      return 0;
+    }
+
   if (GET_CODE (exp) == CONST_INT)
     {
       addval = INTVAL (exp);
@@ -4043,6 +4096,11 @@ emit_prefetch_instructions (loop)
 		  loc = reg;
 		}
 
+	      /* Make sure the address operand is valid for prefetch.  */
+	      if (! (*insn_data[(int)CODE_FOR_prefetch].operand[0].predicate)
+		    (loc,
+		     insn_data[(int)CODE_FOR_prefetch].operand[0].mode))
+		loc = force_reg (Pmode, loc);
 	      emit_insn_before (gen_prefetch (loc, GEN_INT (info[i].write),
 		                              GEN_INT (3)),
 				before_insn);
@@ -4834,6 +4892,24 @@ loop_giv_reduce_benefit (loop, bl, v, test_reg)
      determining code size than run-time benefits.  */
   benefit -= add_cost * bl->biv_count;
 
+  /* APPLE LOCAL */
+#ifdef TARGET_POWERPC
+  /* Adjust this computation to allow for the likelihood that the
+     original increment of the biv will be deleted.  This permits
+     induction variables to be selected correctly in simple
+     cases like for(i){a[i]=42;}  Without this, choice of induction
+     variables is sensitive to whether the relative stack offset of
+     a is 0 or not(!)  On x86 it is probably superior to be more
+     conservative, as there aren't enough registers.  */
+  if ( v->replaceable && bl->eliminable )
+    {
+      int orig_add_cost = iv_add_mult_cost (bl->biv->add_val, 
+				bl->biv->mult_val, test_reg, test_reg);
+      benefit += orig_add_cost * bl->biv_count;
+    }
+#endif
+  /* APPLE LOCAL end */
+
   /* Decide whether to strength-reduce this giv or to leave the code
      unchanged (recompute it from the biv each time it is used).  This
      decision can be made independently for each giv.  */
@@ -5139,14 +5215,36 @@ strength_reduce (loop, flags)
 	     Reversed bivs already have an insn after the loop setting their
 	     value, so we don't need another one.  We can't calculate the
 	     proper final value for such a biv here anyways.  */
+
 	  if (bl->final_value && ! bl->reversed)
-	      loop_insn_sink_or_swim (loop, gen_move_insn
-				      (bl->biv->dest_reg, bl->final_value));
+              /* APPLE LOCAL put this insn after the loop in all cases.
+		 Putting it before the loop can cause problems in an
+	         obscure case.  "a" is the variable we're currently
+		 looking at: 
+                  b <- a
+                  loop beginning
+                  b++;   and references
+                  a++;   no references
+                 if we put the final value for a before the loop, then
+                 eliminate b in favor of c later on, we'll get this
+                 before the loop:
+                  b <- a
+                  a <- final value
+                  c <- a
+                 which is no good 
+              */
+	      loop_insn_sink (loop, gen_move_insn (bl->biv->dest_reg,
+						 bl->final_value));
 
 	  if (loop_dump_stream)
 	    fprintf (loop_dump_stream, "Reg %d: biv eliminated\n",
 		     bl->regno);
 	}
+      /* See above note wrt final_value.  But since we couldn't eliminate
+	 the biv, we must set the value after the loop instead of before.  */
+      else if (bl->final_value && ! bl->reversed)
+	loop_insn_sink (loop, gen_move_insn (bl->biv->dest_reg,
+					     bl->final_value));
     }
 
   /* Go through all the instructions in the loop, making all the
@@ -5193,7 +5291,8 @@ strength_reduce (loop, flags)
      collected.  Always unroll loops that would be as small or smaller
      unrolled than when rolled.  */
   if ((flags & LOOP_UNROLL)
-      || (loop_info->n_iterations > 0
+      || (!(flags & LOOP_FIRST_PASS)
+	  && loop_info->n_iterations > 0
 	  && unrolled_insn_copies <= insn_count))
     unroll_loop (loop, insn_count, 1);
 
@@ -6126,13 +6225,13 @@ basic_induction_var (loop, x, mode, dest_reg, p, inc_val, mult_val, location)
       return 1;
 
     case SUBREG:
-      /* If this is a SUBREG for a promoted variable, check the inner
-	 value.  */
-      if (SUBREG_PROMOTED_VAR_P (x))
-	return basic_induction_var (loop, SUBREG_REG (x),
-				    GET_MODE (SUBREG_REG (x)),
-				    dest_reg, p, inc_val, mult_val, location);
-      return 0;
+      /* If what's inside the SUBREG is a BIV, then the SUBREG.  This will
+	 handle addition of promoted variables.
+	 ??? The comment at the start of this function is wrong: promoted
+	 variable increments don't look like it says they do.  */
+      return basic_induction_var (loop, SUBREG_REG (x),
+				  GET_MODE (SUBREG_REG (x)),
+				  dest_reg, p, inc_val, mult_val, location);
 
     case REG:
       /* If this register is assigned in a previous insn, look at its
@@ -6194,10 +6293,11 @@ basic_induction_var (loop, x, mode, dest_reg, p, inc_val, mult_val, location)
     case CONST:
       /* convert_modes aborts if we try to convert to or from CCmode, so just
          exclude that case.  It is very unlikely that a condition code value
-	 would be a useful iterator anyways.  */
+	 would be a useful iterator anyways.  convert_modes aborts if we try to
+	 convert a float mode to non-float or vice versa too.  */
       if (loop->level == 1
-	  && GET_MODE_CLASS (mode) != MODE_CC
-	  && GET_MODE_CLASS (GET_MODE (dest_reg)) != MODE_CC)
+	  && GET_MODE_CLASS (mode) == GET_MODE_CLASS (GET_MODE (dest_reg))
+	  && GET_MODE_CLASS (mode) != MODE_CC)
 	{
 	  /* Possible bug here?  Perhaps we don't know the mode of X.  */
 	  *inc_val = convert_modes (GET_MODE (dest_reg), mode, x, 0);
@@ -7641,9 +7741,9 @@ loop_regs_update (loop, seq)
     }
   else
     {
-      rtx set = single_set (seq);
-      if (set && GET_CODE (SET_DEST (set)) == REG)
-	record_base_value (REGNO (SET_DEST (set)), SET_SRC (set), 0);
+      if (GET_CODE (seq) == SET
+	  && GET_CODE (SET_DEST (seq)) == REG)
+	record_base_value (REGNO (SET_DEST (seq)), SET_SRC (seq), 0);
     }
 }
 
@@ -7669,7 +7769,7 @@ loop_iv_add_mult_emit_before (loop, b, m, a, reg, before_bb, before_insn)
     }
 
   /* Use copy_rtx to prevent unexpected sharing of these rtx.  */
-  seq = gen_add_mult (copy_rtx (b), m, copy_rtx (a), reg);
+  seq = gen_add_mult (copy_rtx (b), copy_rtx (m), copy_rtx (a), reg);
 
   /* Increase the lifetime of any invariants moved further in code.  */
   update_reg_last_use (a, before_insn);
@@ -7697,7 +7797,7 @@ loop_iv_add_mult_sink (loop, b, m, a, reg)
   rtx seq;
 
   /* Use copy_rtx to prevent unexpected sharing of these rtx.  */
-  seq = gen_add_mult (copy_rtx (b), m, copy_rtx (a), reg);
+  seq = gen_add_mult (copy_rtx (b), copy_rtx (m), copy_rtx (a), reg);
 
   /* Increase the lifetime of any invariants moved further in code.
      ???? Is this really necessary?  */
@@ -7726,7 +7826,7 @@ loop_iv_add_mult_hoist (loop, b, m, a, reg)
   rtx seq;
 
   /* Use copy_rtx to prevent unexpected sharing of these rtx.  */
-  seq = gen_add_mult (copy_rtx (b), m, copy_rtx (a), reg);
+  seq = gen_add_mult (copy_rtx (b), copy_rtx (m), copy_rtx (a), reg);
 
   loop_insn_hoist (loop, seq);
 

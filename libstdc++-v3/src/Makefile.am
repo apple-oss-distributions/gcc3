@@ -1,6 +1,7 @@
 ## Makefile for the src subdirectory of the GNU C++ Standard library.
 ##
-## Copyright (C) 1997, 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
+## Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002
+## Free Software Foundation, Inc.
 ##
 ## This file is part of the libstdc++ version 3 distribution.
 ## Process this file with automake to produce Makefile.in.
@@ -65,7 +66,7 @@ sources = \
 	cmath.cc bitset.cc \
 	functexcept.cc stdexcept.cc vterminate.cc \
 	c++locale.cc locale.cc localename.cc codecvt.cc \
-	collate.cc ctype.cc messages.cc moneypunct.cc numpunct.cc time.cc \
+	collate.cc ctype.cc messages.cc monetary.cc numeric.cc time.cc \
 	concept-inst.cc locale-inst.cc misc-inst.cc stl-inst.cc \
 	string-inst.cc wstring-inst.cc valarray-inst.cc  ext-inst.cc
 
@@ -74,14 +75,20 @@ VPATH = $(top_srcdir)/src:$(top_srcdir)
 libstdc___la_SOURCES = $(sources)
 
 libstdc___la_LIBADD = \
-	@libio_la@ \
-	../libmath/libmath.la \
+	../libmath/libmath.la @libio_la@ \
 	../libsupc++/libsupc++convenience.la
 
-libstdc___la_LDFLAGS = -version-info @libtool_VERSION@ -lm
+if GLIBCPP_BUILD_VERSIONED_SHLIB
+version_arg=-Wl,--version-script=linker.map
+else
+version_arg=
+endif
 
-libstdc___la_DEPENDENCIES = $(libstdc___la_LIBADD)
+libstdc___la_LDFLAGS = \
+	-version-info @libtool_VERSION@ ${version_arg} \
+	-lm @LIBUNWIND_FLAG@ 
 
+libstdc___la_DEPENDENCIES = $(libstdc___la_LIBADD) linker.map
 
 # Use special rules for the deprecated source files so that they find
 # deprecated include files.

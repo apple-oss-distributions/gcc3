@@ -601,7 +601,8 @@ process_reg_param (map, loc, copy)
 }
 
 /* Compare two BLOCKs for qsort.  The key we sort on is the
-   BLOCK_ABSTRACT_ORIGIN of the blocks.  */
+   BLOCK_ABSTRACT_ORIGIN of the blocks.  We cannot just subtract the
+   two pointers, because it may overflow sizeof(int).  */
 
 static int
 compare_blocks (v1, v2)
@@ -610,9 +611,12 @@ compare_blocks (v1, v2)
 {
   tree b1 = *((const tree *) v1);
   tree b2 = *((const tree *) v2);
+  char *p1 = (char *) BLOCK_ABSTRACT_ORIGIN (b1);
+  char *p2 = (char *) BLOCK_ABSTRACT_ORIGIN (b2);
 
-  return ((char *) BLOCK_ABSTRACT_ORIGIN (b1)
-	  - (char *) BLOCK_ABSTRACT_ORIGIN (b2));
+  if (p1 == p2)
+    return 0;
+  return p1 < p2 ? -1 : 1;
 }
 
 /* Compare two BLOCKs for bsearch.  The first pointer corresponds to
@@ -625,8 +629,12 @@ find_block (v1, v2)
 {
   const union tree_node *b1 = (const union tree_node *) v1;
   tree b2 = *((const tree *) v2);
+  char *p1 = (char *) b1;
+  char *p2 = (char *) BLOCK_ABSTRACT_ORIGIN (b2);
 
-  return ((const char *) b1 - (char *) BLOCK_ABSTRACT_ORIGIN (b2));
+  if (p1 == p2)
+    return 0;
+  return p1 < p2 ? -1 : 1;
 }
 
 /* Integrate the procedure defined by FNDECL.  Note that this function
@@ -704,7 +712,7 @@ expand_inline_function (fndecl, parms, target, ignore, type,
       enum machine_mode mode;
 
       if (actual == 0)
-	return (rtx) (HOST_WIDE_INT) -1;
+	return (rtx) (size_t) -1;
 
       arg = TREE_VALUE (actual);
       mode = TYPE_MODE (DECL_ARG_TYPE (formal));
@@ -717,7 +725,7 @@ expand_inline_function (fndecl, parms, target, ignore, type,
 	  || (mode == BLKmode
 	      && (TYPE_MAIN_VARIANT (TREE_TYPE (arg))
 		  != TYPE_MAIN_VARIANT (TREE_TYPE (formal)))))
-	return (rtx) (HOST_WIDE_INT) -1;
+	return (rtx) (size_t) -1;
     }
 
   /* Extra arguments are valid, but will be ignored below, so we must
@@ -1324,6 +1332,7 @@ copy_insn_list (insns, map, static_chain_value)
 #ifdef HAVE_cc0
   rtx cc0_insn = 0;
 #endif
+  rtx static_chain_mem = 0;
 
   /* Copy the insns one by one.  Do this in two passes, first the insns and
      then their REG_NOTES.  */
@@ -1387,25 +1396,62 @@ copy_insn_list (insns, map, static_chain_value)
 		   && REG_FUNCTION_VALUE_P (XEXP (pattern, 0)))
 	    break;
 
+	  /* Look for the address of the static chain slot. The
+             rtx_equal_p comparisons against the
+             static_chain_incoming_rtx below may fail if the static
+             chain is in memory and the address specified is not
+             "legitimate".  This happens on Xtensa where the static
+             chain is at a negative offset from argp and where only
+             positive offsets are legitimate.  When the RTL is
+             generated, the address is "legitimized" by copying it
+             into a register, causing the rtx_equal_p comparisons to
+             fail.  This workaround looks for code that sets a
+             register to the address of the static chain.  Subsequent
+             memory references via that register can then be
+             identified as static chain references.  We assume that
+             the register is only assigned once, and that the static
+             chain address is only live in one register at a time. */
+
+	  else if (static_chain_value != 0
+		   && set != 0
+		   && GET_CODE (static_chain_incoming_rtx) == MEM
+		   && GET_CODE (SET_DEST (set)) == REG
+		   && rtx_equal_p (SET_SRC (set),
+				   XEXP (static_chain_incoming_rtx, 0)))
+	    {
+	      static_chain_mem =
+		  gen_rtx_MEM (GET_MODE (static_chain_incoming_rtx),
+			       SET_DEST (set));
+
+	      /* emit the instruction in case it is used for something
+		 other than setting the static chain; if it's not used,
+		 it can always be removed as dead code */
+	      copy = emit_insn (copy_rtx_and_substitute (pattern, map, 0));
+	    }
+
 	  /* If this is setting the static chain rtx, omit it.  */
 	  else if (static_chain_value != 0
 		   && set != 0
-		   && GET_CODE (SET_DEST (set)) == REG
-		   && rtx_equal_p (SET_DEST (set),
-				   static_chain_incoming_rtx))
+		   && (rtx_equal_p (SET_DEST (set),
+				    static_chain_incoming_rtx)
+		       || (static_chain_mem
+			   && rtx_equal_p (SET_DEST (set), static_chain_mem))))
 	    break;
 
 	  /* If this is setting the static chain pseudo, set it from
 	     the value we want to give it instead.  */
 	  else if (static_chain_value != 0
 		   && set != 0
-		   && rtx_equal_p (SET_SRC (set),
-				   static_chain_incoming_rtx))
+		   && (rtx_equal_p (SET_SRC (set),
+				    static_chain_incoming_rtx)
+		       || (static_chain_mem
+			   && rtx_equal_p (SET_SRC (set), static_chain_mem))))
 	    {
 	      rtx newdest = copy_rtx_and_substitute (SET_DEST (set), map, 1);
 
 	      copy = emit_move_insn (newdest, static_chain_value);
-	      static_chain_value = 0;
+	      if (GET_CODE (static_chain_incoming_rtx) != MEM)
+		static_chain_value = 0;
 	    }
 
 	  /* If this is setting the virtual stack vars register, this must
@@ -2088,6 +2134,7 @@ copy_rtx_and_substitute (orig, map, for_lhs)
     case PC:
     case CC0:
     case CONST_INT:
+    case CONST_VECTOR:
       return orig;
 
     case SYMBOL_REF:
@@ -2447,6 +2494,7 @@ subst_constants (loc, insn, map, memonly)
     case PC:
     case CONST_INT:
     case CONST_DOUBLE:
+    case CONST_VECTOR:
     case SYMBOL_REF:
     case CONST:
     case LABEL_REF:

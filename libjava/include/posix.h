@@ -1,6 +1,6 @@
 // posix.h -- Helper functions for POSIX-flavored OSs.
 
-/* Copyright (C) 2000  Free Software Foundation
+/* Copyright (C) 2000, 2002  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -28,5 +28,19 @@ details.  */
 #include <unistd.h>
 #endif
 
+#include <fcntl.h>
+
+#include <gcj/cni.h>
+#include <java/util/Properties.h>
+
 extern int _Jv_select (int n, fd_set *, fd_set *, fd_set *, struct timeval *);
-extern void _Jv_gettimeofday (struct timeval *);
+extern jlong _Jv_platform_gettimeofday ();
+extern void _Jv_platform_initialize (void);
+extern void _Jv_platform_initProperties (java::util::Properties*);
+
+inline void
+_Jv_platform_close_on_exec (jint fd)
+{
+  // Ignore errors.
+  fcntl (fd, F_SETFD, FD_CLOEXEC);
+}

@@ -282,8 +282,6 @@ cxx_init_options (lang)
 void
 cxx_finish ()
 {
-  if (flag_gnu_xref)
-    GNU_xref_end (errorcount + sorrycount);
   c_common_finish ();
 }
 
@@ -866,8 +864,6 @@ cxx_init (filename)
 
   init_cp_pragma ();
 
-  if (flag_gnu_xref)
-    GNU_xref_begin (filename);
   init_repo (filename);
 
   return filename;
@@ -913,7 +909,7 @@ yyprint (file, yychar, yylval)
       else if (yylval.ttype == enum_type_node)
 	fprintf (file, " `enum'");
       else
-	my_friendly_abort (80);
+	abort ();
       break;
 
     case CONSTANT:
@@ -1064,9 +1060,6 @@ extract_interface_info ()
 
   interface_only = finfo->interface_only;
   interface_unknown = finfo->interface_unknown;
-
-  /* This happens to be a convenient place to put this.  */
-  if (flag_gnu_xref) GNU_xref_file (input_filename);
 }
 
 /* Return nonzero if S is not considered part of an
@@ -1145,7 +1138,7 @@ note_got_semicolon (type)
      tree type;
 {
   if (!TYPE_P (type))
-    my_friendly_abort (60);
+    abort ();
   if (CLASS_TYPE_P (type))
     CLASSTYPE_GOT_SEMICOLON (type) = 1;
 }
@@ -1159,7 +1152,7 @@ note_list_got_semicolon (declspecs)
   for (link = declspecs; link; link = TREE_CHAIN (link))
     {
       tree type = TREE_VALUE (link);
-      if (TYPE_P (type))
+      if (type && TYPE_P (type))
 	note_got_semicolon (type);
     }
   clear_anon_tags ();
@@ -1356,10 +1349,8 @@ do_identifier (token, parsing, args)
   else
     id = lastiddecl;
 
-  /* APPLE LOCAL begin deprecated (Radar 2637521) ilr */
   if (lexing && id && TREE_DEPRECATED (id))
     warn_deprecated_use (id);
-  /* APPLE LOCAL end deprecated ilr */
 
   /* Do Koenig lookup if appropriate (inside templates we build lookup
      expressions instead).
@@ -1522,7 +1513,8 @@ do_scoped_id (token, parsing)
     id = IDENTIFIER_GLOBAL_VALUE (token);
   if (parsing && yychar == YYEMPTY)
     yychar = yylex ();
-  if (! id)
+  if (!id || (TREE_CODE (id) == FUNCTION_DECL
+	      && DECL_ANTICIPATED (id)))
     {
       if (processing_template_decl)
 	{
@@ -1665,7 +1657,7 @@ retrofit_lang_decl (t)
     SET_DECL_LANGUAGE (t, lang_c);
   else if (current_lang_name == lang_name_java)
     SET_DECL_LANGUAGE (t, lang_java);
-  else my_friendly_abort (64);
+  else abort ();
 
 #ifdef GATHER_STATISTICS
   tree_node_counts[(int)lang_decl] += 1;
@@ -1724,7 +1716,9 @@ copy_lang_type (node)
     return;
 
   size = sizeof (struct lang_type);
-  lt = (struct lang_type *) ggc_alloc (size);
+  /*lt = (struct lang_type *) ggc_alloc (size);*/
+  /* APPLE LOCAL PFE - expand to pfe_ggc_alloc or ggc_alloc  */
+  lt = ((struct lang_type *) GGC_ALLOC (size, PFE_ALLOC_GGC_LANG_TYPE));
   memcpy (lt, TYPE_LANG_SPECIFIC (node), size);
   TYPE_LANG_SPECIFIC (node) = lt;
 
@@ -1841,6 +1835,6 @@ cp_type_qual_from_rid (rid)
   else if (rid == ridpointers[(int) RID_RESTRICT])
     return TYPE_QUAL_RESTRICT;
 
-  my_friendly_abort (0);
+  abort ();
   return TYPE_UNQUALIFIED;
 }

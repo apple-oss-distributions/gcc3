@@ -39,5 +39,3 @@ diff_excludes="-x objcp-parse.c -x objcp-parse.y "
 # the object files we need, along with the libraries (libstdc++,
 # libobjc).
 lang_requires="objc c++"
-
-build_by_default=no

@@ -317,10 +317,11 @@ ggc_mark_rtx_children (r)
 	case CONST_DOUBLE:
 	  ggc_mark_rtx (CONST_DOUBLE_CHAIN (r));
 	  break;
-	/* APPLE LOCAL  Altivec */
+	/* APPLE LOCAL Altivec */
 	case CONST_VECTOR:
 	  ggc_mark_rtx (CONST_VECTOR_CHAIN (r));
 	  break;
+	/* APPLE LOCAL end */
 	case NOTE:
 	  switch (NOTE_LINE_NUMBER (r))
 	    {
@@ -433,8 +434,7 @@ ggc_mark_trees ()
 
         /* APPLE LOCAL Altivec */
         case VECTOR_CST:
-          ggc_mark_tree (TREE_VECTOR_CST_LOW (t));
-          ggc_mark_tree (TREE_VECTOR_CST_HIGH (t));
+          ggc_mark_tree (TREE_VECTOR_CST_ELTS (t));
           break;
         /* APPLE LOCAL end */
 

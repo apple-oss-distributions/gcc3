@@ -489,7 +489,7 @@ emit_delay_sequence (insn, list, length)
   for (li = list; li; li = XEXP (li, 1), i++)
     {
       rtx tem = XEXP (li, 0);
-      rtx note;
+      rtx note, next;
 
       /* Show that this copy of the insn isn't deleted.  */
       INSN_DELETED_P (tem) = 0;
@@ -498,11 +498,27 @@ emit_delay_sequence (insn, list, length)
       PREV_INSN (tem) = XVECEXP (seq, 0, i - 1);
       NEXT_INSN (XVECEXP (seq, 0, i - 1)) = tem;
 
-      /* Remove any REG_DEAD notes because we can't rely on them now
-	 that the insn has been moved.  */
-      for (note = REG_NOTES (tem); note; note = XEXP (note, 1))
-	if (REG_NOTE_KIND (note) == REG_DEAD)
-	  XEXP (note, 0) = const0_rtx;
+      for (note = REG_NOTES (tem); note; note = next)
+	{
+	  next = XEXP (note, 1);
+	  switch (REG_NOTE_KIND (note))
+	    {
+	    case REG_DEAD:
+	      /* Remove any REG_DEAD notes because we can't rely on them now
+		 that the insn has been moved.  */
+	      remove_note (tem, note);
+	      break;
+
+	    case REG_LABEL:
+	      /* Keep the label reference count up to date.  */
+	      if (GET_CODE (XEXP (note, 0)) == CODE_LABEL)
+		LABEL_NUSES (XEXP (note, 0)) ++;
+	      break;
+
+	    default:
+	      break;
+	    }
+	}
     }
 
   NEXT_INSN (XVECEXP (seq, 0, length)) = NEXT_INSN (seq_insn);
@@ -1070,9 +1086,14 @@ get_branch_condition (insn, target)
 	       || (GET_CODE (XEXP (src, 2)) == LABEL_REF
 		   && XEXP (XEXP (src, 2), 0) == target))
 	   && XEXP (src, 1) == pc_rtx)
-    return gen_rtx_fmt_ee (reverse_condition (GET_CODE (XEXP (src, 0))),
-			   GET_MODE (XEXP (src, 0)),
-			   XEXP (XEXP (src, 0), 0), XEXP (XEXP (src, 0), 1));
+    {
+      enum rtx_code rev;
+      rev = reversed_comparison_code (XEXP (src, 0), insn);
+      if (rev != UNKNOWN)
+	return gen_rtx_fmt_ee (rev, GET_MODE (XEXP (src, 0)),
+			       XEXP (XEXP (src, 0), 0),
+			       XEXP (XEXP (src, 0), 1));
+    }
 
   return 0;
 }
@@ -2703,6 +2724,8 @@ fill_slots_from_thread (insn, condition, thread, opposite_thread, likely,
 		     starting point of this thread.  */
 		  if (own_thread)
 		    {
+		      rtx note;
+
 		      update_block (trial, thread);
 		      if (trial == thread)
 			{
@@ -2710,7 +2733,19 @@ fill_slots_from_thread (insn, condition, thread, opposite_thread, likely,
 			  if (new_thread == trial)
 			    new_thread = thread;
 			}
+
+		      /* We are moving this insn, not deleting it.  We must
+			 temporarily increment the use count on any referenced
+			 label lest it be deleted by delete_related_insns.  */
+		      note = find_reg_note (trial, REG_LABEL, 0);
+		      /* REG_LABEL could be NOTE_INSN_DELETED_LABEL too.  */
+		      if (note && GET_CODE (XEXP (note, 0)) == CODE_LABEL)
+			LABEL_NUSES (XEXP (note, 0))++;
+
 		      delete_related_insns (trial);
+
+		      if (note && GET_CODE (XEXP (note, 0)) == CODE_LABEL)
+			LABEL_NUSES (XEXP (note, 0))--;
 		    }
 		  else
 		    new_thread = next_active_insn (trial);
@@ -3655,10 +3690,6 @@ dbr_schedule (first, file)
 
   /* It is not clear why the line below is needed, but it does seem to be.  */
   unfilled_firstobj = (rtx *) obstack_alloc (&unfilled_slots_obstack, 0);
-
-  /* Reposition the prologue and epilogue notes in case we moved the
-     prologue/epilogue insns.  */
-  reposition_prologue_and_epilogue_notes (first);
 
   if (file)
     {

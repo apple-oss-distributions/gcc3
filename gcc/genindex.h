@@ -70,6 +70,7 @@ enum index_info {
   INDEX_ENUM,                   /* +vm */
   INDEX_FILE_BEGIN,             /* +Fm */
   INDEX_FILE_END,               /* -Fm */
+  INDEX_FILE_INCLUDE,		/* +Fi */
   INDEX_FUNCTION_BEGIN,         /* +fm */
   INDEX_FUNCTION_END,           /* -fm */
   INDEX_FUNCTION_DECL,          /* +fh */
